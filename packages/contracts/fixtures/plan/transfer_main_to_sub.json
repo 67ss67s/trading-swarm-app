@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "plan_id": "af5a1c02-2ea9-4c4b-9c1a-6d2a5c1b7e01",
+  "intent_id": "2b3c4d5e-6f70-4182-93a4-b5c6d7e8f9a0",
+  "version": 1,
+  "plan_hash": "f900d9a89b081abc1badbcafb9752819603acff182199742dc53c254c2fe77d6",
+  "account": "main",
+  "channel": "rest",
+  "economic": {
+    "kind": "transfer",
+    "asset": "USDT",
+    "amount": "25",
+    "from_account": "main",
+    "from_wallet": "spot",
+    "to_account": "sub",
+    "to_wallet": "usdm_futures"
+  },
+  "basis": {
+    "notes": [
+      "主账户 spot 可用 USDT 2500 ≥ 25"
+    ]
+  },
+  "authorization_ttl_seconds": 120,
+  "created_at": 1788350000100,
+  "expires_at": 1788350300100
+}

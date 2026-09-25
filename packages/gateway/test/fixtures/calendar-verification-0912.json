@@ -1,0 +1,209 @@
+{
+  "verified_at": "2026-09-12T06:41:16.516Z",
+  "method": "Fed: calendar-feed publicText + parseFedCalendar; Fed B press release dates + easternTime(14:00 ET). BLS: publicText 403, web tool official release/month pages read manually + easternTime(08:30 ET). Two official publications per event, same publisher, not independent organizations.",
+  "fetch": [
+    {
+      "url": "https://www.bls.gov/schedule/2026/12_sched.htm",
+      "error": "public fetch failed (22): curl: (22) The requested URL returned error: 403\n"
+    },
+    {
+      "url": "https://www.bls.gov/schedule/2026/11_sched.htm",
+      "error": "public fetch failed (22): curl: (22) The requested URL returned error: 403\n"
+    },
+    {
+      "url": "https://www.bls.gov/schedule/news_release/cpi.htm",
+      "error": "public fetch failed (22): curl: (22) The requested URL returned error: 403\n"
+    },
+    {
+      "url": "https://www.bls.gov/schedule/2026/10_sched.htm",
+      "error": "public fetch failed (22): curl: (22) The requested URL returned error: 403\n"
+    },
+    {
+      "url": "https://www.bls.gov/schedule/news_release/empsit.htm",
+      "error": "public fetch failed (22): curl: (22) The requested URL returned error: 403\n"
+    },
+    {
+      "url": "https://www.bls.gov/schedule/news_release/bls.ics",
+      "error": "public fetch failed (22): curl: (22) The requested URL returned error: 403\n"
+    },
+    {
+      "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20240809a.htm",
+      "bytes": 81588,
+      "sha256": "6c9e635d1c82dc43e872a3a60c4cc4140290e99e9416c7617431020e067faf18",
+      "at": "2026-09-12T06:37:38.347Z"
+    },
+    {
+      "url": "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+      "bytes": 164831,
+      "sha256": "849d7bc100dd60b33b5a2b9f76cf480dc2242610d23d2f3e5b00ac7026aec790",
+      "at": "2026-09-12T06:37:39.014Z",
+      "facts": [
+        {
+          "subkind": "fomc",
+          "title": "FOMC 利率决议",
+          "expected_at": 1789581600000,
+          "source_ref": "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+          "consensus": null,
+          "previous": null,
+          "importance": "high"
+        },
+        {
+          "subkind": "fomc",
+          "title": "FOMC 利率决议",
+          "expected_at": 1793210400000,
+          "source_ref": "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+          "consensus": null,
+          "previous": null,
+          "importance": "high"
+        },
+        {
+          "subkind": "fomc",
+          "title": "FOMC 利率决议",
+          "expected_at": 1796842800000,
+          "source_ref": "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+          "consensus": null,
+          "previous": null,
+          "importance": "high"
+        }
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "subkind": "fomc",
+      "title": "FOMC 利率决议(9 月)",
+      "static_before": "2026-09-16T18:00:00.000Z",
+      "source_a": {
+        "url": "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+        "utc": "2026-09-16T18:00:00.000Z"
+      },
+      "source_b": {
+        "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20240809a.htm",
+        "utc": "2026-09-16T18:00:00.000Z"
+      },
+      "conclusion": "unchanged",
+      "verified_utc": "2026-09-16T18:00:00.000Z"
+    },
+    {
+      "subkind": "fomc",
+      "title": "FOMC 利率决议(10 月)",
+      "static_before": "2026-10-28T18:00:00.000Z",
+      "source_a": {
+        "url": "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+        "utc": "2026-10-28T18:00:00.000Z"
+      },
+      "source_b": {
+        "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20240809a.htm",
+        "utc": "2026-10-28T18:00:00.000Z"
+      },
+      "conclusion": "unchanged",
+      "verified_utc": "2026-10-28T18:00:00.000Z"
+    },
+    {
+      "subkind": "fomc",
+      "title": "FOMC 利率决议(12 月)",
+      "static_before": "2026-12-09T19:00:00.000Z",
+      "source_a": {
+        "url": "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+        "utc": "2026-12-09T19:00:00.000Z"
+      },
+      "source_b": {
+        "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20240809a.htm",
+        "utc": "2026-12-09T19:00:00.000Z"
+      },
+      "conclusion": "unchanged",
+      "verified_utc": "2026-12-09T19:00:00.000Z"
+    },
+    {
+      "subkind": "cpi",
+      "title": "美国 CPI(9 月数据)",
+      "static_before": "2026-10-13T12:30:00.000Z",
+      "source_a": {
+        "url": "https://www.bls.gov/schedule/news_release/cpi.htm",
+        "utc": "2026-10-14T12:30:00.000Z"
+      },
+      "source_b": {
+        "url": "https://www.bls.gov/schedule/2026/10_sched.htm",
+        "utc": "2026-10-14T12:30:00.000Z"
+      },
+      "conclusion": "corrected",
+      "verified_utc": "2026-10-14T12:30:00.000Z"
+    },
+    {
+      "subkind": "cpi",
+      "title": "美国 CPI(10 月数据)",
+      "static_before": "2026-11-10T13:30:00.000Z",
+      "source_a": {
+        "url": "https://www.bls.gov/schedule/news_release/cpi.htm",
+        "utc": "2026-11-10T13:30:00.000Z"
+      },
+      "source_b": {
+        "url": "https://www.bls.gov/schedule/2026/11_sched.htm",
+        "utc": "2026-11-10T13:30:00.000Z"
+      },
+      "conclusion": "unchanged",
+      "verified_utc": "2026-11-10T13:30:00.000Z"
+    },
+    {
+      "subkind": "cpi",
+      "title": "美国 CPI(11 月数据)",
+      "static_before": "2026-12-10T13:30:00.000Z",
+      "source_a": {
+        "url": "https://www.bls.gov/schedule/news_release/cpi.htm",
+        "utc": "2026-12-10T13:30:00.000Z"
+      },
+      "source_b": {
+        "url": "https://www.bls.gov/schedule/2026/12_sched.htm",
+        "utc": "2026-12-10T13:30:00.000Z"
+      },
+      "conclusion": "unchanged",
+      "verified_utc": "2026-12-10T13:30:00.000Z"
+    },
+    {
+      "subkind": "nfp",
+      "title": "美国非农就业(9 月数据)",
+      "static_before": "2026-10-02T12:30:00.000Z",
+      "source_a": {
+        "url": "https://www.bls.gov/schedule/news_release/empsit.htm",
+        "utc": "2026-10-02T12:30:00.000Z"
+      },
+      "source_b": {
+        "url": "https://www.bls.gov/schedule/2026/10_sched.htm",
+        "utc": "2026-10-02T12:30:00.000Z"
+      },
+      "conclusion": "unchanged",
+      "verified_utc": "2026-10-02T12:30:00.000Z"
+    },
+    {
+      "subkind": "nfp",
+      "title": "美国非农就业(10 月数据)",
+      "static_before": "2026-11-06T13:30:00.000Z",
+      "source_a": {
+        "url": "https://www.bls.gov/schedule/news_release/empsit.htm",
+        "utc": "2026-11-06T13:30:00.000Z"
+      },
+      "source_b": {
+        "url": "https://www.bls.gov/schedule/2026/11_sched.htm",
+        "utc": "2026-11-06T13:30:00.000Z"
+      },
+      "conclusion": "unchanged",
+      "verified_utc": "2026-11-06T13:30:00.000Z"
+    },
+    {
+      "subkind": "nfp",
+      "title": "美国非农就业(11 月数据)",
+      "static_before": "2026-12-04T13:30:00.000Z",
+      "source_a": {
+        "url": "https://www.bls.gov/schedule/news_release/empsit.htm",
+        "utc": "2026-12-04T13:30:00.000Z"
+      },
+      "source_b": {
+        "url": "https://www.bls.gov/schedule/2026/12_sched.htm",
+        "utc": "2026-12-04T13:30:00.000Z"
+      },
+      "conclusion": "unchanged",
+      "verified_utc": "2026-12-04T13:30:00.000Z"
+    }
+  ],
+  "facts_sha256": "76834583eedfc1575d80086eefa16050dc6f24f8e587d402aca0983707057392"
+}

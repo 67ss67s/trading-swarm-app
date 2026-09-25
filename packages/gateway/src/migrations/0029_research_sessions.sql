@@ -1,0 +1,19 @@
+-- 新研究领域；旧内容保持原样，扩展列对旧行均为 NULL。
+CREATE TABLE research_sessions(id TEXT PRIMARY KEY,title TEXT NOT NULL,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL,context_json TEXT NOT NULL);
+CREATE TABLE research_messages(id TEXT PRIMARY KEY,session_id TEXT NOT NULL REFERENCES research_sessions(id),seq INTEGER NOT NULL,role TEXT NOT NULL CHECK(role IN ('user','assistant')),created_at INTEGER NOT NULL,blocks_json TEXT NOT NULL,inquiry_id TEXT,UNIQUE(session_id,seq));
+CREATE TABLE research_inquiries(id TEXT PRIMARY KEY,session_id TEXT NOT NULL REFERENCES research_sessions(id),user_message_id TEXT NOT NULL REFERENCES research_messages(id),task_kind TEXT NOT NULL CHECK(task_kind IN ('market','compare','validate','diagnose')),status TEXT NOT NULL CHECK(status IN ('queued','planning','running','validating','completed','awaiting_input','cancelling','cancelled','failed','incomplete')),question TEXT NOT NULL,plan_json TEXT NOT NULL,budget_json TEXT NOT NULL,usage_json TEXT NOT NULL,checkpoint_json TEXT NOT NULL,error_code TEXT,error TEXT,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL,idempotency_key TEXT NOT NULL UNIQUE);
+CREATE UNIQUE INDEX research_session_active ON research_inquiries(session_id) WHERE status NOT IN ('completed','cancelled','failed','incomplete');
+CREATE TABLE research_steps(id TEXT PRIMARY KEY,inquiry_id TEXT NOT NULL REFERENCES research_inquiries(id),seq INTEGER NOT NULL,parent_id TEXT,title TEXT NOT NULL,tool TEXT NOT NULL,tool_version TEXT NOT NULL,status TEXT NOT NULL CHECK(status IN ('pending','running','succeeded','failed','skipped','cancelled')),input_json TEXT NOT NULL,output_summary_json TEXT NOT NULL,snapshot_refs_json TEXT NOT NULL,artifact_refs_json TEXT NOT NULL,error_code TEXT,retryable INTEGER NOT NULL DEFAULT 0,started_at INTEGER,ended_at INTEGER,usage_json TEXT NOT NULL,UNIQUE(inquiry_id,seq));
+CREATE TABLE research_inquiry_events(seq INTEGER PRIMARY KEY AUTOINCREMENT,inquiry_id TEXT NOT NULL REFERENCES research_inquiries(id),at INTEGER NOT NULL,event TEXT NOT NULL,data_json TEXT NOT NULL);
+CREATE INDEX research_inquiry_events_cursor ON research_inquiry_events(inquiry_id,seq);
+CREATE TABLE research_snapshots(id TEXT PRIMARY KEY,kind TEXT NOT NULL,provider TEXT NOT NULL,instrument_json TEXT NOT NULL,requested_window_json TEXT NOT NULL,actual_window_json TEXT NOT NULL,as_of INTEGER NOT NULL,fetched_at INTEGER NOT NULL,frequency TEXT,units_json TEXT NOT NULL,coverage TEXT NOT NULL,quality_flags_json TEXT NOT NULL,rows_json TEXT NOT NULL,checksum TEXT NOT NULL UNIQUE,method_version TEXT NOT NULL);
+-- VIRTUAL 投影列不计入无列名 INSERT 的值数；保留旧七列写入器。
+-- 新元数据与 payload 原子写在 content_json；旧 JSON 没有该命名空间，投影为 NULL。
+ALTER TABLE research_artifacts ADD COLUMN inquiry_id TEXT GENERATED ALWAYS AS (json_extract(content_json, '$.__research_loop_v1.inquiry_id')) VIRTUAL;
+ALTER TABLE research_artifacts ADD COLUMN snapshot_refs_json TEXT GENERATED ALWAYS AS (json_extract(content_json, '$.__research_loop_v1.snapshot_refs')) VIRTUAL;
+ALTER TABLE research_artifacts ADD COLUMN data_kind TEXT GENERATED ALWAYS AS (json_extract(content_json, '$.__research_loop_v1.data_kind')) VIRTUAL;
+ALTER TABLE research_artifacts ADD COLUMN availability TEXT GENERATED ALWAYS AS (json_extract(content_json, '$.__research_loop_v1.availability')) VIRTUAL;
+ALTER TABLE research_artifacts ADD COLUMN question TEXT GENERATED ALWAYS AS (json_extract(content_json, '$.__research_loop_v1.question')) VIRTUAL;
+ALTER TABLE research_artifacts ADD COLUMN spec_json TEXT GENERATED ALWAYS AS (json_extract(content_json, '$.__research_loop_v1.spec')) VIRTUAL;
+ALTER TABLE research_artifacts ADD COLUMN caption TEXT GENERATED ALWAYS AS (json_extract(content_json, '$.__research_loop_v1.caption')) VIRTUAL;
+CREATE INDEX research_artifacts_inquiry ON research_artifacts(inquiry_id,created_at);

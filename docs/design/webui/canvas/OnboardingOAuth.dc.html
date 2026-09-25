@@ -1,0 +1,166 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>向导</title>
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap">
+  <style>
+body{margin:0;background:#090d11;color:#dfe6ea;font-family:Geist,-apple-system,"PingFang SC","Noto Sans SC","Segoe UI",sans-serif;font-size:12.5px;line-height:1.45;-webkit-font-smoothing:antialiased}
+a{color:#6fcadf;text-decoration:none}a:hover{color:#9adcea}
+*{box-sizing:border-box}
+.num{font-family:"JetBrains Mono","SF Mono",ui-monospace,Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
+.app{display:flex;overflow:hidden;background:#090d11;color:#dfe6ea}
+.side{width:168px;flex:none;background:#05080b;border-right:1px solid rgba(255,255,255,0.08);display:flex;flex-direction:column;user-select:none}
+.brand{display:flex;align-items:center;gap:8px;padding:10px 10px 6px}
+.logo{width:26px;height:26px;border-radius:5px;background:#6fcadf;color:#041119;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px}
+.nav-g{padding:4px 8px;display:flex;flex-direction:column;gap:2px}
+.nav-l{height:24px;display:flex;align-items:center;padding:0 8px;font-size:10px;color:#868f95;letter-spacing:0.06em}
+.nav-i{height:28px;display:flex;align-items:center;gap:8px;padding:0 8px;border-radius:6px;font-size:12.5px;color:#c5ccd0}
+.nav-i.on{background:#161c23;color:#eef3f6}
+.nav-i.dim{color:#5b656d}
+.nav-i svg{flex:none}
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.top{height:40px;flex:none;display:flex;align-items:center;gap:10px;padding:0 10px;border-bottom:1px solid rgba(255,255,255,0.09);user-select:none}
+.vsep{width:1px;height:16px;background:rgba(255,255,255,0.13);flex:none}
+.status{height:26px;flex:none;display:flex;align-items:center;gap:16px;padding:0 12px;border-top:1px solid rgba(255,255,255,0.09);background:#05080b;font-size:11px;color:#868f95;user-select:none}
+.content{flex:1;min-height:0;padding:12px;display:flex;flex-direction:column;gap:12px}
+.ws{border:1px solid rgba(255,255,255,0.09);border-radius:6px;background:#10151a;overflow:hidden;display:flex;flex-direction:column;min-height:0;min-width:0}
+.pane-h{height:32px;flex:none;display:flex;align-items:center;gap:8px;padding:0 10px;border-bottom:1px solid rgba(255,255,255,0.09);background:rgba(25,31,36,0.4);user-select:none}
+.pane-t{font-size:12px;font-weight:600;letter-spacing:0.02em;white-space:nowrap;flex:none}
+.pane-h .hint{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.pane-h > .row{flex:none}
+.pane-b{flex:1;min-height:0;overflow:hidden}
+.hint{font-size:11px;color:#868f95}
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{height:30px;font-size:11px;font-weight:500;color:#868f95;text-align:left;padding:0 10px;border-bottom:1px solid rgba(255,255,255,0.09);white-space:nowrap}
+.tbl td{padding:5px 10px;font-size:12.5px;border-bottom:1px solid rgba(255,255,255,0.06);white-space:nowrap;vertical-align:middle}
+.tbl tr:last-child td{border-bottom:0}
+.tbl .r{text-align:right}
+.pill{display:inline-flex;align-items:center;gap:5px;height:18px;padding:0 7px;border-radius:999px;font-size:10.5px;font-weight:500;border:1px solid transparent;white-space:nowrap;line-height:1}
+.pill .dot{width:6px;height:6px;border-radius:999px;background:currentColor;flex:none}
+.pill.ok{color:#48a870;background:rgba(72,168,112,0.12);border-color:rgba(72,168,112,0.28)}
+.pill.warn{color:#bd903b;background:rgba(189,144,59,0.12);border-color:rgba(189,144,59,0.3)}
+.pill.bad{color:#cc544b;background:rgba(204,84,75,0.12);border-color:rgba(204,84,75,0.3)}
+.pill.live{color:#fff;background:#e24947;border-color:#e24947;font-weight:600}
+.pill.ice{color:#6fcadf;background:rgba(111,202,223,0.1);border-color:rgba(111,202,223,0.3)}
+.pill.mute{color:#c5ccd0;background:#1d2329;border-color:rgba(255,255,255,0.13)}
+.pill.dim{color:#868f95;background:transparent;border-color:rgba(255,255,255,0.13)}
+.pill.slate{color:#c9d3dc;background:rgba(120,139,161,0.16);border-color:rgba(120,139,161,0.35)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:28px;padding:0 10px;border-radius:6px;font-size:12px;font-weight:500;border:1px solid transparent;white-space:nowrap;user-select:none}
+.btn.pri{background:#6fcadf;color:#041119}
+.btn.out{border-color:rgba(255,255,255,0.13);color:#dfe6ea;background:transparent}
+.btn.ghost{color:#868f95;background:transparent}
+.btn.danger{background:#da534f;color:#fff}
+.btn.dout{border-color:rgba(218,83,79,0.45);color:#da534f;background:transparent}
+.btn.xs{height:24px;padding:0 8px;font-size:11.5px}
+.btn.lg{height:36px;padding:0 16px;font-size:13px}
+.btn.dis{opacity:0.45}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.lbl{font-size:11px;color:#868f95}
+.inp{height:30px;border:1px solid rgba(255,255,255,0.13);border-radius:6px;background:rgba(255,255,255,0.03);padding:0 9px;display:flex;align-items:center;gap:6px;font-size:12.5px;color:#dfe6ea;min-width:0}
+.inp.ro{background:transparent;color:#868f95}
+.seg{display:inline-flex;flex:none;border:1px solid rgba(255,255,255,0.13);border-radius:6px;padding:2px;gap:2px;user-select:none}
+.seg span{padding:2px 8px;border-radius:4px;font-size:11.5px;color:#868f95;white-space:nowrap}
+.seg .on{background:#1d2329;color:#d9dfe3}
+.seg .on.buy{background:rgba(72,168,112,0.18);color:#48a870}
+.seg .on.sell{background:rgba(204,84,75,0.18);color:#cc544b}
+.seg .on.livep{background:#e24947;color:#fff}
+.seg .on.warnp{background:rgba(189,144,59,0.18);color:#bd903b}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:5px 12px;font-size:12px;align-items:baseline}
+.kv .k{color:#868f95;white-space:nowrap}
+.card{border:1px solid rgba(255,255,255,0.09);border-radius:6px;background:#10151a}
+.cell{display:flex;flex-direction:column;gap:2px;padding:10px 14px;min-width:0;overflow:hidden}
+.cell .l{font-size:11px;color:#868f95;white-space:nowrap}
+.cell .v{font-size:19px;font-weight:600;line-height:24px;white-space:nowrap}
+.cell .v small{font-size:11px;font-weight:400;color:#868f95;margin-left:4px}
+.cell .s{font-size:11px;color:#868f95;white-space:nowrap;display:flex;gap:8px;align-items:center;overflow:hidden;text-overflow:ellipsis}
+.up{color:#48a870}.down{color:#cc544b}.warn{color:#bd903b}.live{color:#e24947}.ice{color:#6fcadf}.mutedc{color:#868f95}
+.row{display:flex;align-items:center;gap:8px;min-width:0}
+.col{display:flex;flex-direction:column;gap:8px;min-width:0;min-height:0}
+.list{display:flex;flex-direction:column}
+.li{display:flex;align-items:center;gap:10px;padding:7px 10px;border-bottom:1px solid rgba(255,255,255,0.06);min-width:0}
+.li:last-child{border-bottom:0}
+.li.sel{background:rgba(111,202,223,0.07);box-shadow:inset 2px 0 0 #6fcadf}
+.mono{font-family:"JetBrains Mono","SF Mono",ui-monospace,Menlo,monospace}
+.ell{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.steps{display:flex;align-items:center;gap:0}
+.step{display:flex;align-items:center;gap:5px;font-size:10px;white-space:nowrap}
+.step .n{width:14px;height:14px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:9px;flex:none;border:1px solid rgba(255,255,255,0.13);color:#868f95}
+.step.done .n{background:rgba(72,168,112,0.15);border-color:rgba(72,168,112,0.4);color:#48a870}
+.step.on .n{background:#6fcadf;border-color:#6fcadf;color:#041119}
+.step.bad .n{background:#e24947;border-color:#e24947;color:#fff}
+.step.done{color:#c5ccd0}.step.on{color:#dfe6ea}.step.bad{color:#e24947}.step.todo{color:#868f95}
+.sline{width:10px;height:1px;background:rgba(255,255,255,0.13);flex:none;margin:0 3px}
+.chk{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:999px;flex:none}
+.chk.ok{background:rgba(72,168,112,0.16);color:#48a870}
+.chk.bad{background:rgba(204,84,75,0.16);color:#cc544b}
+.chk.warn{background:rgba(189,144,59,0.16);color:#bd903b}
+.chk.todo{border:1px solid rgba(255,255,255,0.13);color:#868f95}
+.chk.on{background:rgba(111,202,223,0.16);color:#6fcadf}
+.note{font-size:11px;color:#868f95;line-height:1.5}
+.banner{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:6px;border:1px solid;font-size:12px}
+.banner.live{border-color:rgba(226,73,71,0.45);background:rgba(226,73,71,0.09);color:#f1b3b2}
+.banner.warn{border-color:rgba(189,144,59,0.4);background:rgba(189,144,59,0.09);color:#e3c98a}
+.banner.ice{border-color:rgba(111,202,223,0.35);background:rgba(111,202,223,0.07);color:#bfe7f0}
+.tab{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;font-size:12px;color:#868f95;border-bottom:2px solid transparent;white-space:nowrap}
+.tab.on{color:#dfe6ea;border-bottom-color:#6fcadf}
+.cnt{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 4px;border-radius:999px;font-size:10px;background:#1d2329;color:#c5ccd0}
+.cnt.warn{background:rgba(189,144,59,0.2);color:#bd903b}
+.ring{position:relative;display:inline-block;width:44px;height:44px;flex:none;vertical-align:middle}
+.ring svg{display:block}
+.ring .t{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600}
+.spin{width:14px;height:14px;border-radius:999px;border:2px solid rgba(111,202,223,0.25);border-top-color:#6fcadf;flex:none}
+.meter{height:4px;border-radius:2px;background:#1d2329;overflow:hidden;flex:1;min-width:40px}
+.meter i{display:block;height:100%;border-radius:2px}
+</style>
+</helmet>
+<div class="app" style="width:1440px;height:900px">
+
+<aside class="side">
+  <div class="brand"><span class="logo mono">TG</span><span style="font-size:13px;font-weight:600">trading-swarm</span><span class="hint num" style="margin-left:auto">v0.1</span></div>
+  <div class="nav-g"><div class="nav-l">交易</div><div class="nav-i  "><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg><span class="ell">总览</span></div><div class="nav-i  dim" title="B 阶段铺面"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span class="ell">对话</span></div><div class="nav-i  "><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5v14M9 8H6v8h3M15 3v18M15 6h3v10h-3"/></svg><span class="ell">图表</span></div><div class="nav-i  "><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"/><path d="M4 6v12c0 1.1.9 2 2 2h14v-4"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/></svg><span class="ell">资产</span></div><div class="nav-i  "><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 17l6-6 4 4 6-6"/><path d="M14 9h6v6"/></svg><span class="ell">手动下单</span></div><div class="nav-i  "><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3L4 7l4 4"/><path d="M4 7h16"/><path d="M16 21l4-4-4-4"/><path d="M20 17H4"/></svg><span class="ell">划转</span></div><div class="nav-i  "><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg><span class="ell">审批</span><span class="cnt warn num" style="margin-left:auto">1</span></div><div class="nav-i  dim" title="B 阶段铺面"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5L18.5 21 12 17l-6.5 4 2-7.5L2 9h7z"/></svg><span class="ell">策略</span></div></div><div class="nav-g"><div class="nav-l">自动化</div><div class="nav-i  dim" title="B 阶段铺面"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span class="ell">自动化</span></div><div class="nav-i  dim" title="B 阶段铺面"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a4 4 0 0 0-4 4v1a4 4 0 0 0-3 4 4 4 0 0 0 3 4v1a4 4 0 0 0 8 0v-1a4 4 0 0 0 3-4 4 4 0 0 0-3-4V7a4 4 0 0 0-4-4z"/></svg><span class="ell">技能与记忆</span></div><div class="nav-i  dim" title="B 阶段铺面"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><span class="ell">复盘</span></div></div><div class="nav-g"><div class="nav-l">系统</div><div class="nav-i  "><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><span class="ell">交易所</span><span style="margin-left:auto;width:6px;height:6px;border-radius:999px;background:#bd903b"></span></div><div class="nav-i  dim" title="B 阶段铺面"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9z"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/></svg><span class="ell">大脑</span></div><div class="nav-i  "><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z"/><path d="M12 12l4-4"/><path d="M12 6v2M6 12h2M16 12h2M12 16v2"/></svg><span class="ell">风控</span></div><div class="nav-i  "><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg><span class="ell">活动</span></div><div class="nav-i  dim" title="B 阶段铺面"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 6-6"/></svg><span class="ell">用量</span></div><div class="nav-i  dim" title="B 阶段铺面"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8"/></svg><span class="ell">日志</span></div><div class="nav-i  dim" title="B 阶段铺面"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span class="ell">设置</span></div><div class="nav-i on "><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4V2M15 16v-2M8 9h2M20 9h2M17.8 11.8L19 13M17.8 6.2L19 5M12.2 6.2L11 5M12.2 11.8L11 13"/><path d="M3 21l9-9"/></svg><span class="ell">向导</span></div></div>
+  <div style="margin-top:auto;padding:10px 14px" class="note">灰色项 = B 阶段铺面<br>A3 最小 UI 只含高亮页</div>
+</aside><div class="main">
+<header class="top">
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#868f95" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span class="vsep"></span>
+  <span style="font-size:13px;font-weight:600">向导</span><span class="hint">Wizard · 第 4 步 · 等待回调</span>
+  
+  <div class="row" style="margin-left:auto;gap:10px">
+    <span class="num" style="font-size:11px;color:#868f95">合并权益 <b style="font-size:12.5px;color:#dfe6ea">3,788.00</b> USDT</span>
+    <span class="num" style="font-size:11px;color:#868f95">未实现 <b class="down" style="font-size:12.5px">-12.50</b></span>
+    <span class="vsep"></span>
+    <span class="row" style="gap:6px"><span class="pill mute mono ">mode run</span><span class="pill ice mono ">authority draft</span></span>
+    <span class="btn dout xs "><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.86 2h8.28L22 7.86v8.28L16.14 22H7.86L2 16.14V7.86z"/><path d="M12 8v4M12 16h.01"/></svg>紧急停</span>
+    <span class="vsep"></span>
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#868f95" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 3a3 3 0 0 0-3 3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/></svg><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#868f95" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+  </div>
+</header><div class="content"><div class="row" style="align-items:stretch;gap:12px;flex:1;min-height:0"><div class="ws" style="width:250px;flex:none"><div class="pane-h"><span class="pane-t">向导 · tswarm onboard</span><span class="hint">wizard.status</span></div>
+  <div class="list" style="padding:4px 0"><div class="li " style="gap:10px;padding:6px 12px;border-bottom:0"><span class="step done"><span class="n num"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg></span></span><span class="col" style="gap:0"><span style="font-size:12.5px;color:#dfe6ea">模式与风险确认</span><span class="hint num ell" style="max-width:170px">quickstart · securityAcknowledgedAt 19:38</span></span></div><div class="li " style="gap:10px;padding:6px 12px;border-bottom:0"><span class="step done"><span class="n num"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg></span></span><span class="col" style="gap:0"><span style="font-size:12.5px;color:#dfe6ea">Workspace</span><span class="hint num ell" style="max-width:170px">~/.trading-swarm/workspace</span></span></div><div class="li " style="gap:10px;padding:6px 12px;border-bottom:0"><span class="step done"><span class="n num"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg></span></span><span class="col" style="gap:0"><span style="font-size:12.5px;color:#dfe6ea">大脑</span><span class="hint num ell" style="max-width:170px">api · deepseek-chat · completion</span></span></div><div class="li sel" style="gap:10px;padding:6px 12px;border-bottom:0"><span class="step on"><span class="n num">4</span></span><span class="col" style="gap:0"><span style="font-size:12.5px;color:#dfe6ea">Binance MCP 授权</span><span class="hint num ell" style="max-width:170px">Agentic 子账户 · OAuth PKCE</span></span></div><div class="li " style="gap:10px;padding:6px 12px;border-bottom:0"><span class="step todo"><span class="n num">4b</span></span><span class="col" style="gap:0"><span style="font-size:12.5px;color:#868f95">主账户 API key</span><span class="hint num ell" style="max-width:170px">可选:手动交易与划转</span></span></div><div class="li " style="gap:10px;padding:6px 12px;border-bottom:0"><span class="step todo"><span class="n num">5</span></span><span class="col" style="gap:0"><span style="font-size:12.5px;color:#868f95">Policy 初值</span><span class="hint num ell" style="max-width:170px">金丝雀保守值</span></span></div><div class="li " style="gap:10px;padding:6px 12px;border-bottom:0"><span class="step todo"><span class="n num">6</span></span><span class="col" style="gap:0"><span style="font-size:12.5px;color:#868f95">Gateway</span><span class="hint num ell" style="max-width:170px">port 18800 · token</span></span></div><div class="li " style="gap:10px;padding:6px 12px;border-bottom:0"><span class="step todo"><span class="n num">7</span></span><span class="col" style="gap:0"><span style="font-size:12.5px;color:#868f95">行情回填</span><span class="hint num ell" style="max-width:170px">90 天 · 8 周期</span></span></div><div class="li " style="gap:10px;padding:6px 12px;border-bottom:0"><span class="step todo"><span class="n num">8</span></span><span class="col" style="gap:0"><span style="font-size:12.5px;color:#868f95">通知(可选)</span><span class="hint num ell" style="max-width:170px">Telegram</span></span></div><div class="li " style="gap:10px;padding:6px 12px;border-bottom:0"><span class="step todo"><span class="n num">9</span></span><span class="col" style="gap:0"><span style="font-size:12.5px;color:#868f95">Daemon</span><span class="hint num ell" style="max-width:170px">launchd / systemd</span></span></div><div class="li " style="gap:10px;padding:6px 12px;border-bottom:0"><span class="step todo"><span class="n num">10</span></span><span class="col" style="gap:0"><span style="font-size:12.5px;color:#868f95">Health</span><span class="hint num ell" style="max-width:170px">WS · MCP · brain · 时钟 · 代理</span></span></div><div class="li " style="gap:10px;padding:6px 12px;border-bottom:0"><span class="step todo"><span class="n num">11</span></span><span class="col" style="gap:0"><span style="font-size:12.5px;color:#868f95">完成</span><span class="hint num ell" style="max-width:170px">先 Observe 一周</span></span></div></div>
+  <div class="note" style="margin-top:auto;padding:10px 12px;border-top:1px solid rgba(255,255,255,0.06)">显式状态机,可从任一步恢复;wizard.cancel 不丢已完成的步。</div></div><div class="ws" style="flex:1">
+<div class="pane-h" style="height:44px"><span class="pane-t" style="font-size:13px">第 4 步 · Binance MCP 授权(Agentic 子账户)</span><span class="hint">exchange.oauth.start → 浏览器 → /oauth/callback → exchange.oauth.complete</span><span style="margin-left:auto"><span class="pill warn mono "><span class="dot"></span>等待回调</span></span></div>
+<div class="col" style="flex:1;gap:0;overflow:hidden">
+  <div class="row" style="align-items:flex-start;gap:12px;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,0.06)"><span class="chk ok"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" stroke-width="2.6"><path d="M20 6L9 17l-5-5"/></svg></span><div class="col" style="flex:1;gap:8px"><div class="row"><span style="font-size:13px;font-weight:600;color:#dfe6ea">启动本地回调监听</span><span class="hint num" style="margin-left:auto">19:41:02</span></div><div class="kv" style=""><span class="k">redirect_uri</span><span class="num ell">http://127.0.0.1:18801/oauth/callback</span><span class="k">为什么固定端口</span><span class="num ell">CIMD 元数据里的 redirect_uri 必须逐字匹配</span><span class="k">client_id</span><span class="num ell">CIMD 托管元数据 · <bridge-domain>/.well-known/trading-swarm-client.json(P0 验证)</span><span class="k">PKCE</span><span class="num ell">S256 · code_verifier 已生成(只在内存)</span></div></div></div>
+  <div class="row" style="align-items:flex-start;gap:12px;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,0.06)"><span class="chk ok"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" stroke-width="2.6"><path d="M20 6L9 17l-5-5"/></svg></span><div class="col" style="flex:1;gap:8px"><div class="row"><span style="font-size:13px;font-weight:600;color:#dfe6ea">打开浏览器授权</span><span class="hint num" style="margin-left:auto">19:41:03</span></div><div class="row" style="gap:8px"><span class="btn out  "><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>已打开浏览器</span><span class="btn ghost  "><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>复制授权链接</span><span class="hint">accounts.binance.com/oauth/authorize?client_id=…&amp;scope=market+account&amp;code_challenge=…</span></div><div class="row" style="gap:6px"><span class="lbl">申请 scope</span><span class="pill ok mono "><span class="dot"></span>market</span><span class="pill ok mono "><span class="dot"></span>account</span><span class="pill dim mono "><span class="dot"></span>trade · 未申请</span><span class="pill dim mono "><span class="dot"></span>transfer · v1 不勾</span><span class="hint">Observe 阶段只授 market+account;进入 Draft 前再重新授权加 trade</span></div></div></div>
+  <div class="row" style="align-items:flex-start;gap:12px;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,0.06)"><span class="chk on"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" stroke-width="2.6"><path d="M20 6L9 17l-5-5"/></svg></span><div class="col" style="flex:1;gap:8px"><div class="row"><span style="font-size:13px;font-weight:600;color:#dfe6ea">等待回环回调</span><span class="hint num" style="margin-left:auto">19:41:03 起</span></div><div class="row" style="gap:10px"><span class="spin"></span><span>在浏览器里登录 Binance 并点「授权」后会自动继续,不要关闭本页</span></div>
+     <div class="row" style="gap:16px"><span class="num" style="font-size:22px;font-weight:600">00:42</span><span class="col" style="gap:4px;flex:1"><span class="hint">已等待 · 超时 10:00 后需重新开始(code 一次性)</span><span class="meter"><i style="width:7%;background:#6fcadf"></i></span></span></div>
+     <div class="row" style="gap:8px"><span class="btn out  "><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>重新打开浏览器</span><span class="btn ghost  ">换成手动粘贴回调 URL</span><span class="hint">回调只在向导期间监听;完成后端口即关</span></div></div></div>
+  <div class="row" style="align-items:flex-start;gap:12px;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,0.06)"><span class="chk todo"></span><div class="col" style="flex:1;gap:8px"><div class="row"><span style="font-size:13px;font-weight:600;color:#868f95">校验 token · tools/list 快照钉版 · 读子账户余额</span><span class="hint num" style="margin-left:auto"></span></div><div class="kv" style=""><span class="k">token 有效期</span><span class="num ell">—</span><span class="k">scope</span><span class="num ell">—</span><span class="k">tools_hash</span><span class="num ell">— (钉版后写入 policy)</span><span class="k">子账户标识 / 余额</span><span class="num ell">—</span></div></div></div>
+</div>
+<div class="row" style="padding:10px 14px;border-top:1px solid rgba(255,255,255,0.09);background:rgba(25,31,36,0.4)"><span class="btn ghost  ">上一步</span><span class="hint" style="margin-left:12px">wizard.next 带 idempotencyKey;失败可重试</span><span style="margin-left:auto"></span><span class="btn ghost  ">取消向导</span><span class="btn out  dis"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>下一步</span></div></div></div></div>
+<footer class="status">
+  <span class="row" style="gap:6px"><span style="width:6px;height:6px;border-radius:999px;background:#48a870"></span>gateway ws 127.0.0.1:18800 已连接</span>
+  <span class="num">execd ok · lease epoch 7</span>
+  <span class="row num" style="gap:6px"><span style="width:6px;height:6px;border-radius:999px;background:#48a870"></span>main REST ok</span>
+  <span class="row num" style="gap:6px;color:#bd903b"><span style="width:6px;height:6px;border-radius:999px;background:#bd903b"></span>sub MCP degraded · oauth 8m</span>
+  <span class="num" style="margin-left:auto">时钟 +12 ms</span>
+  <span class="num">v0.1.0</span>
+</footer></div>
+</div>
+</x-dc>
+</body>
+</html>

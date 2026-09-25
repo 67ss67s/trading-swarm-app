@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "seq": 2,
+  "event": "intent.foo",
+  "at": 1788350000000,
+  "payload": {}
+}

@@ -1,0 +1,36 @@
+[package]
+name = "exec-core"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "tswarm-rest-probe"
+path = "src/bin/tswarm-rest-probe.rs"
+
+[[bin]]
+name = "tswarm-demo-exec"
+path = "src/bin/tswarm-demo-exec.rs"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+futures-util.workspace = true
+hex.workspace = true
+hmac.workspace = true
+http.workspace = true
+hyper-util.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-tungstenite.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+axum.workspace = true
+tempfile.workspace = true

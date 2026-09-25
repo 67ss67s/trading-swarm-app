@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "account": "sub",
+  "channel": "mcp",
+  "computed_at": 1788350000000,
+  "consistency": "consistent",
+  "account_version": "a18c8380c8cef8e3ed2ef66ee6d39cfcf4bd56c0271e3f7fe810478e065ac7ab",
+  "span_ms": 350,
+  "components": {
+    "balances": {
+      "observed_at": 1788349999900,
+      "fetched_from": 1788349999650,
+      "fetched_to": 1788349999900,
+      "completeness": "complete",
+      "source": "mcp",
+      "data": [
+        {
+          "asset": "USDT",
+          "wallet": "usdm_futures",
+          "wallet_balance": 1000.5,
+          "available": "900"
+        }
+      ]
+    },
+    "positions": {
+      "observed_at": 1788349999950,
+      "fetched_from": 1788349999700,
+      "fetched_to": 1788349999950,
+      "completeness": "complete",
+      "source": "mcp",
+      "data": []
+    },
+    "open_orders": {
+      "observed_at": 1788350000000,
+      "fetched_from": 1788349999800,
+      "fetched_to": 1788350000000,
+      "completeness": "complete",
+      "source": "mcp",
+      "data": []
+    },
+    "position_mode": {
+      "observed_at": 1788349999650,
+      "fetched_from": 1788349999600,
+      "fetched_to": 1788349999650,
+      "completeness": "complete",
+      "source": "mcp",
+      "data": {
+        "mode": "one_way"
+      }
+    },
+    "recent_fills": {
+      "observed_at": 1788349999990,
+      "fetched_from": 1788349999800,
+      "fetched_to": 1788349999990,
+      "completeness": "complete",
+      "source": "mcp",
+      "data": []
+    },
+    "margin": {
+      "observed_at": 1788349999900,
+      "fetched_from": 1788349999650,
+      "fetched_to": 1788349999900,
+      "completeness": "partial",
+      "source": "mcp",
+      "error": {
+        "kind": "unavailable",
+        "message": "margin ratio 字段缺失",
+        "retryable": true
+      },
+      "data": {
+        "margin_balance": "1000.5",
+        "available_balance": "900"
+      }
+    }
+  },
+  "summary": {
+    "quote_asset": "USDT",
+    "wallet_balance": "1000.5",
+    "margin_balance": "1000.5",
+    "available_balance": "900",
+    "unrealized_pnl": "0",
+    "open_position_count": 0,
+    "open_order_count": 0
+  }
+}

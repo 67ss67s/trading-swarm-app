@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "effect_id": "e5f60718-c9da-4ebf-9012-4c5d6e7f8091",
+  "intent_id": "5e6f7081-92a3-4b4c-8d5e-6f708192a3b4",
+  "plan_id": "bf6b2d13-3fba-4d5c-8d2b-7e3b6d2c8f12",
+  "kind": "open",
+  "account": "sub",
+  "symbol": "SOLUSDT",
+  "status": "failed",
+  "target_qty": "1.5",
+  "filled_qty": "1.5",
+  "remaining_qty": "0",
+  "remaining_canceled": true,
+  "first_fill_at": 1788350000500,
+  "protection_required": true,
+  "protection_confirmed": false,
+  "protection_order_ids": [],
+  "naked_seconds": 21,
+  "compensation_close_attempt_id": "cf7c3e24-40cb-4e6d-9e3c-8f4c7e3d9a23",
+  "position_qty_after": "0",
+  "failure_reason": "max_naked_seconds=20 内保护腿未确认,已 reduce-only 市价补偿平仓",
+  "evaluated_at": 1788350022000
+}

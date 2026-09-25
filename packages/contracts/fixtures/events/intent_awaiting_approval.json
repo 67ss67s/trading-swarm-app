@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "seq": 4181,
+  "event": "intent.awaiting_approval",
+  "at": 1788350001000,
+  "account": "sub",
+  "intent_id": "0f8fad5b-d9cb-469f-a165-70867728950e",
+  "plan_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+  "symbol": "BTCUSDT",
+  "payload": {
+    "status": "awaiting_approval",
+    "plan_hash": "474838171b83561288f58fc3ebdaf96c236f5ff4983b1556cac37ee8cc22433c",
+    "authorization_ttl_seconds": 120
+  }
+}

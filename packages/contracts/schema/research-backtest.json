@@ -1,0 +1,1548 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trading-swarm.local/schema/research-backtest.json",
+  "title": "ResearchBacktest",
+  "anyOf": [
+    {
+      "$ref": "#/$defs/BacktestReport"
+    },
+    {
+      "$ref": "#/$defs/BacktestReportSummary"
+    }
+  ],
+  "$defs": {
+    "BacktestSegmentName": {
+      "enum": [
+        "in_sample",
+        "out_of_sample"
+      ]
+    },
+    "BacktestMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "total_return": {
+          "type": "number",
+          "description": "窗口总收益,小数"
+        },
+        "cagr": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "年化复合收益(365 天),窗口<30 天为 null"
+        },
+        "max_drawdown": {
+          "type": "number",
+          "description": "最大回撤,正数小数"
+        },
+        "sharpe": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "日收益 Sharpe×√365,rf=0;日收益<30 为 null"
+        },
+        "sortino": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "下行偏差 sqrt(Σmin(r,0)²/N) 口径"
+        },
+        "calmar": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "cagr / max_drawdown"
+        },
+        "volatility": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "日收益标准差×√365"
+        },
+        "win_rate": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "已平仓位胜率"
+        },
+        "profit_factor": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "盈利合计/|亏损合计|,无亏损为 null"
+        },
+        "avg_win": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "盈利仓位平均单笔收益(净盈亏/入场名义),小数"
+        },
+        "avg_loss": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "亏损仓位平均单笔收益,负数小数"
+        },
+        "risk_reward": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "avg_win/|avg_loss|"
+        },
+        "expectancy": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "全部仓位平均单笔收益,小数"
+        },
+        "max_win_streak": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "max_loss_streak": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "time_in_drawdown": {
+          "type": "number",
+          "description": "净值低于前高的时间占比"
+        },
+        "max_drawdown_duration_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "前高到收复(或窗口末)的最长时长"
+        },
+        "trades": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "已平仓位数(同一仓位多次减仓合并)"
+        },
+        "exposure": {
+          "type": "number",
+          "description": "持仓市值/净值 的逐根均值"
+        },
+        "avg_holding_ms": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "平均持仓时长"
+        },
+        "best_trade": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "最好单笔收益,小数"
+        },
+        "worst_trade": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "最差单笔收益,小数"
+        },
+        "net_pnl": {
+          "type": "number",
+          "description": "净盈亏,报价币(USDT)"
+        },
+        "fees": {
+          "type": "number",
+          "description": "实付手续费,报价币"
+        },
+        "benchmark_return": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "同窗口买入持有收益(含同样费用与滑点)"
+        },
+        "excess_return": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "total_return - benchmark_return"
+        },
+        "alpha": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "对基准日收益 OLS 截距×365"
+        },
+        "beta": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "对基准日收益 OLS 斜率"
+        },
+        "time_in_market": {
+          "type": "number",
+          "description": "有持仓的 bar 占比"
+        }
+      },
+      "required": [
+        "total_return",
+        "cagr",
+        "max_drawdown",
+        "sharpe",
+        "sortino",
+        "calmar",
+        "volatility",
+        "win_rate",
+        "profit_factor",
+        "avg_win",
+        "avg_loss",
+        "risk_reward",
+        "expectancy",
+        "max_win_streak",
+        "max_loss_streak",
+        "time_in_drawdown",
+        "max_drawdown_duration_ms",
+        "trades",
+        "exposure",
+        "time_in_market",
+        "avg_holding_ms",
+        "best_trade",
+        "worst_trade",
+        "net_pnl",
+        "fees",
+        "benchmark_return",
+        "excess_return",
+        "alpha",
+        "beta"
+      ]
+    },
+    "BacktestEquityPoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "equity": {
+          "type": "number"
+        },
+        "pnl_pct": {
+          "type": "number"
+        },
+        "drawdown": {
+          "type": "number"
+        },
+        "benchmark_pct": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "exposure": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "at",
+        "equity",
+        "pnl_pct",
+        "drawdown",
+        "benchmark_pct",
+        "exposure"
+      ]
+    },
+    "BacktestTrade": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "symbol": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "side": {
+          "enum": [
+            "long",
+            "short"
+          ]
+        },
+        "entry_at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "entry_price": {
+          "type": "number"
+        },
+        "exit_at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "exit_price": {
+          "type": "number"
+        },
+        "qty": {
+          "type": "number"
+        },
+        "pnl": {
+          "type": "number"
+        },
+        "return_pct": {
+          "type": "number"
+        },
+        "fees": {
+          "type": "number"
+        },
+        "bars_held": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "exit_reason": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "segment": {
+          "$ref": "#/$defs/BacktestSegmentName"
+        }
+      },
+      "required": [
+        "id",
+        "symbol",
+        "side",
+        "entry_at",
+        "entry_price",
+        "exit_at",
+        "exit_price",
+        "qty",
+        "pnl",
+        "return_pct",
+        "fees",
+        "bars_held",
+        "exit_reason",
+        "segment"
+      ]
+    },
+    "BacktestSegment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/BacktestSegmentName"
+        },
+        "from_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "to_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "name",
+        "from_ms",
+        "to_ms"
+      ]
+    },
+    "BacktestSegmentMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/BacktestSegmentName"
+        },
+        "from_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "to_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "metrics": {
+          "$ref": "#/$defs/BacktestMetrics"
+        }
+      },
+      "required": [
+        "name",
+        "from_ms",
+        "to_ms",
+        "metrics"
+      ]
+    },
+    "BacktestPeriodReturn": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "period": {
+          "type": "string",
+          "maxLength": 16
+        },
+        "return": {
+          "type": "number"
+        },
+        "benchmark": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "period",
+        "return",
+        "benchmark"
+      ]
+    },
+    "BacktestTradeStats": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "exit_reasons": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "holding_histogram": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "bins": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "maxItems": 64
+            },
+            "counts": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "maxItems": 64
+            }
+          },
+          "required": [
+            "bins",
+            "counts"
+          ]
+        },
+        "return_histogram": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "bins": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "maxItems": 64
+            },
+            "counts": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "maxItems": 64
+            }
+          },
+          "required": [
+            "bins",
+            "counts"
+          ]
+        },
+        "long_trades": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "short_trades": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "pnl_by_exit_reason": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/BacktestExitReasonPnl"
+          }
+        }
+      },
+      "required": [
+        "exit_reasons",
+        "holding_histogram",
+        "return_histogram",
+        "long_trades",
+        "short_trades"
+      ]
+    },
+    "BacktestDataProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "first_at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "last_at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "bars": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "timeframe": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "dataset_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4000,
+          "description": "research_datasets 里保存的整段 K 线(含预热),回放 candles 从这里取"
+        },
+        "snapshot_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4000,
+          "description": "研究 loop 价格快照 id(如果来自 loop)"
+        },
+        "warmup_bars": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "warmup_borrowed": {
+          "type": "boolean",
+          "description": "预热是否向窗口之前的数据借"
+        },
+        "trading_from_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "market": {
+          "$ref": "research-orders.json#/$defs/OrderMarket",
+          "description": "数据市场;缺省 spot"
+        },
+        "perp": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BacktestPerpProvenance"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "market=perp 时的永续溯源"
+        }
+      },
+      "required": [
+        "source",
+        "first_at",
+        "last_at",
+        "bars",
+        "timeframe",
+        "dataset_id",
+        "snapshot_id",
+        "warmup_bars",
+        "warmup_borrowed",
+        "trading_from_ms"
+      ]
+    },
+    "BacktestAssetKind": {
+      "enum": [
+        "single",
+        "basket"
+      ]
+    },
+    "BacktestAssetStatus": {
+      "enum": [
+        "completed",
+        "failed",
+        "data_missing"
+      ]
+    },
+    "BacktestAsset": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "kind": {
+          "$ref": "#/$defs/BacktestAssetKind"
+        },
+        "symbols": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "maxItems": 16
+        },
+        "status": {
+          "$ref": "#/$defs/BacktestAssetStatus"
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4000
+        },
+        "metrics": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BacktestMetrics"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "segments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BacktestSegmentMetrics"
+          },
+          "maxItems": 8
+        },
+        "equity": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BacktestEquityPoint"
+          },
+          "maxItems": 5000
+        },
+        "trades": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BacktestTrade"
+          },
+          "maxItems": 20000
+        },
+        "monthly_returns": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BacktestPeriodReturn"
+          },
+          "maxItems": 2000
+        },
+        "yearly_returns": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BacktestPeriodReturn"
+          },
+          "maxItems": 200
+        },
+        "trade_stats": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BacktestTradeStats"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "data": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BacktestDataProvenance"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "window": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "from_ms": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "to_ms": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "from_ms",
+                "to_ms"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "该资产的交易窗口(预热之后的首根决策 bar 收盘 → 最后一根已收盘 bar)"
+        },
+        "plans": {
+          "type": "array",
+          "items": {
+            "$ref": "research-orders.json#/$defs/BacktestPlan"
+          },
+          "maxItems": 20000,
+          "description": "订单周期执行核(WP-F)产出的订单计划;默认执行器不产出"
+        },
+        "plan_stats": {
+          "anyOf": [
+            {
+              "$ref": "research-orders.json#/$defs/BacktestPlanStats"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "engine_version": {
+          "type": "string",
+          "maxLength": 4000,
+          "description": "该资产执行器的口径版本"
+        },
+        "side_breakdown": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "long": {
+              "$ref": "#/$defs/BacktestSideStats"
+            },
+            "short": {
+              "$ref": "#/$defs/BacktestSideStats"
+            }
+          },
+          "required": [
+            "long",
+            "short"
+          ]
+        },
+        "per_symbol": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BacktestSymbolContribution"
+          },
+          "maxItems": 16
+        },
+        "daily_pnl": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BacktestDailyPnl"
+          },
+          "maxItems": 3000,
+          "description": "UTC 日净值收益(最近 ≤3000 天)"
+        },
+        "capital_usage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BacktestCapitalUsage"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "strategy_capacity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BacktestCapacity"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "key",
+        "label",
+        "kind",
+        "symbols",
+        "status",
+        "error",
+        "metrics",
+        "segments",
+        "equity",
+        "trades",
+        "monthly_returns",
+        "yearly_returns",
+        "trade_stats",
+        "data"
+      ]
+    },
+    "BacktestScoreLabel": {
+      "enum": [
+        "excellent",
+        "good",
+        "fair",
+        "needs_work",
+        "poor"
+      ]
+    },
+    "BacktestConfidence": {
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ]
+    },
+    "BacktestScoreComponent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "value": {
+          "type": "number"
+        },
+        "weight": {
+          "type": "number"
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 4000
+        }
+      },
+      "required": [
+        "key",
+        "value",
+        "weight",
+        "note"
+      ]
+    },
+    "BacktestScore": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "label": {
+          "$ref": "#/$defs/BacktestScoreLabel"
+        },
+        "confidence": {
+          "$ref": "#/$defs/BacktestConfidence"
+        },
+        "confidence_reason": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "components": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BacktestScoreComponent"
+          },
+          "maxItems": 16
+        }
+      },
+      "required": [
+        "value",
+        "label",
+        "confidence",
+        "confidence_reason",
+        "components"
+      ]
+    },
+    "BacktestExecution": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "initial_cash": {
+          "type": "number"
+        },
+        "fee_rate": {
+          "type": "number"
+        },
+        "slippage_bps": {
+          "type": "number"
+        },
+        "sizing_mode": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "fill_model": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "basket_weighting": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "market": {
+          "$ref": "research-orders.json#/$defs/OrderMarket"
+        },
+        "leverage": {
+          "type": "number",
+          "minimum": 0
+        },
+        "view_bars": {
+          "type": "string",
+          "maxLength": 4000,
+          "description": "每根决策可见的历史长度口径"
+        }
+      },
+      "required": [
+        "initial_cash",
+        "fee_rate",
+        "slippage_bps",
+        "sizing_mode",
+        "fill_model",
+        "basket_weighting",
+        "market",
+        "leverage"
+      ]
+    },
+    "BacktestReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "created_at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "engine_version": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "strategy_ir_hash": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "strategy_ir": {
+          "$ref": "research.json#/$defs/StrategyIR"
+        },
+        "timeframe": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "window": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "from_ms": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "to_ms": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "from_ms",
+            "to_ms"
+          ]
+        },
+        "segments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BacktestSegment"
+          },
+          "maxItems": 8
+        },
+        "execution": {
+          "$ref": "#/$defs/BacktestExecution"
+        },
+        "primary_key": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "assets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BacktestAsset"
+          },
+          "maxItems": 16
+        },
+        "score": {
+          "$ref": "#/$defs/BacktestScore"
+        },
+        "run_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "maxItems": 32
+        },
+        "inquiry_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4000
+        },
+        "session_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4000
+        },
+        "strategy_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4000
+        },
+        "strategy_version": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "maxItems": 64
+        }
+      },
+      "required": [
+        "id",
+        "created_at",
+        "engine_version",
+        "title",
+        "description",
+        "strategy_ir_hash",
+        "strategy_ir",
+        "timeframe",
+        "window",
+        "segments",
+        "execution",
+        "primary_key",
+        "assets",
+        "score",
+        "run_ids",
+        "inquiry_id",
+        "session_id",
+        "strategy_id",
+        "strategy_version",
+        "warnings"
+      ]
+    },
+    "BacktestReportSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "created_at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "timeframe": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "primary_key": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "strategy_ir_hash": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "strategy_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4000
+        },
+        "strategy_version": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "score": {
+          "$ref": "#/$defs/BacktestScore"
+        },
+        "metrics": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BacktestMetrics"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sparkline": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 200
+        }
+      },
+      "required": [
+        "id",
+        "created_at",
+        "title",
+        "timeframe",
+        "primary_key",
+        "strategy_ir_hash",
+        "strategy_id",
+        "strategy_version",
+        "score",
+        "metrics",
+        "sparkline"
+      ]
+    },
+    "BacktestSideStats": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "trades": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "total_pnl": {
+          "type": "number",
+          "description": "报价币"
+        },
+        "win_rate": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "avg_return": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "平均单笔收益,小数"
+        }
+      },
+      "required": [
+        "trades",
+        "total_pnl",
+        "win_rate",
+        "avg_return"
+      ]
+    },
+    "BacktestExitReasonPnl": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "pnl": {
+          "type": "number",
+          "description": "该退出原因的净盈亏合计,报价币"
+        },
+        "avg_return": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "count",
+        "pnl",
+        "avg_return"
+      ]
+    },
+    "BacktestSymbolContribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "symbol": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "trades": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "pnl": {
+          "type": "number",
+          "description": "该腿净值变化(含期末未平仓盯市),报价币"
+        },
+        "win_rate": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "contribution": {
+          "type": "number",
+          "description": "pnl / 篮子初始资金;各腿之和 = 篮子 total_return"
+        }
+      },
+      "required": [
+        "symbol",
+        "trades",
+        "pnl",
+        "win_rate",
+        "contribution"
+      ]
+    },
+    "BacktestDailyPnl": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "day": {
+          "type": "string",
+          "maxLength": 10
+        },
+        "pnl_pct": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "day",
+        "pnl_pct"
+      ]
+    },
+    "BacktestCapitalUsage": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "资金使用:avg/max_exposure = 持仓市值/净值;time_in_market = 有持仓的 bar 占比;avg_concurrent_positions = 逐根同时持仓数均值;idle_fraction = 没有任何持仓的 bar 占比",
+      "properties": {
+        "avg_exposure": {
+          "type": "number"
+        },
+        "max_exposure": {
+          "type": "number"
+        },
+        "time_in_market": {
+          "type": "number"
+        },
+        "avg_concurrent_positions": {
+          "type": "number"
+        },
+        "idle_fraction": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "avg_exposure",
+        "max_exposure",
+        "time_in_market",
+        "avg_concurrent_positions",
+        "idle_fraction"
+      ]
+    },
+    "BacktestCapacity": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "策略容量粗估:单笔入场名义不超过窗口内 bar 成交额中位数 × 参与率 ⇒ 可容纳资金 ≈ 中位成交额 × 参与率 / 平均单笔入场占净值比例",
+      "properties": {
+        "capacity_usd": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "participation_rate": {
+          "type": "number"
+        },
+        "median_bar_quote_volume": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "avg_entry_fraction": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "method": {
+          "type": "string",
+          "maxLength": 4000
+        }
+      },
+      "required": [
+        "capacity_usd",
+        "participation_rate",
+        "median_bar_quote_volume",
+        "avg_entry_fraction",
+        "method"
+      ]
+    },
+    "BacktestFundingSegment": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "资金费序列里连续同源的一段",
+      "properties": {
+        "source": {
+          "enum": [
+            "okx_archive",
+            "okx_rest",
+            "binance_proxy"
+          ],
+          "description": "okx_archive=OKX 月度归档(UTC+8 月);okx_rest=OKX 资金费 REST(近约 3 个月);binance_proxy=币安 U 本位同名合约代理(OKX 官方覆盖不到的时段)"
+        },
+        "from_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "to_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "points": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "source",
+        "from_ms",
+        "to_ms",
+        "points"
+      ]
+    },
+    "BacktestPerpProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "永续回测的数据溯源(WP-F):成交价/标记价 K 线覆盖、资金费分界与重叠期偏差、维持保证金分档",
+      "properties": {
+        "instrument": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "OKX instId,如 BTC-USDT-SWAP"
+        },
+        "source": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "mark_coverage": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "from_ms": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "to_ms": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "from_ms",
+                "to_ms"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mark_missing_bars": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "没有标记价的根数(强平退回成交价)"
+        },
+        "funding_coverage": {
+          "enum": [
+            "complete",
+            "partial",
+            "missing"
+          ]
+        },
+        "funding_note": {
+          "type": "string",
+          "maxLength": 4000,
+          "description": "资金费来源分界的一句话(哪段 OKX 官方 / OKX 归档 / 币安代理)"
+        },
+        "funding_segments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BacktestFundingSegment"
+          },
+          "maxItems": 200
+        },
+        "funding_gaps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "from_ms": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "to_ms": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "from_ms",
+              "to_ms"
+            ]
+          },
+          "maxItems": 200
+        },
+        "proxy_until_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "币安代理用到哪一期(null=没用代理)"
+        },
+        "deviation_note": {
+          "type": "string",
+          "maxLength": 4000,
+          "description": "OKX 与币安同期资金费对照(相关、平均差、累计差)"
+        },
+        "max_lever": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "maintenance_margin": {
+          "type": "string",
+          "maxLength": 4000,
+          "description": "维持保证金分档口径(当前值,不是历史值)"
+        },
+        "flags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "maxItems": 50
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "maxItems": 50
+        }
+      },
+      "required": [
+        "instrument",
+        "source",
+        "mark_coverage",
+        "mark_missing_bars",
+        "funding_coverage",
+        "funding_note",
+        "funding_segments",
+        "proxy_until_ms",
+        "deviation_note",
+        "max_lever",
+        "maintenance_margin",
+        "flags",
+        "notes"
+      ]
+    }
+  }
+}

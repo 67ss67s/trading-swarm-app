@@ -1,0 +1,241 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "title": "1 Dashboard 总览"
+    },
+    {
+      "file": "Chart.dc.html",
+      "x": 1520,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "title": "10 Chart 最小 K 线"
+    },
+    {
+      "file": "Portfolio.dc.html",
+      "x": 3040,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "title": "4 Portfolio 主+子合并"
+    },
+    {
+      "file": "OnboardingOAuth.dc.html",
+      "x": 0,
+      "y": 1120,
+      "w": 1440,
+      "h": 900,
+      "title": "2a 向导 · 第 4 步 等待回调"
+    },
+    {
+      "file": "OnboardingOAuthDone.dc.html",
+      "x": 1520,
+      "y": 1120,
+      "w": 1440,
+      "h": 900,
+      "title": "2b 向导 · 第 4 步 授权结果"
+    },
+    {
+      "file": "OnboardingMainKey.dc.html",
+      "x": 3040,
+      "y": 1120,
+      "w": 1440,
+      "h": 900,
+      "title": "2c 向导 · 4b 主账户 API key"
+    },
+    {
+      "file": "Exchange.dc.html",
+      "x": 0,
+      "y": 2240,
+      "w": 1440,
+      "h": 900,
+      "title": "3 Exchange 两通道健康"
+    },
+    {
+      "file": "Policy.dc.html",
+      "x": 1520,
+      "y": 2240,
+      "w": 1440,
+      "h": 900,
+      "title": "9 Policy & 紧急停"
+    },
+    {
+      "file": "EmergencyStop.dc.html",
+      "x": 3040,
+      "y": 2240,
+      "w": 520,
+      "h": 520,
+      "title": "9b 紧急停二次确认"
+    },
+    {
+      "file": "Trade.dc.html",
+      "x": 0,
+      "y": 3360,
+      "w": 1440,
+      "h": 900,
+      "title": "5 Trade 主账户手动下单"
+    },
+    {
+      "file": "TradeConfirm.dc.html",
+      "x": 1520,
+      "y": 3360,
+      "w": 520,
+      "h": 760,
+      "title": "5b 结构化确认弹层"
+    },
+    {
+      "file": "Funding.dc.html",
+      "x": 3040,
+      "y": 3360,
+      "w": 1440,
+      "h": 900,
+      "title": "6 Funding 划转 / 提币深链"
+    },
+    {
+      "file": "Intents.dc.html",
+      "x": 0,
+      "y": 4480,
+      "w": 1440,
+      "h": 940,
+      "title": "7 Intents 审批卡"
+    },
+    {
+      "file": "IntentCardMobile.dc.html",
+      "x": 1520,
+      "y": 4480,
+      "w": 390,
+      "h": 844,
+      "title": "7b 移动端审批卡"
+    },
+    {
+      "file": "Activity.dc.html",
+      "x": 3040,
+      "y": 4480,
+      "w": 1440,
+      "h": 900,
+      "title": "8 Activity trace 回放"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "cover",
+      "x": 0,
+      "y": -420,
+      "w": 900,
+      "text": "trading-swarm WebUI · A3 最小 UI 设计稿 v1 · 2026-09-02\n每个画板 = 一页(桌面 1440 宽),小画板 = 组件 1:1 / 移动端。示例数据全部取自 packages/contracts/fixtures(intent / plan / authorization / account_snapshot / policy / events / attempt / exchange_order / position_effect / fill),状态枚举保留英文小写。\n气质借 8794 shadcn 变体「Graphite & Ice」:三层暗色地面、冰青只给界面 chrome、绿红只表达多空、数字全部等宽;两账户用固定视觉约定区分:main · REST = 石板灰 chip,sub · MCP = 冰青 chip。\n行 1 交易台 · 行 2 向导 · 行 3 系统 · 行 4 主账户动钱 · 行 5 agent 动钱与回放"
+    },
+    {
+      "id": "n-dashboard",
+      "x": 0,
+      "y": -168,
+      "w": 560,
+      "text": "Dashboard\nRPC:account.truth(两账户合并)· intents.list · strategies.list(attention 桶)· exchange.status · policy.get · usage.summary\n事件:account.updated|stale · intent.* · strategy.attention · exchange.auth.* · health · usage"
+    },
+    {
+      "id": "n-chart",
+      "x": 1520,
+      "y": -168,
+      "w": 560,
+      "text": "Chart\nRPC:market.klines / market.subscribe(4h 收盘)· market.features / market.structure(证据)· intents.get · drawing.create/update/remove(role, state)\n事件:market.kline · market.tick · intent.*\n画线颜色 = 8794 frontend-shared/drawing/palette.ts 的 role 调色(support 蓝 / resistance 琥珀 / trend 品红 / volumeNode·structure 无彩),状态用虚实与透明度编码,不用色相"
+    },
+    {
+      "id": "n-portfolio",
+      "x": 3040,
+      "y": -168,
+      "w": 560,
+      "text": "Portfolio\nRPC:account.truth(AccountSnapshot:每组件 observed_at / fetched_from-to / completeness / source;consistency = consistent | inconsistent | unavailable;account_version)· orders.list · positions.list\n事件:account.updated|stale · order.* · position.*\n订单 origin:tg- 前缀 = local,ts_ / 其他 = foreign(开仓前强制对账)"
+    },
+    {
+      "id": "n-oauth",
+      "x": 0,
+      "y": 952,
+      "w": 560,
+      "text": "向导 第 4 步(等待回调)\nRPC:wizard.start/next/status · exchange.oauth.start(启动回环回调 :18801,PKCE)→ 浏览器 → GET /oauth/callback(只在向导期间监听)\n事件:exchange.auth.pending · tick"
+    },
+    {
+      "id": "n-oauth-done",
+      "x": 1520,
+      "y": 952,
+      "w": 560,
+      "text": "向导 第 4 步(授权结果)\nRPC:exchange.oauth.complete · exchange.tools.snapshot(tools/list 钉版 → tools_hash)· account.truth(子账户余额)\n事件:exchange.auth.granted · exchange.tools.snapshot"
+    },
+    {
+      "id": "n-mainkey",
+      "x": 3040,
+      "y": 952,
+      "w": 560,
+      "text": "向导 4b 主账户 API key\nRPC:wizard.next{apiKey, secret}(只到 execd,落盘 secrets/apikey-main.json 0600)· execd 权限探测(读 / 合约 / 子账户划转 / 提币 / IP 白名单)· sub-account/list · sub-account/assets · universalTransfer dry-run(§3.5 三件事)\n事件:exchange.credentials.probed"
+    },
+    {
+      "id": "n-exchange",
+      "x": 0,
+      "y": 2072,
+      "w": 560,
+      "text": "Exchange\nRPC:exchange.status(key 指纹 / 权限位 / 用户数据流 / 时钟偏移 / RestGate;OAuth fresh|expiring|expired|revoked / MCP 会话 / tools_hash vs 钉版 / 子账户标识)· exchange.oauth.start/complete/revoke · exchange.tools.snapshot\n事件:exchange.auth.* · exchange.tools.drift · health"
+    },
+    {
+      "id": "n-policy",
+      "x": 1520,
+      "y": 2072,
+      "w": 560,
+      "text": "Policy & 紧急停\nRPC:policy.get · policy.set(admin + confirm 字段逐字回填)· policy.emergencyStop(admin,输入 HALT)\n事件:policy.changed · policy.halted\nlive_capped 灰掉:feature-gate 关闭直到 Q6(Binance 对 standing authorization 的口径)"
+    },
+    {
+      "id": "n-stop",
+      "x": 3040,
+      "y": 2072,
+      "w": 480,
+      "text": "紧急停二次确认(组件 1:1)\npolicy.emergencyStop → mode halt_all + emergency_stop=true + 所有 active 授权 revoked(emergency_stop);EmergencyReduce 与已确认保护腿保留"
+    },
+    {
+      "id": "n-trade",
+      "x": 0,
+      "y": 3192,
+      "w": 560,
+      "text": "Trade(主账户手动下单,经 execd)\nRPC:tools.invoke intent.propose{kind open|close, account main}(principal=user, surface=rpc, origin ui:trade-page)→ exec.plan.materialize(预览)→ intents.approve{confirm_echo}\n事件:intent.awaiting_approval → intent.approved → attempt.before_submit/acked|unknown → order.observed → effect.evaluated;状态 dispatching → executing → completed / execution_unknown(对账中禁新增敞口)"
+    },
+    {
+      "id": "n-confirm",
+      "x": 1520,
+      "y": 3192,
+      "w": 480,
+      "text": "结构化确认弹层(组件 1:1)\nconfirm_fields(tables/confirm_fields.json)kind=order:symbol · side · qty · order_type · price · trigger_price(缺省不出现)· leverage · reduce_only + 永远回填 plan_hash;execd exec.intent.authorize 逐字比对,任何差异 → conflict(1006)\nTTL:market 30 s · limit 120 s"
+    },
+    {
+      "id": "n-funding",
+      "x": 3040,
+      "y": 3192,
+      "w": 560,
+      "text": "Funding\nRPC:tools.invoke intent.propose{kind transfer, asset, amount, from_account/from_wallet, to_account/to_wallet}(principal=user)→ intents.approve{confirm_echo: asset · amount · from_account · to_account · plan_hash}· account.history\n事件:intent.* · attempt.*(leg transfer,clientOrderId tg-…-f0-1)\n提币 = 打开 Binance 深链(Q7 默认不做一键提币)"
+    },
+    {
+      "id": "n-intents",
+      "x": 0,
+      "y": 4312,
+      "w": 560,
+      "text": "Intents\nRPC:intents.list{status} · intents.get(Intent + ExecutableOrderPlan + gate_rejections)· intents.approve{plan_hash, confirm_echo}(超上限需 admin)· intents.reject · intents.expire\n事件:intent.created/gated/awaiting_approval/approved/rejected/expired/submitted/reconciled\n11 种状态徽章:proposed · awaiting_approval · authorized · recorded · dispatching · execution_unknown · executing · completed · canceled · expired · rejected"
+    },
+    {
+      "id": "n-mobile",
+      "x": 1520,
+      "y": 4312,
+      "w": 420,
+      "text": "移动端审批卡(390 宽)\n与 Telegram 卡片同一口径:thesis / evidence_refs / plan 经济字段 / gate 摘要 / TTL / 回填 8 字段;按钮 ≥ 44px"
+    },
+    {
+      "id": "n-activity",
+      "x": 3040,
+      "y": 4312,
+      "w": 560,
+      "text": "Activity / Trace 回放\nRPC:runs.list · runs.inspect(trace_events + tool_calls + llm_usage,与 execd events 按 exec_seq 对齐)· logs.tail\n时间线:context.built → model.called → tool.called → gate.evaluated → intent.* → attempt.* → order.observed → effect.evaluated"
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}

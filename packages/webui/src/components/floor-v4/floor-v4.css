@@ -1,0 +1,148 @@
+/* 楼层 v4 外壳(顶栏 / 右栏 / 浮层)。颜色变量由主题注入(engine-b/themes.ts 的 ui 表),A/B 两种布局共用。
+   A 的浮层(NPC / 房间卡 / 进化日卡)沿用原型 a.html 的类名,这里只在 .fv4 作用域里定义。 */
+.fv4{--mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;--sans:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  --panel2:var(--panel-2);--up:var(--good);--down:var(--bad);--stage:#000;
+  display:grid;grid-template-rows:56px minmax(0,1fr);height:100%;min-height:0;background:var(--bg);color:var(--ink);font:13px/1.45 var(--sans);border:2px solid var(--line);overflow:hidden}
+.fv4 .mono{font-family:var(--mono)}
+.fv4 button{font:inherit;color:inherit}
+.fv4 .up{color:var(--good)} .fv4 .down{color:var(--bad)} .fv4 .warn{color:var(--warn)}
+/* 顶栏 */
+.fv4 .top{display:flex;align-items:center;gap:16px;padding:0 14px;background:var(--panel);border-bottom:2px solid var(--line);min-width:0}
+.fv4 .brand{display:flex;align-items:center;gap:10px;white-space:nowrap}
+.fv4 .brand canvas{width:26px;height:26px;image-rendering:pixelated}
+.fv4 .brand b{font:700 15px/1 var(--mono);letter-spacing:.04em}
+.fv4 .brand small{display:block;font-size:11px;color:var(--dim);margin-top:3px}
+.fv4 .kpis{display:flex;gap:16px}
+.fv4 .kpi{display:flex;flex-direction:column;line-height:1.15;white-space:nowrap}
+.fv4 .kpi .k{font-size:11px;color:var(--dim)}
+.fv4 .kpi .v{font:700 16px/1.2 var(--mono)}
+.fv4 .coins{display:flex;gap:6px;min-width:0;overflow:hidden}
+.fv4 .coin{display:flex;flex-direction:column;align-items:flex-start;padding:3px 8px;border:2px solid var(--line);background:var(--panel-2);cursor:grab;user-select:none;touch-action:none;line-height:1.2;box-shadow:2px 2px 0 rgba(0,0,0,.35)}
+.fv4 .coin:hover{border-color:var(--accent)}
+.fv4 .coin b{font:700 12px var(--mono)}
+.fv4 .coin span{font:11px var(--mono);color:var(--dim)}
+.fv4 .spacer{flex:1}
+.fv4 .seg{display:flex;border:2px solid var(--line);flex:none}
+.fv4 .seg button{font-size:12px;padding:5px 10px;background:transparent;color:var(--dim);border:0;cursor:pointer;white-space:nowrap}
+.fv4 .seg button.on{background:var(--accent);color:var(--bg);font-weight:700}
+/* 紧急停止 */
+.fv4 .estop{position:relative;width:118px;height:42px;flex:none}
+.fv4 .estop .lid{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;letter-spacing:.08em;color:#ffd5dc;cursor:pointer;z-index:2;background:repeating-linear-gradient(45deg,#3a0d14 0 6px,#240810 6px 12px);border:2px solid #ff3b5c;box-shadow:3px 3px 0 rgba(0,0,0,.5);transform-origin:top;transition:transform .25s steps(4)}
+.fv4 .estop.open .lid{transform:perspective(200px) rotateX(78deg) translateY(-6px)}
+.fv4 .estop.halted .lid{background:#ff3b5c;color:#fff;cursor:default}
+.fv4 .estop .btn{position:absolute;left:50%;top:50%;width:42px;height:42px;margin:-21px 0 0 -21px;border-radius:50%;border:0;padding:0;cursor:pointer;background:radial-gradient(circle at 40% 35%,#ff6b7d,#c8102e 60%,#6a0816);box-shadow:0 3px 0 #3a0008;color:#fff}
+.fv4 .estop .btn span{position:relative;font:800 10px var(--mono);letter-spacing:.04em}
+.fv4 .estop .btn.hold{transform:translateY(2px);box-shadow:0 1px 0 #3a0008}
+.fv4 .estop svg{position:absolute;inset:-5px;width:52px;height:52px;transform:rotate(-90deg);pointer-events:none}
+.fv4 .estop .trk{fill:none;stroke:rgba(255,255,255,.12);stroke-width:3}
+.fv4 .estop .prog{fill:none;stroke:#ffe36b;stroke-width:3}
+/* 舞台 */
+.fv4 .stage{display:grid;grid-template-columns:minmax(0,1fr) 316px;min-height:0}
+.fv4 .scene{position:relative;min-width:0;min-height:0;overflow:hidden;background:#000}
+.fv4 .scene.b > canvas{position:absolute;inset:0;display:block}
+.fv4 .scene.a{display:flex;align-items:center;justify-content:center;padding:8px;background:var(--bg)}
+.fv4 .keys{position:absolute;left:12px;top:10px;z-index:5;font-size:11px;color:rgba(255,255,255,.6);background:rgba(0,0,0,.4);padding:3px 8px;pointer-events:none}
+.fv4 .keys b{color:#fff}
+.fv4 .rail{background:var(--panel);border-left:2px solid var(--line);display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.fv4 .blk{padding:12px 14px;border-bottom:2px solid var(--line)}
+.fv4 .blk h3{margin:0 0 8px;font-size:12px;font-weight:600;color:var(--dim);display:flex;align-items:center;gap:8px;letter-spacing:.04em}
+.fv4 .blk h3 .n{margin-left:auto;font-family:var(--mono);color:var(--ink)}
+.fv4 .inbox{background:linear-gradient(0deg,transparent,color-mix(in srgb,var(--warn) 10%,transparent))}
+.fv4 .inbox h3{color:var(--warn)}
+.fv4 .inbox .dot{width:8px;height:8px;background:var(--warn);display:inline-block;animation:fv4blink 1s steps(2) infinite}
+@keyframes fv4blink{50%{opacity:.2}}
+.fv4 .item{display:block;width:100%;text-align:left;padding:7px 9px;background:var(--panel-2);border:1px solid var(--line);margin-top:6px;font-size:13px;cursor:pointer}
+.fv4 .item:hover{border-color:var(--warn)}
+.fv4 .item small{display:block;color:var(--dim);font-size:12px;margin-top:2px;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.fv4 .item .kd{font:700 10px var(--mono);padding:0 4px;margin-right:6px;border:1px solid var(--warn);color:var(--warn)}
+.fv4 .money{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.fv4 .money .cell{background:var(--panel-2);border:1px solid var(--line);padding:7px 8px;min-width:0}
+.fv4 .money .v{font:700 15px var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fv4 .money .k{font-size:11px;color:var(--dim)}
+.fv4 .strat{margin-top:8px;display:flex;gap:8px;align-items:center;padding:7px 9px;border:2px dashed var(--line);background:var(--panel-2);cursor:grab;user-select:none;touch-action:none}
+.fv4 .strat:hover{border-color:var(--accent)}
+.fv4 .strat .grip{color:var(--faint);font-size:16px}
+.fv4 .strat b{font-size:13px;display:block}
+.fv4 .strat small{font-size:11px;color:var(--dim)}
+.fv4 .feedblk{flex:1;min-height:0;display:flex;flex-direction:column;border-bottom:0}
+.fv4 .feed{list-style:none;margin:0;padding:0;overflow:auto;flex:1;min-height:0}
+.fv4 .feed li{padding:7px 2px;border-top:1px dashed var(--line);font-size:13px;line-height:1.45;word-break:break-word}
+.fv4 .feed li.new{animation:fv4slide .35s steps(5)}
+.fv4 .feed li:first-child{border-top:0}
+@keyframes fv4slide{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}}
+.fv4 .feed .cs{font:700 12px var(--mono)}
+.fv4 .feed .meta{display:flex;gap:8px;font-size:11px;color:var(--faint);margin-top:1px}
+.fv4 .feed .tag{padding:0 5px;border:1px solid var(--line);color:var(--dim)}
+.fv4 .feed .tag.ok{color:var(--good);border-color:color-mix(in srgb,var(--good) 50%,transparent)}
+.fv4 .feed .tag.warn{color:var(--warn)}
+.fv4 .feed .tag.bad{color:var(--bad)}
+.fv4 .feed .empty{color:var(--dim);font-size:12px;padding:8px 2px}
+/* 场景里的像素卡(审批 / 交接) */
+.fv4 .pcard{position:absolute;left:50%;top:42%;transform:translate(-50%,-50%);z-index:60;width:360px;max-width:calc(100% - 32px);background:#0f0d14;color:#f4f1ea;border:3px solid #ffd23a;box-shadow:0 0 0 3px #000,6px 6px 0 3px rgba(0,0,0,.45);padding:14px 16px;font-size:13px}
+.fv4 .pcard h4{margin:0 0 8px;font-size:15px}
+.fv4 .pcard p{margin:6px 0;line-height:1.5}
+.fv4 .pcard .hint{color:#8a8398;font-size:11px}
+.fv4 .pcard .env{font-size:26px;color:#ffd23a;float:right;line-height:1}
+.fv4 .pcard .kv{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font:12px var(--mono);margin:8px 0}
+.fv4 .pcard .kv span{color:#8a8398}
+.fv4 .pcard .arm{border:1px solid #ffd23a;background:rgba(255,210,58,.08);padding:6px 8px;margin:8px 0;font-size:12px;color:#ffe9a0}
+.fv4 .pcard .btns{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.fv4 .pcard button{font-size:13px;font-weight:700;cursor:pointer;padding:6px 14px;border:2px solid #3a3446;background:#1a1722;color:#eee;box-shadow:2px 2px 0 rgba(0,0,0,.5)}
+.fv4 .pcard button:disabled{opacity:.5;cursor:default}
+.fv4 .pcard button.ok{background:#7dffb0;border-color:#7dffb0;color:#0b1a10}
+.fv4 .pcard button.no{background:#ff5d7a;border-color:#ff5d7a;color:#1a0508}
+.fv4 .console{position:absolute;left:16px;bottom:16px;z-index:55;width:min(560px,calc(100% - 32px));background:rgba(8,8,12,.94);border:2px solid #7dffb0;box-shadow:4px 4px 0 rgba(0,0,0,.5);font:13px var(--mono);color:#cfe;padding:8px 10px}
+.fv4 .console .log div{padding:1px 0;white-space:pre-wrap}
+.fv4 .console .log .dim{color:#7a8a84}.fv4 .console .log .ok{color:#7dffb0}.fv4 .console .log .err{color:#ff7a8a}
+.fv4 .console .in{display:flex;gap:6px;align-items:center;border-top:1px dashed #2a3a34;margin-top:4px;padding-top:4px}
+.fv4 .console .in span{color:#7dffb0}
+.fv4 .console input{flex:1;font:inherit;background:transparent;border:0;outline:0;color:#fff}
+/* 拖拽幽灵(挂在 body) */
+.fv4-ghost{position:fixed;left:0;top:0;z-index:80;pointer-events:none;padding:6px 10px;background:#1a1520;color:#fff;border:2px solid #fff;box-shadow:4px 4px 0 rgba(0,0,0,.5);font-size:12px}
+.fv4-ghost b{font:700 14px ui-monospace,monospace;display:block}
+.fv4-ghost small{color:#bbb}
+.fv4-ghost.ok{border-color:#7dffb0;background:#10261a}
+.fv4-ghost.no{border-color:#ff5d7a}
+/* ---- 布局 A 的浮层(原型 a.html 同名类) ---- */
+.fv4 .px-box{background:var(--panel);border:2px solid var(--line);box-shadow:inset 0 0 0 1px rgba(0,0,0,.35),3px 3px 0 rgba(0,0,0,.35)}
+.fv4 .pbtn{background:var(--panel-2);border:2px solid var(--line);padding:3px 8px;cursor:pointer;font-size:12px;box-shadow:2px 2px 0 rgba(0,0,0,.4);color:var(--ink);line-height:1.45}
+.fv4 .pbtn:hover{border-color:var(--accent)}
+.fv4 .pbtn.ok{background:#2f5a2a;border-color:#6aa84f;color:#eaffd8}
+.fv4 .pbtn.no{background:#4a1a1a;border-color:#a84f4f}
+.fv4 a.pbtn{text-decoration:none;display:inline-block}
+.fv4 .card{position:absolute;z-index:40;padding:12px 14px;width:300px;max-width:calc(100% - 32px);line-height:1.45;font-size:13px;box-sizing:border-box;color:var(--ink)}
+.fv4 .card.evo{width:auto;min-width:260px;max-width:340px}
+.fv4 .card h4{margin:0 0 2px;font:700 16px/1.3 var(--mono)}
+.fv4 .card .hd{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;padding-right:18px;margin-bottom:6px}
+.fv4 .card .hd .cs{font:700 18px/1.2 var(--mono)}
+.fv4 .card .hd .rn{font-size:12px;color:var(--dim);line-height:1.3}
+.fv4 .card .st{display:flex;align-items:baseline;gap:6px;font-size:12px;line-height:1.4;margin-bottom:10px}
+.fv4 .card .st .lamp{flex:none;width:8px;height:8px;align-self:center}
+.fv4 .card .st .stl{flex:none;font-weight:700}
+.fv4 .card .st .ln{color:var(--dim);min-width:0}
+.fv4 .card .sub{color:var(--dim);font-size:12px;margin-bottom:10px}
+.fv4 .card .m3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:8px 0 12px}
+.fv4 .card .m3 div{background:var(--panel-2);border:2px solid var(--line);padding:6px 7px;display:flex;flex-direction:column;gap:3px;min-width:0}
+.fv4 .card .m3 span{display:block;color:var(--dim);font-size:11px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fv4 .card .m3 b{font:700 16px/1.2 var(--mono)}
+.fv4 .card .acts{display:flex;gap:8px;flex-wrap:wrap}
+.fv4 .card .x{position:absolute;right:8px;top:6px;background:none;border:0;color:var(--dim);cursor:pointer;font:700 14px var(--mono)}
+.fv4 .card ul{margin:0 0 10px;padding:0;list-style:none}
+.fv4 .card li{padding:4px 0;border-top:1px dashed var(--line);font-size:12px}
+.fv4 .card li small{color:var(--faint);font-family:var(--mono);margin-right:6px}
+.fv4 .npc{position:absolute;z-index:45;left:50%;bottom:14px;transform:translateX(-50%);width:min(620px,92%);display:flex;gap:12px;padding:12px 14px;background:#140f0a;border:3px solid #f3e9d8;box-shadow:0 0 0 3px #1a1410,5px 5px 0 rgba(0,0,0,.5);color:#f3e9d8}
+.fv4 .npc canvas{width:72px;height:72px;image-rendering:pixelated;flex:none;background:#0008;border:2px solid #3a2c1d}
+.fv4 .npc .body{flex:1;min-width:0}
+.fv4 .npc .name{font:700 13px var(--mono);margin-bottom:4px}
+.fv4 .npc .say{min-height:38px;font-size:14px;line-height:1.5}
+.fv4 .npc .say::after{content:"▌";animation:fv4blink 1s steps(2) infinite;margin-left:2px;opacity:.7}
+.fv4 .npc .say.done::after{content:""}
+.fv4 .npc .opts{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.fv4 .npc .opts button{background:#231a12;border:2px solid #6b5d4a;padding:4px 10px;cursor:pointer;font-size:13px;color:#f3e9d8}
+.fv4 .npc .opts button:hover,.fv4 .npc .opts button:focus{border-color:#ffe066;outline:0}
+.fa-tip{position:fixed;z-index:90;pointer-events:none;max-width:260px;padding:7px 9px;background:#fffaf0;color:#1a1410;border:2px solid #1a1410;box-shadow:3px 3px 0 rgba(0,0,0,.5);font-size:12px;line-height:1.45}
+.fa-tip b{font:700 12px ui-monospace,monospace}
+.fa-tip .sw{display:inline-block;width:9px;height:9px;border:1px solid #1a1410;margin-right:5px;vertical-align:-1px}
+@media (max-width:1560px){.fv4 .coin:nth-child(n+4){display:none}}
+@media (max-width:1400px){.fv4 .kpis{gap:12px}.fv4 .brand small{display:none}.fv4 .stage{grid-template-columns:minmax(0,1fr) 288px}.fv4 .coins{display:none}}
+@media (prefers-reduced-motion: reduce){.fv4 .feed li,.fv4 .inbox .dot,.fv4 .npc .say::after{animation:none}.fv4 .estop .lid{transition:none}}

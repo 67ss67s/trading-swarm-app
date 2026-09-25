@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "attempt_id": "ad3e4f50-6172-4839-9a0b-1c2d3e4f5a6b",
+  "intent_id": "0f8fad5b-d9cb-469f-a165-70867728950e",
+  "plan_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+  "plan_hash": "474838171b83561288f58fc3ebdaf96c236f5ff4983b1556cac37ee8cc22433c",
+  "attempt_no": 1,
+  "leg": "stop",
+  "leg_index": 0,
+  "account": "sub",
+  "channel": "mcp",
+  "client_order_id": "tg-0f8fad5bd9cb-s0-1",
+  "order_fingerprint": "{\"closePosition\":\"true\",\"newClientOrderId\":\"tg-0f8fad5bd9cb-s0-1\",\"side\":\"SELL\",\"stopPrice\":\"59000\",\"symbol\":\"BTCUSDT\",\"type\":\"STOP_MARKET\",\"workingType\":\"MARK_PRICE\"}",
+  "writer_instance_id": "execd-mba-2026",
+  "lease_epoch": 7,
+  "fencing_token": "7:execd-mba-2026:1788350106500",
+  "stage": "submitted",
+  "result": "unknown",
+  "created_at": 1788350106500,
+  "submitted_at": 1788350106520,
+  "deadline_at": 1788350126500,
+  "result_at": 1788350126500,
+  "error": {
+    "kind": "transport_ambiguous",
+    "message": "MCP tools/call 超时(20s),不知道是否到达",
+    "retryable": false
+  },
+  "tool_name": "futures_place_order",
+  "tools_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

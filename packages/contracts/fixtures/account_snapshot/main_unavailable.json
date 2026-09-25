@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "account": "main",
+  "channel": "rest",
+  "computed_at": 1788350000000,
+  "consistency": "unavailable",
+  "consistency_reason": "REST -1021 时钟漂移;用户数据流断开 > 600s",
+  "components": {
+    "balances": {
+      "observed_at": 1788349300000,
+      "fetched_from": 1788349299900,
+      "fetched_to": 1788349300000,
+      "completeness": "missing",
+      "source": "cache",
+      "error": {
+        "kind": "stale",
+        "message": "cache age 700s > 15s",
+        "retryable": true,
+        "exchange_code": -1021,
+        "http_status": 400
+      }
+    },
+    "positions": {
+      "observed_at": 1788349300000,
+      "fetched_from": 1788349299900,
+      "fetched_to": 1788349300000,
+      "completeness": "missing",
+      "source": "cache",
+      "error": {
+        "kind": "stale",
+        "message": "cache age 700s",
+        "retryable": true
+      }
+    },
+    "open_orders": {
+      "observed_at": 1788349300000,
+      "fetched_from": 1788349299900,
+      "fetched_to": 1788349300000,
+      "completeness": "missing",
+      "source": "cache",
+      "error": {
+        "kind": "stale",
+        "message": "cache age 700s",
+        "retryable": true
+      }
+    },
+    "position_mode": {
+      "observed_at": 1788349300000,
+      "fetched_from": 1788349299900,
+      "fetched_to": 1788349300000,
+      "completeness": "missing",
+      "source": "cache",
+      "error": {
+        "kind": "stale",
+        "message": "cache age 700s",
+        "retryable": true
+      }
+    }
+  }
+}

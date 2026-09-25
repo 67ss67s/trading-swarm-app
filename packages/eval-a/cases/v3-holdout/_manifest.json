@@ -1,0 +1,80 @@
+{
+  "generated_with": {
+    "symbols": [
+      "NVDAUSDT"
+    ],
+    "tf": "15m",
+    "from": 1788220800000,
+    "to": 1788566400000,
+    "n": 2,
+    "seed": "7",
+    "set": "holdout",
+    "chain_step_bars": 4,
+    "horizon_bars": 48,
+    "sample": "triggers",
+    "daily_bars": 150,
+    "min_spacing_bars": 8
+  },
+  "generation_batches": [
+    {
+      "symbols": [
+        "SOLUSDT",
+        "BNBUSDT",
+        "XRPUSDT",
+        "DOGEUSDT",
+        "HYPEUSDT",
+        "TSLAUSDT",
+        "XAUUSDT"
+      ],
+      "tf": "15m",
+      "from": 1788220800000,
+      "to": 1788566400000,
+      "n": 14,
+      "seed": "7",
+      "set": "holdout",
+      "chain_step_bars": 4,
+      "horizon_bars": 48,
+      "sample": "triggers",
+      "daily_bars": 210,
+      "min_spacing_bars": 8
+    },
+    {
+      "symbols": [
+        "NVDAUSDT"
+      ],
+      "tf": "15m",
+      "from": 1788220800000,
+      "to": 1788566400000,
+      "n": 2,
+      "seed": "7",
+      "set": "holdout",
+      "chain_step_bars": 4,
+      "horizon_bars": 48,
+      "sample": "triggers",
+      "daily_bars": 150,
+      "min_spacing_bars": 8
+    }
+  ],
+  "cases": 142,
+  "tag_counts": {
+    "scan": 64,
+    "base": 16,
+    "trig:breakout": 36,
+    "halted": 16,
+    "mirror": 55,
+    "review": 78,
+    "in_position": 62,
+    "long": 39,
+    "entry:limit": 38,
+    "stop-crossed": 20,
+    "short": 39,
+    "stale": 16,
+    "entry:market": 40,
+    "tp-crossed": 10,
+    "trig:vol_spike": 32,
+    "trig:retest": 12,
+    "trig:ema_cross": 8,
+    "pending_entry": 16,
+    "far-from-entry": 6
+  }
+}

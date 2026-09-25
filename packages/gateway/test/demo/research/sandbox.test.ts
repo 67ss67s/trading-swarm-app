@@ -1,0 +1,13 @@
+import { describe,it,expect } from 'vitest';
+import { mkdtempSync,rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { ResearchSandbox,validateArtifact } from '../../../src/demo/research/sandbox.js';
+async function inSandbox(fn:(s:ResearchSandbox)=>Promise<void>){const root=mkdtempSync(join(tmpdir(),'research-sandbox-'));try{await fn(new ResearchSandbox('test',root));}finally{rmSync(root,{recursive:true,force:true});}}
+describe('研究脚本沙箱',()=>{
+ it('executes ESM, writes outputs, exposes only clean environment',()=>inSandbox(async s=>{s.write('main.mjs',`import {writeFileSync} from 'node:fs';writeFileSync('result.json',JSON.stringify({ok:true}));console.log(Object.keys(process.env).sort().join(','));`);const r=await s.execute('main.mjs');expect(r.exit_code,r.stderr_tail).toBe(0);expect(r.stdout_tail.trim()).toBe('HOME,PATH');expect(s.read('result.json').content).toBe('{"ok":true}');}));
+ it('denies fetch, external files, processes and module escape',()=>inSandbox(async s=>{for(const code of [`await fetch('https://example.com')`,`import 'node:child_process'`,`import 'node:module'`,`process.getBuiltinModule('child_process')`,`import {readFileSync} from 'node:fs';readFileSync('/etc/passwd')`,`eval('1+1')`,`process.kill(process.ppid,0)`,`process._kill(process.ppid,0)`,`new WebSocket('wss://example.com')`,`Buffer.alloc(513*1024*1024)`]){s.write('main.mjs',code);expect((await s.execute('main.mjs')).exit_code,code).not.toBe(0);}}));
+ it('rejects traversal and kills busy loops within timeout',()=>inSandbox(async s=>{expect(()=>s.write('../escape','x')).toThrow();expect(()=>s.write('.runtime.mjs','x')).toThrow();s.write('loop.mjs','while(true){}');const r=await s.execute('loop.mjs',100);expect(r.stderr_tail).toContain('sandbox_timeout');expect(r.duration_ms).toBeLessThan(5000);s.executions=20;await expect(s.execute('loop.mjs')).rejects.toThrow('budget');}));
+ it('validates chart and rectangular table data',()=>{expect(()=>validateArtifact('chart',{kind:'chart',type:'line',title:'x',x:'time',y_label:'%',note:'',series:[{name:'A',points:[[1,2]]}]})).not.toThrow();expect(()=>validateArtifact('chart',{kind:'chart',type:'line',x:'time',series:[{name:'A',points:[[1,NaN]]}]})).toThrow();expect(()=>validateArtifact('table',{kind:'table',columns:['a'],rows:[[1,2]]})).toThrow();});
+});
+it('truncates combined process output to at most one MiB',()=>inSandbox(async s=>{s.write('log.mjs',`console.log('x'.repeat(1200000));console.error('y'.repeat(1200000));`);const r=await s.execute('log.mjs');expect(r.exit_code).toBe(0);expect(Buffer.byteLength(r.stdout_tail)+Buffer.byteLength(r.stderr_tail)).toBeLessThanOrEqual(1024*1024+100);expect(r.stdout_tail.endsWith('x\n')).toBe(true);}));

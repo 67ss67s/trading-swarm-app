@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "attempt_id": "be4f5061-7283-4940-8b1c-2d3e4f5a6b7c",
+  "intent_id": "2b3c4d5e-6f70-4182-93a4-b5c6d7e8f9a0",
+  "plan_id": "af5a1c02-2ea9-4c4b-9c1a-6d2a5c1b7e01",
+  "plan_hash": "f900d9a89b081abc1badbcafb9752819603acff182199742dc53c254c2fe77d6",
+  "attempt_no": 1,
+  "leg": "transfer",
+  "leg_index": 0,
+  "account": "main",
+  "channel": "rest",
+  "client_order_id": "tg-2b3c4d5e6f70-f0-1",
+  "order_fingerprint": "{\"amount\":\"25\",\"asset\":\"USDT\",\"fromAccountType\":\"SPOT\",\"toAccountType\":\"USDT_FUTURE\",\"toEmail\":\"<sub>\"}",
+  "writer_instance_id": "execd-mba-2026",
+  "lease_epoch": 7,
+  "fencing_token": "7:execd-mba-2026:1788350200000",
+  "stage": "before_submit",
+  "result": "pending",
+  "created_at": 1788350200000,
+  "deadline_at": 1788350215000
+}

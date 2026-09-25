@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "intent_id": "1a2b3c4d-5e6f-4071-8293-a4b5c6d7e8f9",
+  "account": "main",
+  "principal": "user",
+  "surface": "rpc",
+  "origin": "ui:trade-page",
+  "idempotency_key": "ui-7f3a-000042",
+  "params": {
+    "kind": "close",
+    "product": "usdm_perp",
+    "symbol": "ETHUSDT",
+    "position_side": "both",
+    "pct": "100",
+    "order": {
+      "type": "market",
+      "max_slippage_bps": 30
+    },
+    "reason": "手动平仓"
+  },
+  "status": "completed",
+  "gate_rejections": [],
+  "current_plan_id": "8d9e6f70-8192-4a3b-9c4d-5e6f708192a3",
+  "authorization_id": "27fe3817-9cb0-444c-93fc-9d8fadb958eb",
+  "ttl_seconds": 120,
+  "created_at": 1788350005000,
+  "updated_at": 1788350009000,
+  "expires_at": 1788350125000,
+  "terminal_at": 1788350009000
+}

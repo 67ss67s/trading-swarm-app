@@ -1,0 +1,2049 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trading-swarm.local/schema/research-loop.json",
+  "title": "ResearchLoop",
+  "anyOf": [
+    {
+      "$ref": "#/$defs/LoopPlan"
+    },
+    {
+      "$ref": "#/$defs/LoopSnapshot"
+    },
+    {
+      "$ref": "#/$defs/LoopArtifact"
+    }
+  ],
+  "$defs": {
+    "LoopJson": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LoopJson"
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/LoopJson"
+          }
+        }
+      ]
+    },
+    "LoopObject": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/LoopJson"
+      }
+    },
+    "LoopRefs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "LoopWindow": {
+      "type": "object",
+      "properties": {
+        "from_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "to_ms": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "from_ms",
+        "to_ms"
+      ],
+      "additionalProperties": false
+    },
+    "LoopContext": {
+      "type": "object",
+      "properties": {
+        "instrument_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "selected_artifact_id": {
+          "type": "string"
+        },
+        "selected_inquiry_id": {
+          "type": "string"
+        },
+        "selected_run_id": {
+          "type": "string"
+        },
+        "selected_window": {
+          "$ref": "#/$defs/LoopWindow"
+        }
+      },
+      "required": [
+        "instrument_refs"
+      ],
+      "additionalProperties": false
+    },
+    "LoopTaskKind": {
+      "enum": [
+        "market",
+        "compare",
+        "validate",
+        "diagnose"
+      ]
+    },
+    "LoopResearchMode": {
+      "enum": [
+        "validate_single",
+        "validate_multi",
+        "compare_assets",
+        "market_leverage",
+        "diagnose",
+        "parameter_sweep",
+        "pattern_frequency"
+      ]
+    },
+    "LoopConceptStatus": {
+      "enum": [
+        "mapped",
+        "acquired",
+        "proxy",
+        "unmapped"
+      ]
+    },
+    "LoopConceptCategory": {
+      "enum": [
+        "indicator",
+        "pattern",
+        "structure",
+        "data_metric",
+        "comparison",
+        "timeframe",
+        "asset",
+        "risk"
+      ]
+    },
+    "LoopConceptSource": {
+      "enum": [
+        "primitive_registry",
+        "lexicon",
+        "data_catalog",
+        "acquired",
+        "none"
+      ]
+    },
+    "LoopConcept": {
+      "type": "object",
+      "properties": {
+        "term": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "concept_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "category": {
+          "$ref": "#/$defs/LoopConceptCategory"
+        },
+        "status": {
+          "$ref": "#/$defs/LoopConceptStatus"
+        },
+        "source": {
+          "$ref": "#/$defs/LoopConceptSource"
+        },
+        "target": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 200
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 2000
+        }
+      },
+      "required": [
+        "term",
+        "concept_id",
+        "category",
+        "status",
+        "source",
+        "target",
+        "note"
+      ],
+      "additionalProperties": false
+    },
+    "LoopStatus": {
+      "enum": [
+        "queued",
+        "planning",
+        "running",
+        "validating",
+        "completed",
+        "awaiting_input",
+        "cancelling",
+        "cancelled",
+        "failed",
+        "incomplete"
+      ]
+    },
+    "LoopBudget": {
+      "type": "object",
+      "properties": {
+        "max_model_calls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_data_calls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_backtests": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "wall_clock_ms": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "max_model_calls",
+        "max_data_calls",
+        "max_backtests",
+        "wall_clock_ms"
+      ],
+      "additionalProperties": false
+    },
+    "LoopUsage": {
+      "type": "object",
+      "properties": {
+        "max_model_calls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_data_calls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_backtests": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "wall_clock_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unknown_cost": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "max_model_calls",
+        "max_data_calls",
+        "max_backtests",
+        "wall_clock_ms",
+        "unknown_cost"
+      ],
+      "additionalProperties": false
+    },
+    "LoopCheckpoint": {
+      "type": "object",
+      "properties": {
+        "completed_step_keys": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "snapshot_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "artifact_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "concepts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LoopConcept"
+          },
+          "maxItems": 200
+        }
+      },
+      "required": [
+        "completed_step_keys",
+        "snapshot_refs",
+        "artifact_refs"
+      ],
+      "additionalProperties": false
+    },
+    "LoopPlanStep": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "title": {
+          "type": "string"
+        },
+        "tool": {
+          "type": "string"
+        },
+        "args": {
+          "$ref": "#/$defs/LoopObject"
+        },
+        "depends_on": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "key",
+        "title",
+        "tool",
+        "args",
+        "depends_on"
+      ],
+      "additionalProperties": false
+    },
+    "LoopPlan": {
+      "type": "object",
+      "properties": {
+        "task_kind": {
+          "$ref": "#/$defs/LoopTaskKind"
+        },
+        "mode": {
+          "$ref": "#/$defs/LoopResearchMode"
+        },
+        "instruments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "window": {
+          "$ref": "#/$defs/LoopWindow"
+        },
+        "timeframe": {
+          "type": "string"
+        },
+        "plan": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LoopPlanStep"
+          }
+        },
+        "clarify": {
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "model",
+            "fallback_rules"
+          ]
+        },
+        "command": {
+          "$ref": "#/$defs/LoopRevisionCommand"
+        }
+      },
+      "required": [
+        "task_kind",
+        "instruments",
+        "window",
+        "timeframe",
+        "plan"
+      ],
+      "additionalProperties": false
+    },
+    "LoopInstrument": {
+      "type": "object",
+      "properties": {
+        "canonical_id": {
+          "type": "string"
+        },
+        "asset_class": {
+          "const": "crypto"
+        },
+        "venue": {
+          "const": "okx"
+        },
+        "market_type": {
+          "enum": [
+            "spot",
+            "perp"
+          ]
+        },
+        "base": {
+          "type": "string"
+        },
+        "quote": {
+          "type": "string"
+        },
+        "timezone": {
+          "const": "UTC"
+        },
+        "ccxt_symbol": {
+          "type": "string"
+        },
+        "display": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "canonical_id",
+        "asset_class",
+        "venue",
+        "market_type",
+        "base",
+        "quote",
+        "timezone",
+        "ccxt_symbol",
+        "display"
+      ],
+      "additionalProperties": false
+    },
+    "LoopAvailability": {
+      "enum": [
+        "available",
+        "partial",
+        "missing",
+        "not_applicable",
+        "stale"
+      ]
+    },
+    "LoopCoverage": {
+      "type": "object",
+      "properties": {
+        "availability": {
+          "$ref": "#/$defs/LoopAvailability"
+        },
+        "earliest": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "latest": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "note": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "availability",
+        "note"
+      ],
+      "additionalProperties": false
+    },
+    "LoopUnits": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "LoopRows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "LoopSnapshot": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "price",
+            "funding",
+            "open_interest",
+            "liquidations"
+          ]
+        },
+        "provider": {
+          "const": "okx"
+        },
+        "instrument": {
+          "$ref": "#/$defs/LoopInstrument"
+        },
+        "requested_window": {
+          "$ref": "#/$defs/LoopWindow"
+        },
+        "actual_window": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LoopWindow"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "as_of": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "fetched_at": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "frequency": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "units": {
+          "$ref": "#/$defs/LoopUnits"
+        },
+        "coverage": {
+          "$ref": "#/$defs/LoopAvailability"
+        },
+        "quality_flags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "rows": {
+          "$ref": "#/$defs/LoopRows"
+        },
+        "checksum": {
+          "type": "string",
+          "minLength": 1
+        },
+        "method_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "provider",
+        "instrument",
+        "requested_window",
+        "actual_window",
+        "as_of",
+        "fetched_at",
+        "frequency",
+        "units",
+        "coverage",
+        "quality_flags",
+        "rows",
+        "checksum",
+        "method_version"
+      ],
+      "additionalProperties": false
+    },
+    "LoopSeriesMode": {
+      "enum": [
+        "line",
+        "line+markers",
+        "bar",
+        "scatter"
+      ],
+      "description": "序列画法:折线 / 带点折线 / 柱 / 散点"
+    },
+    "LoopSeriesRole": {
+      "enum": [
+        "strategy",
+        "benchmark",
+        "asset",
+        "basket",
+        "alt",
+        "positive",
+        "negative",
+        "neutral",
+        "split"
+      ],
+      "description": "颜色角色:前端按角色取色(策略=主色、持有=蓝、正=绿、负=红…),不在数据里写死颜色"
+    },
+    "LoopYUnit": {
+      "enum": [
+        "$",
+        "%",
+        "count",
+        "ratio",
+        "none"
+      ],
+      "description": "纵轴数值单位:$ 按 $10k/9.97k 缩写,% 为已乘 100 的百分数"
+    },
+    "LoopChartTemplate": {
+      "enum": [
+        "equity_comparison",
+        "drawdown_comparison",
+        "exit_reason_pnl",
+        "asset_pnl",
+        "trade_scatter",
+        "monthly_heatmap",
+        "strategies_equity",
+        "strategies_drawdown"
+      ],
+      "description": "研究图表模板(research/loop/charts.ts):由回测报告确定性生成"
+    },
+    "LoopChartAnnotation": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "enum": [
+            "vline",
+            "hline"
+          ]
+        },
+        "x": {
+          "type": [
+            "number",
+            "string"
+          ]
+        },
+        "y": {
+          "type": "number"
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "role": {
+          "$ref": "#/$defs/LoopSeriesRole"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "additionalProperties": false,
+      "description": "x 分界竖线(vline,如样本内/外)或 y 参考横线(hline,如 0 线)"
+    },
+    "LoopChartSeries": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "mode": {
+          "$ref": "#/$defs/LoopSeriesMode"
+        },
+        "role": {
+          "$ref": "#/$defs/LoopSeriesRole"
+        },
+        "points": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": [
+                "number",
+                "string",
+                "null"
+              ]
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "maxItems": 5000
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "maxItems": 5000,
+          "description": "与 points 对齐的文字标签(柱顶笔数等)"
+        },
+        "point_roles": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "positive",
+              "negative",
+              "neutral"
+            ]
+          },
+          "maxItems": 5000,
+          "description": "逐点颜色角色(散点盈绿亏红、柱正负)"
+        },
+        "hover": {
+          "type": "array",
+          "items": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "maxItems": 5000,
+          "description": "与 points 对齐的悬停附注(如交易日期)"
+        }
+      },
+      "required": [
+        "name",
+        "mode",
+        "role",
+        "points"
+      ],
+      "additionalProperties": false
+    },
+    "LoopChart": {
+      "type": "object",
+      "description": "研究图表产物的内容(artifact.content):由模板从回测报告确定性生成,前端按 Horizon 风格渲染(统一悬停、底部图例、坐标轴标题、分界线、柱顶标签)",
+      "properties": {
+        "kind": {
+          "const": "chart"
+        },
+        "version": {
+          "const": "research-chart/v1"
+        },
+        "template": {
+          "$ref": "#/$defs/LoopChartTemplate"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "type": {
+          "enum": [
+            "line",
+            "bar",
+            "scatter",
+            "heatmap"
+          ]
+        },
+        "x": {
+          "enum": [
+            "time",
+            "category",
+            "linear"
+          ],
+          "description": "time=毫秒时间戳;category=等距类目;linear=数值(如 Trade #)"
+        },
+        "x_title": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "y_title": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "y_unit": {
+          "$ref": "#/$defs/LoopYUnit"
+        },
+        "series": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LoopChartSeries"
+          },
+          "maxItems": 24
+        },
+        "annotations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LoopChartAnnotation"
+          },
+          "maxItems": 24
+        },
+        "heatmap": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 24
+            },
+            "y": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 64
+            },
+            "z": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                }
+              },
+              "maxItems": 64
+            }
+          },
+          "required": [
+            "x",
+            "y",
+            "z"
+          ],
+          "additionalProperties": false
+        },
+        "caption": {
+          "type": "string",
+          "maxLength": 400,
+          "description": "代码生成的一句说明(带数值)"
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 400
+        },
+        "report_id": {
+          "type": "string"
+        },
+        "report_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32
+        },
+        "asset": {
+          "type": "string"
+        },
+        "base_capital": {
+          "type": "number",
+          "description": "金额换算基数(统一按 $10k 本金)"
+        }
+      },
+      "required": [
+        "kind",
+        "version",
+        "template",
+        "title",
+        "type",
+        "x",
+        "x_title",
+        "y_title",
+        "y_unit",
+        "series",
+        "annotations"
+      ],
+      "additionalProperties": false
+    },
+    "LoopSpec": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "enum": [
+            "line",
+            "bar",
+            "candlestick",
+            "table",
+            "comparison",
+            "scatter",
+            "heatmap"
+          ]
+        },
+        "x": {
+          "type": "string"
+        },
+        "y": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "series": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "field": {
+                    "type": "string"
+                  },
+                  "axis": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "mode": {
+                    "$ref": "#/$defs/LoopSeriesMode"
+                  },
+                  "role": {
+                    "$ref": "#/$defs/LoopSeriesRole"
+                  },
+                  "text_field": {
+                    "type": "string",
+                    "description": "柱顶/点旁文字标签取自哪个字段(如「28T」笔数标签)"
+                  }
+                },
+                "required": [
+                  "field"
+                ],
+                "additionalProperties": false
+              }
+            }
+          ]
+        },
+        "axis_units": {
+          "$ref": "#/$defs/LoopUnits"
+        },
+        "y_unit": {
+          "$ref": "#/$defs/LoopYUnit"
+        },
+        "x_title": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "y_title": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "template": {
+          "$ref": "#/$defs/LoopChartTemplate"
+        },
+        "report_id": {
+          "type": "string",
+          "description": "图表由哪份全窗口回测报告确定性生成(溯源)"
+        },
+        "report_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32,
+          "description": "多策略横比图引用的报告"
+        },
+        "encoding": {
+          "$ref": "#/$defs/LoopObject"
+        },
+        "legend": {
+          "$ref": "#/$defs/LoopJson"
+        },
+        "annotations": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/LoopChartAnnotation"
+              },
+              {
+                "$ref": "#/$defs/LoopObject"
+              }
+            ]
+          }
+        },
+        "interaction": {
+          "$ref": "#/$defs/LoopObject"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    "LoopBlocks": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "text"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "text"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "next_question"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "text"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "enum": [
+                  "chart_ref",
+                  "table_ref",
+                  "report_ref",
+                  "comparison_ref"
+                ]
+              },
+              "artifact_id": {
+                "type": "string"
+              },
+              "caption": {
+                "type": "string",
+                "maxLength": 300,
+                "description": "这张图的一句说明(模型写的不得含数字;模板写的由代码从报告算出)"
+              }
+            },
+            "required": [
+              "kind",
+              "artifact_id"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "step_ref"
+              },
+              "step_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "step_id"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "strategy_ref"
+              },
+              "run_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "run_id"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "data_gap"
+              },
+              "metric": {
+                "type": "string"
+              },
+              "availability": {
+                "$ref": "#/$defs/LoopAvailability"
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "metric",
+              "availability",
+              "note"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "run_status"
+              },
+              "inquiry_id": {
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/LoopStatus"
+              }
+            },
+            "required": [
+              "kind",
+              "inquiry_id",
+              "status"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "plan"
+              },
+              "task_kind": {
+                "$ref": "#/$defs/LoopTaskKind"
+              },
+              "steps": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "tool": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        "pending",
+                        "running",
+                        "succeeded",
+                        "failed",
+                        "skipped",
+                        "cancelled"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "title",
+                    "tool",
+                    "status"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "kind",
+              "task_kind",
+              "steps"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    "LoopErrorCode": {
+      "enum": [
+        "UNSUPPORTED_ASSET",
+        "DATA_MISSING",
+        "DATA_STALE",
+        "RATE_LIMIT",
+        "BUDGET_EXHAUSTED",
+        "PROVIDER_ERROR",
+        "SCHEMA_MISMATCH",
+        "UNIT_MISMATCH",
+        "NOT_COMPARABLE",
+        "CANCELLED",
+        "TIMEOUT"
+      ]
+    },
+    "LoopResult": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "enum": [
+            "ok",
+            "partial",
+            "missing",
+            "not_applicable",
+            "stale",
+            "error"
+          ]
+        },
+        "output": {
+          "$ref": "#/$defs/LoopJson"
+        },
+        "snapshot_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "artifact_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "coverage": {
+          "$ref": "#/$defs/LoopCoverage"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "units": {
+          "$ref": "#/$defs/LoopUnits"
+        },
+        "error_code": {
+          "$ref": "#/$defs/LoopErrorCode"
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "latency_ms": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "status",
+        "output",
+        "snapshot_refs",
+        "artifact_refs",
+        "warnings",
+        "latency_ms"
+      ],
+      "additionalProperties": false
+    },
+    "LoopResolveInput": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string"
+        },
+        "symbols": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "market": {
+          "enum": [
+            "spot",
+            "perp"
+          ]
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "LoopResolveOutput": {
+      "type": "object",
+      "properties": {
+        "instruments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LoopInstrument"
+          }
+        }
+      },
+      "required": [
+        "instruments"
+      ],
+      "additionalProperties": false
+    },
+    "LoopDataInput": {
+      "type": "object",
+      "properties": {
+        "instrument": {
+          "$ref": "#/$defs/LoopInstrument"
+        },
+        "window": {
+          "$ref": "#/$defs/LoopWindow"
+        },
+        "timeframe": {
+          "type": "string"
+        },
+        "metric": {
+          "enum": [
+            "price",
+            "funding",
+            "open_interest",
+            "liquidations",
+            "liquidation_estimates",
+            "orderbook"
+          ]
+        }
+      },
+      "required": [
+        "instrument",
+        "window"
+      ],
+      "additionalProperties": false
+    },
+    "LoopSnapshotOutput": {
+      "type": "object",
+      "properties": {
+        "snapshot_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "snapshot_id"
+      ],
+      "additionalProperties": false
+    },
+    "LoopLeverageInput": {
+      "type": "object",
+      "properties": {
+        "price_snapshot": {
+          "type": "string"
+        },
+        "funding_snapshot": {
+          "type": "string"
+        },
+        "oi_snapshot": {
+          "type": "string"
+        },
+        "liquidations_snapshot": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "price_snapshot"
+      ],
+      "additionalProperties": false
+    },
+    "LoopStrengthInput": {
+      "type": "object",
+      "properties": {
+        "instruments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "benchmark": {
+          "type": "string"
+        },
+        "timeframe": {
+          "type": "string"
+        },
+        "window": {
+          "$ref": "#/$defs/LoopWindow"
+        },
+        "snapshot_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "instruments",
+        "benchmark",
+        "timeframe",
+        "window"
+      ],
+      "additionalProperties": false
+    },
+    "LoopCompareInput": {
+      "type": "object",
+      "properties": {
+        "run_id": {
+          "type": "string"
+        },
+        "arm": {
+          "enum": [
+            "a_rules",
+            "b_agent",
+            "c_filter"
+          ]
+        }
+      },
+      "required": [
+        "run_id",
+        "arm"
+      ],
+      "additionalProperties": false
+    },
+    "LoopCompileInput": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "ir": {
+          "$ref": "#/$defs/LoopObject"
+        },
+        "timeframe": {
+          "type": "string"
+        },
+        "dataset_id": {
+          "type": "string"
+        },
+        "acquired": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LoopObject"
+          },
+          "maxItems": 8
+        }
+      },
+      "required": [
+        "timeframe"
+      ],
+      "additionalProperties": false
+    },
+    "LoopBacktestInput": {
+      "type": "object",
+      "properties": {
+        "instrument": {
+          "$ref": "#/$defs/LoopInstrument"
+        },
+        "window": {
+          "$ref": "#/$defs/LoopWindow"
+        },
+        "timeframe": {
+          "type": "string"
+        },
+        "ir": {
+          "$ref": "#/$defs/LoopObject"
+        },
+        "price_snapshot": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "instrument",
+        "window",
+        "timeframe",
+        "ir"
+      ],
+      "additionalProperties": false
+    },
+    "LoopRenderInput": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "chart",
+            "table"
+          ]
+        },
+        "spec": {
+          "$ref": "#/$defs/LoopSpec"
+        },
+        "snapshot_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "title": {
+          "type": "string"
+        },
+        "question": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "spec",
+        "snapshot_refs",
+        "title",
+        "question"
+      ],
+      "additionalProperties": false
+    },
+    "LoopComposeInput": {
+      "type": "object",
+      "properties": {
+        "question": {
+          "type": "string"
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LoopObject"
+          }
+        },
+        "artifact_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "metrics": {
+          "$ref": "#/$defs/LoopObject"
+        }
+      },
+      "required": [
+        "question",
+        "steps",
+        "artifact_ids",
+        "metrics"
+      ],
+      "additionalProperties": false
+    },
+    "LoopComposeOutput": {
+      "type": "object",
+      "properties": {
+        "blocks": {
+          "$ref": "#/$defs/LoopBlocks"
+        }
+      },
+      "required": [
+        "blocks"
+      ],
+      "additionalProperties": false
+    },
+    "LoopArtifact": {
+      "type": "object",
+      "properties": {
+        "inquiry_id": {
+          "type": "string"
+        },
+        "snapshot_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "data_kind": {
+          "enum": [
+            "observed",
+            "derived",
+            "estimated",
+            "synthetic"
+          ]
+        },
+        "availability": {
+          "$ref": "#/$defs/LoopAvailability"
+        },
+        "question": {
+          "type": "string"
+        },
+        "spec": {
+          "$ref": "#/$defs/LoopSpec"
+        },
+        "caption": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "chart",
+            "table",
+            "markdown"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "content": {
+          "$ref": "#/$defs/LoopObject"
+        },
+        "run_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "inquiry_id",
+        "snapshot_refs",
+        "data_kind",
+        "availability",
+        "question",
+        "spec",
+        "caption",
+        "kind",
+        "title",
+        "content"
+      ],
+      "additionalProperties": false
+    },
+    "LoopMetric": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "insufficient",
+            "not_applicable"
+          ]
+        },
+        "note": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value",
+        "unit",
+        "status"
+      ],
+      "additionalProperties": false
+    },
+    "LoopMetrics": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/LoopMetric"
+      }
+    },
+    "LoopAnalysisOutput": {
+      "type": "object",
+      "properties": {
+        "analysis": {
+          "$ref": "#/$defs/LoopObject"
+        },
+        "metrics": {
+          "$ref": "#/$defs/LoopMetrics"
+        }
+      },
+      "required": [
+        "analysis",
+        "metrics"
+      ],
+      "additionalProperties": false
+    },
+    "LoopCompileOutput": {
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean"
+        },
+        "ir": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LoopObject"
+          }
+        }
+      },
+      "required": [
+        "ok",
+        "ir",
+        "checks"
+      ],
+      "additionalProperties": {
+        "$ref": "#/$defs/LoopJson"
+      }
+    },
+    "LoopBacktestOutput": {
+      "type": "object",
+      "properties": {
+        "run_id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "closed_trades": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "metrics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LoopObject"
+          }
+        }
+      },
+      "required": [
+        "run_id",
+        "status"
+      ],
+      "additionalProperties": false
+    },
+    "LoopRenderOutput": {
+      "type": "object",
+      "properties": {
+        "artifact_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id"
+      ],
+      "additionalProperties": false
+    },
+    "LoopRevisionCommand": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "enum": [
+            "revise",
+            "optimize",
+            "rerun"
+          ]
+        },
+        "baseline_run_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "instruction": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20000
+        },
+        "max_candidates": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2
+        },
+        "execution_overrides": {
+          "type": "object",
+          "properties": {
+            "initial_cash": {
+              "type": "string",
+              "pattern": "^\\d+(\\.\\d+)?$",
+              "maxLength": 30
+            },
+            "fee_rate": {
+              "type": "string",
+              "pattern": "^\\d+(\\.\\d+)?$",
+              "maxLength": 30
+            },
+            "slippage_bps": {
+              "type": "string",
+              "pattern": "^\\d+(\\.\\d+)?$",
+              "maxLength": 30
+            },
+            "risk_fraction": {
+              "type": "string",
+              "pattern": "^\\d+(\\.\\d+)?$",
+              "maxLength": 30
+            },
+            "max_allocation": {
+              "type": "string",
+              "pattern": "^\\d+(\\.\\d+)?$",
+              "maxLength": 30
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "mode",
+        "baseline_run_id",
+        "instruction",
+        "max_candidates"
+      ],
+      "additionalProperties": false
+    },
+    "LoopRunInput": {
+      "type": "object",
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        }
+      },
+      "required": [
+        "run_id"
+      ],
+      "additionalProperties": false
+    },
+    "LoopRevisionCompileInput": {
+      "type": "object",
+      "properties": {
+        "baseline_run_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "instruction": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20000
+        },
+        "candidate_index": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2
+        }
+      },
+      "required": [
+        "baseline_run_id",
+        "instruction",
+        "candidate_index"
+      ],
+      "additionalProperties": false
+    },
+    "LoopRevisionRunInput": {
+      "type": "object",
+      "properties": {
+        "baseline_run_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "draft_artifact_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "baseline_run_id",
+        "draft_artifact_id"
+      ],
+      "additionalProperties": false
+    },
+    "LoopRunPairInput": {
+      "type": "object",
+      "properties": {
+        "baseline_run_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "candidate_run_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        }
+      },
+      "required": [
+        "baseline_run_id",
+        "candidate_run_id"
+      ],
+      "additionalProperties": false
+    },
+    "LoopAcquireInput": {
+      "type": "object",
+      "properties": {
+        "concept": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "category": {
+          "$ref": "#/$defs/LoopConceptCategory"
+        },
+        "question": {
+          "type": "string",
+          "maxLength": 4000
+        }
+      },
+      "required": [
+        "concept"
+      ],
+      "additionalProperties": false
+    },
+    "LoopAcquireOutput": {
+      "type": "object",
+      "properties": {
+        "concept": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "definition": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "implementation": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "enum": [
+                "primitive",
+                "indicator_row",
+                "pine",
+                "unsupported"
+              ]
+            },
+            "target": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 200
+            },
+            "params": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/LoopObject"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "expression": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 4000
+            },
+            "note": {
+              "type": "string",
+              "maxLength": 4000
+            }
+          },
+          "required": [
+            "kind",
+            "target",
+            "params",
+            "expression",
+            "note"
+          ],
+          "additionalProperties": false
+        },
+        "provenance": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "enum": [
+                "lexicon",
+                "brain",
+                "web"
+              ]
+            },
+            "detail": {
+              "type": "string",
+              "maxLength": 500
+            },
+            "retrieved_at": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "source",
+            "detail",
+            "retrieved_at"
+          ],
+          "additionalProperties": false
+        },
+        "concept_status": {
+          "$ref": "#/$defs/LoopConcept"
+        },
+        "tried_sources": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 10
+        },
+        "offline_sources": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 10
+        }
+      },
+      "required": [
+        "concept",
+        "definition",
+        "implementation",
+        "provenance",
+        "concept_status",
+        "tried_sources",
+        "offline_sources"
+      ],
+      "additionalProperties": false
+    },
+    "LoopPatternInput": {
+      "type": "object",
+      "properties": {
+        "price_snapshot": {
+          "type": "string",
+          "minLength": 1
+        },
+        "primitive": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "params": {
+          "$ref": "#/$defs/LoopObject"
+        },
+        "horizon_bars": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 200
+        }
+      },
+      "required": [
+        "price_snapshot",
+        "primitive",
+        "horizon_bars"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

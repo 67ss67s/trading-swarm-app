@@ -1,0 +1,514 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trading-swarm.dev/schema/rpc.json",
+  "title": "ExecutionServiceRpc",
+  "description": "gateway ↔ execd 的 UDS 契约:JSON-RPC 2.0,每帧一行(newline-delimited,UTF-8,单帧 ≤ 4 MiB)。execd 监听 ~/.trading-swarm/run/execd.sock(0600)。请求方法见 Method;execd → gateway 的通知只有 exec.event。错误码映射见 tables/error_codes.json。",
+  "oneOf": [
+    { "$ref": "#/$defs/RpcRequest" },
+    { "$ref": "#/$defs/RpcSuccess" },
+    { "$ref": "#/$defs/RpcFailure" },
+    { "$ref": "#/$defs/RpcNotification" }
+  ],
+  "$defs": {
+    "Method": {
+      "type": "string",
+      "enum": [
+        "exec.health",
+        "exec.intent.propose",
+        "exec.intent.get",
+        "exec.intent.list",
+        "exec.intent.authorize",
+        "exec.intent.reject",
+        "exec.account.snapshot",
+        "exec.exchange.status",
+        "exec.policy.get",
+        "exec.policy.set",
+        "exec.emergency_stop",
+        "exec.events.subscribe",
+        "exec.oauth.start",
+        "exec.oauth.status",
+        "exec.oauth.revoke",
+        "exec.credentials.public_key",
+        "exec.credentials.set",
+        "exec.credentials.status"
+      ]
+    },
+    "RpcId": {
+      "oneOf": [{ "type": "string", "minLength": 1, "maxLength": 64 }, { "type": "integer", "minimum": 0 }]
+    },
+    "RpcRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["jsonrpc", "id", "method", "params"],
+      "properties": {
+        "jsonrpc": { "const": "2.0" },
+        "id": { "$ref": "#/$defs/RpcId" },
+        "method": { "$ref": "#/$defs/Method" },
+        "params": { "type": "object" }
+      }
+    },
+    "RpcSuccess": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["jsonrpc", "id", "result"],
+      "properties": {
+        "jsonrpc": { "const": "2.0" },
+        "id": { "$ref": "#/$defs/RpcId" },
+        "result": { "type": "object" }
+      }
+    },
+    "RpcErrorData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "retryable"],
+      "properties": {
+        "kind": { "$ref": "common.json#/$defs/ErrorKind" },
+        "retryable": { "type": "boolean" },
+        "details": { "type": "object" }
+      }
+    },
+    "RpcError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "data"],
+      "properties": {
+        "code": { "type": "integer" },
+        "message": { "type": "string", "maxLength": 2000 },
+        "data": { "$ref": "#/$defs/RpcErrorData" }
+      }
+    },
+    "RpcFailure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["jsonrpc", "id", "error"],
+      "properties": {
+        "jsonrpc": { "const": "2.0" },
+        "id": { "oneOf": [{ "$ref": "#/$defs/RpcId" }, { "type": "null" }] },
+        "error": { "$ref": "#/$defs/RpcError" }
+      }
+    },
+    "RpcNotification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["jsonrpc", "method", "params"],
+      "properties": {
+        "jsonrpc": { "const": "2.0" },
+        "method": { "const": "exec.event" },
+        "params": { "$ref": "events.json" }
+      }
+    },
+
+    "ChannelHealth": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state"],
+      "properties": {
+        "state": { "type": "string", "enum": ["ok", "degraded", "down", "unconfigured"] },
+        "detail": { "type": "string", "maxLength": 500 },
+        "last_ok_at": { "$ref": "common.json#/$defs/TimestampMs" }
+      }
+    },
+    "HealthParams": { "type": "object", "additionalProperties": false, "properties": {} },
+    "HealthResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ok", "version", "writer_instance_id", "lease_epoch", "started_at", "now", "db_ok", "mode", "halted", "open_intents", "unknown_attempts", "channels"],
+      "properties": {
+        "ok": { "type": "boolean" },
+        "version": { "type": "string", "maxLength": 64 },
+        "writer_instance_id": { "type": "string", "maxLength": 128 },
+        "lease_epoch": { "type": "integer", "minimum": 0 },
+        "started_at": { "$ref": "common.json#/$defs/TimestampMs" },
+        "now": { "$ref": "common.json#/$defs/TimestampMs" },
+        "db_ok": { "type": "boolean" },
+        "mode": { "$ref": "common.json#/$defs/PolicyMode" },
+        "halted": { "type": "boolean" },
+        "open_intents": { "type": "integer", "minimum": 0 },
+        "unknown_attempts": { "type": "integer", "minimum": 0 },
+        "channels": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["main", "sub"],
+          "properties": {
+            "main": { "$ref": "#/$defs/ChannelHealth" },
+            "sub": { "$ref": "#/$defs/ChannelHealth" }
+          }
+        }
+      }
+    },
+
+    "IntentProposeParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["account", "principal", "surface", "params"],
+      "properties": {
+        "account": { "$ref": "common.json#/$defs/AccountRef" },
+        "principal": { "$ref": "common.json#/$defs/Principal" },
+        "surface": { "$ref": "common.json#/$defs/Surface" },
+        "session_id": { "type": "string", "maxLength": 128 },
+        "run_id": { "type": "string", "maxLength": 128 },
+        "origin": { "type": "string", "maxLength": 256 },
+        "idempotency_key": { "type": "string", "maxLength": 128 },
+        "params": { "$ref": "intent.json#/$defs/IntentParams" },
+        "ttl_seconds": { "type": "integer", "minimum": 1, "maximum": 86400 }
+      }
+    },
+    "IntentProposeResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["intent", "gate_rejections"],
+      "properties": {
+        "intent": { "$ref": "intent.json" },
+        "plan": { "$ref": "plan.json" },
+        "gate_rejections": { "type": "array", "items": { "$ref": "common.json#/$defs/GateRejection" } }
+      }
+    },
+    "IntentGetParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["intent_id"],
+      "properties": { "intent_id": { "$ref": "common.json#/$defs/Uuid" } }
+    },
+    "IntentBundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["intent", "attempts", "orders", "fills"],
+      "properties": {
+        "intent": { "$ref": "intent.json" },
+        "plan": { "$ref": "plan.json" },
+        "authorization": { "$ref": "authorization.json" },
+        "attempts": { "type": "array", "items": { "$ref": "attempt.json" } },
+        "orders": { "type": "array", "items": { "$ref": "exchange_order.json" } },
+        "fills": { "type": "array", "items": { "$ref": "fill.json" } },
+        "effect": { "$ref": "position_effect.json" }
+      }
+    },
+    "IntentListParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "status": { "type": "array", "items": { "$ref": "common.json#/$defs/IntentStatus" } },
+        "account": { "$ref": "common.json#/$defs/AccountRef" },
+        "kind": { "$ref": "common.json#/$defs/IntentKind" },
+        "since": { "$ref": "common.json#/$defs/TimestampMs" },
+        "limit": { "type": "integer", "minimum": 1, "maximum": 500 }
+      }
+    },
+    "IntentListResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["intents"],
+      "properties": { "intents": { "type": "array", "items": { "$ref": "intent.json" } } }
+    },
+    "IntentAuthorizeParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["intent_id", "plan_hash", "principal", "surface", "confirm_echo"],
+      "properties": {
+        "intent_id": { "$ref": "common.json#/$defs/Uuid" },
+        "plan_hash": { "$ref": "common.json#/$defs/Hash256" },
+        "principal": { "$ref": "common.json#/$defs/Principal" },
+        "surface": { "$ref": "common.json#/$defs/Surface" },
+        "actor_ref": { "type": "string", "maxLength": 256 },
+        "confirm_echo": { "type": "object", "additionalProperties": { "type": "string", "maxLength": 200 } }
+      },
+      "description": "只接受 principal=user;plan_hash 或 confirm_echo 与当前 plan 不符 → conflict"
+    },
+    "IntentAuthorizeResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["intent", "authorization"],
+      "properties": {
+        "intent": { "$ref": "intent.json" },
+        "authorization": { "$ref": "authorization.json" }
+      }
+    },
+    "IntentRejectParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["intent_id", "reason", "principal", "surface"],
+      "properties": {
+        "intent_id": { "$ref": "common.json#/$defs/Uuid" },
+        "reason": { "type": "string", "maxLength": 1000 },
+        "principal": { "$ref": "common.json#/$defs/Principal" },
+        "surface": { "$ref": "common.json#/$defs/Surface" }
+      }
+    },
+    "IntentRejectResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["intent"],
+      "properties": { "intent": { "$ref": "intent.json" } }
+    },
+
+    "AccountSnapshotParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["account"],
+      "properties": {
+        "account": { "$ref": "common.json#/$defs/AccountRef" },
+        "max_age_ms": { "type": "integer", "minimum": 0 },
+        "force_refresh": { "type": "boolean" }
+      }
+    },
+    "AccountSnapshotResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["snapshot"],
+      "properties": { "snapshot": { "$ref": "account_snapshot.json" } }
+    },
+
+    "OauthState": {
+      "type": "string",
+      "enum": ["missing", "fresh", "expiring", "expired", "revoked"]
+    },
+    "OauthStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "has_refresh"],
+      "properties": {
+        "state": { "$ref": "#/$defs/OauthState" },
+        "expires_at": { "$ref": "common.json#/$defs/TimestampMs" },
+        "has_refresh": { "type": "boolean" },
+        "scopes": { "type": "array", "items": { "type": "string", "maxLength": 64 } },
+        "client_id": { "type": "string", "maxLength": 512 },
+        "obtained_at": { "$ref": "common.json#/$defs/TimestampMs" }
+      }
+    },
+    "MainKeyPermissions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "reading": { "type": "boolean" },
+        "spot_margin_trading": { "type": "boolean" },
+        "futures": { "type": "boolean" },
+        "universal_transfer": { "type": "boolean" },
+        "withdrawals": { "type": "boolean" },
+        "ip_restricted": { "type": "boolean" }
+      }
+    },
+    "MainChannelStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["configured", "user_stream", "rest_gate"],
+      "properties": {
+        "configured": { "type": "boolean" },
+        "key_fingerprint": { "type": "string", "maxLength": 32, "description": "sha256(api_key) 前 16 hex,只用于识别不是密钥" },
+        "permissions": { "$ref": "#/$defs/MainKeyPermissions" },
+        "user_stream": { "type": "string", "enum": ["connected", "stale", "disconnected", "unconfigured"] },
+        "time_offset_ms": { "type": "integer" },
+        "rest_gate": { "type": "string", "enum": ["ready", "wait", "banned", "unconfigured"] },
+        "last_verified_at": { "$ref": "common.json#/$defs/TimestampMs" }
+      }
+    },
+    "SubChannelStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["configured", "oauth", "mcp_session", "drift"],
+      "properties": {
+        "configured": { "type": "boolean" },
+        "oauth": { "$ref": "#/$defs/OauthStatus" },
+        "mcp_session": { "type": "string", "enum": ["active", "none", "lost"] },
+        "tools_hash": { "$ref": "common.json#/$defs/Hash256" },
+        "tools_pinned_hash": { "$ref": "common.json#/$defs/Hash256" },
+        "tools_count": { "type": "integer", "minimum": 0 },
+        "drift": { "type": "boolean", "description": "tools_hash != tools_pinned_hash → 写路径 HALT" },
+        "subaccount_ref": { "type": "string", "maxLength": 128, "description": "Agentic 子账户稳定标识(A1 实测 MCP 是否暴露)" }
+      }
+    },
+    "ExchangeStatusParams": { "type": "object", "additionalProperties": false, "properties": {} },
+    "ExchangeStatusResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["main", "sub", "writer"],
+      "properties": {
+        "main": { "$ref": "#/$defs/MainChannelStatus" },
+        "sub": { "$ref": "#/$defs/SubChannelStatus" },
+        "writer": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["instance_id", "lease_epoch", "since"],
+          "properties": {
+            "instance_id": { "type": "string", "maxLength": 128 },
+            "lease_epoch": { "type": "integer", "minimum": 0 },
+            "since": { "$ref": "common.json#/$defs/TimestampMs" }
+          }
+        }
+      }
+    },
+
+    "PolicyGetParams": { "type": "object", "additionalProperties": false, "properties": {} },
+    "PolicyGetResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy"],
+      "properties": { "policy": { "$ref": "policy.json" } }
+    },
+    "PolicySetParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy", "confirm", "principal", "surface"],
+      "properties": {
+        "policy": { "$ref": "policy.json" },
+        "confirm": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "authority"],
+          "properties": {
+            "mode": { "type": "string", "maxLength": 32 },
+            "authority": { "type": "string", "maxLength": 32 }
+          },
+          "description": "逐字回填新 policy 的 mode/authority(设计 §10.4)"
+        },
+        "principal": { "$ref": "common.json#/$defs/Principal" },
+        "surface": { "$ref": "common.json#/$defs/Surface" }
+      }
+    },
+    "PolicySetResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy"],
+      "properties": { "policy": { "$ref": "policy.json" } }
+    },
+    "EmergencyStopParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "reason", "principal", "surface"],
+      "properties": {
+        "mode": { "type": "string", "enum": ["stop_opening", "flatten_only", "halt_all"] },
+        "reason": { "type": "string", "maxLength": 1000 },
+        "principal": { "$ref": "common.json#/$defs/Principal" },
+        "surface": { "$ref": "common.json#/$defs/Surface" }
+      },
+      "description": "只能收紧;放松要走 policy.set + confirm"
+    },
+    "EmergencyStopResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy"],
+      "properties": { "policy": { "$ref": "policy.json" } }
+    },
+
+    "EventsSubscribeParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "since_seq": { "type": "integer", "minimum": 0 } }
+    },
+    "EventsSubscribeResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ok", "current_seq"],
+      "properties": {
+        "ok": { "type": "boolean" },
+        "current_seq": { "type": "integer", "minimum": 0 }
+      }
+    },
+
+    "OauthStartParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scopes": { "type": "array", "items": { "type": "string", "maxLength": 64 } },
+        "open_browser": { "type": "boolean" }
+      }
+    },
+    "OauthStartResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authorize_url", "state", "expires_at"],
+      "properties": {
+        "authorize_url": { "type": "string", "maxLength": 4096 },
+        "state": { "type": "string", "maxLength": 128 },
+        "expires_at": { "$ref": "common.json#/$defs/TimestampMs" }
+      },
+      "description": "回调由 execd 自己在回环端口接收;code/verifier 不经过 gateway"
+    },
+    "OauthStatusParams": { "type": "object", "additionalProperties": false, "properties": {} },
+    "OauthStatusResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["oauth"],
+      "properties": { "oauth": { "$ref": "#/$defs/OauthStatus" } }
+    },
+    "OauthRevokeParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["principal", "surface"],
+      "properties": {
+        "principal": { "$ref": "common.json#/$defs/Principal" },
+        "surface": { "$ref": "common.json#/$defs/Surface" }
+      }
+    },
+    "OauthRevokeResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ok"],
+      "properties": { "ok": { "type": "boolean" } }
+    },
+
+    "SealedSecret": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["alg", "ephemeral_public_key", "iv", "ciphertext"],
+      "properties": {
+        "alg": { "const": "ecdh-p256-hkdf-sha256-aes256gcm" },
+        "ephemeral_public_key": { "type": "string", "maxLength": 200, "description": "base64,65 字节未压缩点" },
+        "iv": { "type": "string", "maxLength": 32, "description": "base64,12 字节" },
+        "ciphertext": { "type": "string", "maxLength": 8192, "description": "base64;明文是 UTF-8 JSON {api_key, api_secret}" }
+      },
+      "description": "浏览器用 execd 的 P-256 公钥做 ECDH → HKDF-SHA256(salt 空, info 'trading-swarm/credentials/v1') → AES-256-GCM;gateway 只转发密文,TS 进程永远拿不到明文(AGENTS.md 规矩 1)"
+    },
+    "CredentialsPublicKeyParams": { "type": "object", "additionalProperties": false, "properties": {} },
+    "CredentialsPublicKeyResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["alg", "public_key", "expires_at"],
+      "properties": {
+        "alg": { "const": "ecdh-p256-hkdf-sha256-aes256gcm" },
+        "public_key": { "type": "string", "maxLength": 200 },
+        "expires_at": { "$ref": "common.json#/$defs/TimestampMs" }
+      }
+    },
+    "CredentialsSetParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "sealed", "principal", "surface"],
+      "properties": {
+        "kind": { "type": "string", "enum": ["main_api_key"] },
+        "sealed": { "$ref": "#/$defs/SealedSecret" },
+        "principal": { "$ref": "common.json#/$defs/Principal" },
+        "surface": { "$ref": "common.json#/$defs/Surface" }
+      }
+    },
+    "CredentialsSetResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ok"],
+      "properties": {
+        "ok": { "type": "boolean" },
+        "key_fingerprint": { "type": "string", "maxLength": 32 },
+        "permissions": { "$ref": "#/$defs/MainKeyPermissions" }
+      }
+    },
+    "CredentialsStatusParams": { "type": "object", "additionalProperties": false, "properties": {} },
+    "CredentialsStatusResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["main_api_key", "oauth"],
+      "properties": {
+        "main_api_key": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["present"],
+          "properties": {
+            "present": { "type": "boolean" },
+            "key_fingerprint": { "type": "string", "maxLength": 32 },
+            "permissions": { "$ref": "#/$defs/MainKeyPermissions" },
+            "last_verified_at": { "$ref": "common.json#/$defs/TimestampMs" }
+          }
+        },
+        "oauth": { "$ref": "#/$defs/OauthStatus" }
+      }
+    }
+  }
+}

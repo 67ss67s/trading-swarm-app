@@ -1,0 +1,7588 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trading-swarm.local/schema/research.json",
+  "title": "ResearchContract",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/ResearchRequest"
+    },
+    {
+      "$ref": "#/$defs/ResearchDataset"
+    },
+    {
+      "$ref": "#/$defs/ResearchFilterDecision"
+    },
+    {
+      "$ref": "#/$defs/ResearchChatRequest"
+    },
+    {
+      "$ref": "#/$defs/ResearchToolCall"
+    },
+    {
+      "$ref": "#/$defs/ResearchStudy"
+    },
+    {
+      "$ref": "#/$defs/ResearchPolicy"
+    },
+    {
+      "$ref": "#/$defs/ResearchUniverseRequest"
+    },
+    {
+      "$ref": "#/$defs/ResearchUniverse"
+    },
+    {
+      "$ref": "#/$defs/ResearchScreen"
+    },
+    {
+      "$ref": "#/$defs/ResearchFactorResult"
+    },
+    {
+      "$ref": "#/$defs/ResearchTrend"
+    },
+    {
+      "$ref": "#/$defs/StrategyIR"
+    },
+    {
+      "$ref": "#/$defs/StrategyCompileRequest"
+    },
+    {
+      "$ref": "#/$defs/StrategyCompileResult"
+    },
+    {
+      "$ref": "#/$defs/ResearchAttribution"
+    },
+    {
+      "$ref": "#/$defs/ResearchRecordedDecision"
+    },
+    {
+      "$ref": "#/$defs/ResearchPrecheckRequest"
+    }
+  ],
+  "$defs": {
+    "ResearchBar": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "open_time": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "close_time": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "available_at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "open": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+          "maxLength": 32
+        },
+        "high": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+          "maxLength": 32
+        },
+        "low": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+          "maxLength": 32
+        },
+        "close": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+          "maxLength": 32
+        },
+        "volume": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+          "maxLength": 32
+        }
+      },
+      "required": [
+        "open_time",
+        "close_time",
+        "available_at",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume"
+      ]
+    },
+    "ResearchDataset": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "venue": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{1,40}$"
+        },
+        "market": {
+          "type": "string",
+          "enum": [
+            "spot",
+            "perp"
+          ],
+          "description": "perp = OKX USDT 线性永续成交价 K 线(研究回测永续路径,symbol 用 BTC-USDT-SWAP 形式,不与现货数据集混用)"
+        },
+        "symbol": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "timeframe_ms": {
+          "type": "integer",
+          "minimum": 60000,
+          "maximum": 86400000
+        },
+        "source": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "retrieved_at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "bars": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ResearchBar"
+          },
+          "maxItems": 50000
+        },
+        "calendar": {
+          "enum": [
+            "crypto_24_7",
+            "us_equity_rth"
+          ]
+        },
+        "adjusted": {
+          "type": "boolean"
+        },
+        "risk_free_per_bar": {
+          "type": "string",
+          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+        }
+      },
+      "required": [
+        "venue",
+        "market",
+        "symbol",
+        "timeframe_ms",
+        "source",
+        "retrieved_at",
+        "bars"
+      ]
+    },
+    "ResearchPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 6000
+        },
+        "interpretation": {
+          "type": "string",
+          "enum": [
+            "donchian_close_long_v1"
+          ]
+        },
+        "lookback": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 400
+        },
+        "atr_period": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 100
+        },
+        "stop_atr": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 20
+        },
+        "take_profit_r": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 20
+        },
+        "volume_multiple": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 20
+        },
+        "holding_bars": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500
+        }
+      },
+      "required": [
+        "label",
+        "description",
+        "interpretation",
+        "lookback",
+        "atr_period",
+        "stop_atr",
+        "take_profit_r",
+        "volume_multiple",
+        "holding_bars"
+      ]
+    },
+    "ResearchExecution": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "initial_cash": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+          "maxLength": 32
+        },
+        "risk_fraction": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+          "maxLength": 32
+        },
+        "max_allocation": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+          "maxLength": 32
+        },
+        "fee_rate": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+          "maxLength": 32
+        },
+        "slippage_bps": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+          "maxLength": 32
+        },
+        "qty_step": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+          "maxLength": 32
+        },
+        "min_notional": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+          "maxLength": 32
+        },
+        "max_opens_per_day": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "max_positions": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 30,
+          "default": 3
+        },
+        "allocation": {
+          "enum": [
+            "equal_risk",
+            "equal_notional"
+          ],
+          "default": "equal_risk"
+        },
+        "sizing_mode": {
+          "type": "string",
+          "enum": [
+            "unit_notional",
+            "risk_fraction"
+          ]
+        }
+      },
+      "required": [
+        "initial_cash",
+        "risk_fraction",
+        "max_allocation",
+        "fee_rate",
+        "slippage_bps",
+        "qty_step",
+        "min_notional",
+        "max_opens_per_day"
+      ]
+    },
+    "ResearchRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "idempotency_key": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "dataset_id": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "source_strategy_ref": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "policy": {
+          "$ref": "#/$defs/ResearchPolicy"
+        },
+        "execution": {
+          "$ref": "#/$defs/ResearchExecution"
+        },
+        "from_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "to_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "arms": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "a_rules",
+              "b_agent",
+              "c_filter"
+            ]
+          },
+          "minItems": 1,
+          "maxItems": 3,
+          "uniqueItems": true
+        },
+        "repeats": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "max_model_calls": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5000
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 3600000
+        },
+        "purpose": {
+          "type": "string",
+          "enum": [
+            "development",
+            "validation",
+            "holdout"
+          ]
+        },
+        "study_id": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "parent_run_id": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "acknowledge_adaptive_search": {
+          "type": "boolean"
+        },
+        "universe_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "model_call_timeout_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300000,
+          "default": 120000
+        },
+        "strategy_ir": {
+          "$ref": "#/$defs/StrategyIR"
+        },
+        "order_gate": {
+          "$ref": "#/$defs/OrderGateParams"
+        },
+        "precheck_overrides": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 20
+        },
+        "shortlist": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "top_n": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            },
+            "by": {
+              "enum": [
+                "composite",
+                "residual_sharpe"
+              ]
+            }
+          },
+          "required": [
+            "top_n",
+            "by"
+          ]
+        },
+        "spec_version": {
+          "type": "string",
+          "maxLength": 40
+        }
+      },
+      "required": [
+        "idempotency_key",
+        "execution",
+        "from_ms",
+        "to_ms",
+        "arms",
+        "repeats",
+        "max_model_calls",
+        "timeout_ms",
+        "purpose",
+        "study_id",
+        "acknowledge_adaptive_search"
+      ],
+      "allOf": [
+        {
+          "oneOf": [
+            {
+              "required": [
+                "dataset_id"
+              ]
+            },
+            {
+              "required": [
+                "universe_id"
+              ]
+            }
+          ]
+        },
+        {
+          "oneOf": [
+            {
+              "required": [
+                "policy"
+              ]
+            },
+            {
+              "required": [
+                "strategy_ir"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "ResearchFilterDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "follow",
+            "skip"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "maxItems": 30,
+          "minItems": 1
+        }
+      },
+      "required": [
+        "action",
+        "reason",
+        "evidence_refs"
+      ]
+    },
+    "ResearchEquity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "cash": {
+          "type": "string",
+          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+          "maxLength": 32
+        },
+        "holdings": {
+          "type": "string",
+          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+          "maxLength": 32
+        },
+        "equity": {
+          "type": "string",
+          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+          "maxLength": 32
+        },
+        "exposure": {
+          "type": "number"
+        },
+        "drawdown": {
+          "type": "number"
+        },
+        "by_symbol": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+            "maxLength": 32
+          }
+        }
+      },
+      "required": [
+        "at",
+        "cash",
+        "holdings",
+        "equity",
+        "exposure",
+        "drawdown"
+      ]
+    },
+    "ResearchTrade": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "candidate_id": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "entry_at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "exit_at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "entry_price": {
+          "type": "string",
+          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+          "maxLength": 32
+        },
+        "exit_price": {
+          "type": "string",
+          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+          "maxLength": 32
+        },
+        "qty": {
+          "type": "string",
+          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+          "maxLength": 32
+        },
+        "gross_pnl": {
+          "type": "string",
+          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+          "maxLength": 32
+        },
+        "fees": {
+          "type": "string",
+          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+          "maxLength": 32
+        },
+        "net_pnl": {
+          "type": "string",
+          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+          "maxLength": 32
+        },
+        "initial_risk": {
+          "type": "string",
+          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+          "maxLength": 32
+        },
+        "net_r": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "enum": [
+            "stop",
+            "target",
+            "agent_exit",
+            "agent_reduce",
+            "horizon",
+            "trend_break",
+            "time_stop",
+            "fixed_r_target",
+            "chandelier_trail",
+            "swing_structure_stop",
+            "breakeven_after_r",
+            "trail",
+            "structure",
+            "breakeven",
+            "time"
+          ]
+        },
+        "timing": {
+          "type": "string",
+          "enum": [
+            "open",
+            "intrabar_unknown"
+          ]
+        },
+        "position_id": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "symbol": {
+          "type": "string"
+        },
+        "mae_r": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "mfe_r": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "holding_bars": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "slippage_est": {
+          "type": "string",
+          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+          "maxLength": 32
+        },
+        "capped": {
+          "type": "boolean"
+        },
+        "return_pct": {
+          "type": "number"
+        },
+        "fit": {
+          "$ref": "#/$defs/ResearchEntry/properties/fit"
+        },
+        "stop": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+          "maxLength": 32
+        },
+        "target": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+              "maxLength": 32
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "candidate_id",
+        "entry_at",
+        "exit_at",
+        "entry_price",
+        "exit_price",
+        "qty",
+        "gross_pnl",
+        "fees",
+        "net_pnl",
+        "initial_risk",
+        "net_r",
+        "reason",
+        "timing",
+        "position_id"
+      ]
+    },
+    "ResearchDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "arm": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "candidate_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "enter",
+            "follow",
+            "skip",
+            "hold",
+            "exit",
+            "reduce",
+            "no_trade",
+            "blocked",
+            "model_error"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 8000
+        },
+        "input_hash": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "decision_hash": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "maxItems": 100
+        },
+        "gate_errors": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "maxItems": 100
+        },
+        "symbol": {
+          "type": "string"
+        },
+        "screen_rank": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "fit": {
+          "$ref": "#/$defs/ResearchEntry/properties/fit"
+        },
+        "spec_violations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "maxItems": 20
+        }
+      },
+      "required": [
+        "id",
+        "at",
+        "arm",
+        "candidate_id",
+        "action",
+        "reason",
+        "input_hash",
+        "decision_hash",
+        "evidence_refs",
+        "gate_errors"
+      ]
+    },
+    "ResearchMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "net_return": {
+          "type": "number"
+        },
+        "max_drawdown": {
+          "type": "number"
+        },
+        "avg_exposure": {
+          "type": "number"
+        },
+        "turnover": {
+          "type": "number"
+        },
+        "closed_trades": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "win_rate": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "profit_factor": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "net_pnl": {
+          "type": "string",
+          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+          "maxLength": 32
+        },
+        "fees": {
+          "type": "string",
+          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+          "maxLength": 32
+        },
+        "open_position": {
+          "type": "boolean"
+        },
+        "daily_sharpe": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "sharpe_status": {
+          "type": "string",
+          "enum": [
+            "insufficient",
+            "estimated"
+          ]
+        },
+        "avg_net_r": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "per_trade_return_pct": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "avg": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "median": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "std": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "best": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "worst": {
+              "type": [
+                "number",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "avg",
+            "median",
+            "std",
+            "best",
+            "worst"
+          ]
+        },
+        "expectancy_pct": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "trade_return_histogram": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "bins": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            },
+            "counts": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "required": [
+            "bins",
+            "counts"
+          ]
+        }
+      },
+      "required": [
+        "net_return",
+        "max_drawdown",
+        "avg_exposure",
+        "turnover",
+        "closed_trades",
+        "win_rate",
+        "profit_factor",
+        "net_pnl",
+        "fees",
+        "open_position",
+        "daily_sharpe",
+        "sharpe_status",
+        "avg_net_r"
+      ]
+    },
+    "ResearchArmResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "arm": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "metrics": {
+          "$ref": "#/$defs/ResearchMetrics"
+        },
+        "decisions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ResearchDecision"
+          },
+          "maxItems": 100000
+        },
+        "trades": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ResearchTrade"
+          },
+          "maxItems": 100000
+        },
+        "equity": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ResearchEquity"
+          },
+          "maxItems": 100000
+        },
+        "pending_at_end": {
+          "type": "boolean"
+        },
+        "by_symbol": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ResearchSymbolResult"
+          }
+        },
+        "diagnostics": {
+          "$ref": "#/$defs/ResearchDiagnostics"
+        }
+      },
+      "required": [
+        "arm",
+        "metrics",
+        "decisions",
+        "trades",
+        "equity",
+        "pending_at_end"
+      ]
+    },
+    "ResearchEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "run_id": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "event": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "data": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "seq",
+        "run_id",
+        "at",
+        "event",
+        "data"
+      ]
+    },
+    "ResearchToolCall": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tool": {
+          "type": "string",
+          "enum": [
+            "runs.list",
+            "runs.metrics",
+            "runs.trades",
+            "runs.decisions",
+            "runs.compare",
+            "policy.draft",
+            "experiments.run_candidate",
+            "datasets.list",
+            "studies.get",
+            "policies.create",
+            "experiments.start",
+            "strategies.compile",
+            "primitives.list",
+            "research.write_file",
+            "research.execute",
+            "research.read_file",
+            "research.list_files",
+            "research.register_artifact",
+            "strategies.precheck"
+          ]
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "task": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "parent_task_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 100
+        }
+      },
+      "required": [
+        "tool",
+        "args"
+      ]
+    },
+    "ResearchChatRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "type": "string",
+          "maxLength": 12000
+        },
+        "run_id": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "max_rounds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 24
+        }
+      },
+      "required": [
+        "message",
+        "max_rounds"
+      ]
+    },
+    "ResearchStudy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "dataset_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "from_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "development_to_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "validation_from_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "validation_to_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "holdout_from_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "to_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "purge_bars": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "max_trials": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        }
+      },
+      "required": [
+        "id",
+        "dataset_id",
+        "from_ms",
+        "development_to_ms",
+        "validation_from_ms",
+        "validation_to_ms",
+        "holdout_from_ms",
+        "to_ms",
+        "purge_bars",
+        "max_trials"
+      ]
+    },
+    "ResearchFactorDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "btc",
+            "btc_eth_capw",
+            "equal_weight_universe"
+          ]
+        },
+        "symbols": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z0-9]{5,20}$"
+          },
+          "minItems": 1,
+          "maxItems": 500,
+          "uniqueItems": true
+        },
+        "weights": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "note": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "symbols",
+        "weights"
+      ]
+    },
+    "ResearchUniverseRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "symbols": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z0-9]{5,20}$"
+          },
+          "minItems": 1,
+          "maxItems": 500,
+          "uniqueItems": true
+        },
+        "timeframe": {
+          "enum": [
+            "1m",
+            "3m",
+            "5m",
+            "15m",
+            "30m",
+            "1h",
+            "2h",
+            "4h",
+            "6h",
+            "12h",
+            "1d"
+          ]
+        },
+        "from_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "to_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "market_factor": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "enum": [
+                "btc",
+                "btc_eth_capw",
+                "equal_weight_universe"
+              ]
+            },
+            "symbols": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Z0-9]{5,20}$"
+              },
+              "minItems": 1,
+              "maxItems": 500,
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "kind",
+            "symbols"
+          ]
+        },
+        "filter": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "exchange": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,40}$"
+            },
+            "quote": {
+              "type": "string",
+              "pattern": "^[A-Z0-9]{2,15}$"
+            },
+            "min_quote_volume_30d": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+            },
+            "listed_before_ms": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "exclude": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 500
+            }
+          },
+          "required": [
+            "exchange",
+            "quote",
+            "min_quote_volume_30d",
+            "listed_before_ms",
+            "exclude"
+          ]
+        }
+      },
+      "required": [
+        "timeframe",
+        "from_ms",
+        "to_ms",
+        "market_factor"
+      ],
+      "anyOf": [
+        {
+          "required": [
+            "symbols"
+          ]
+        },
+        {
+          "required": [
+            "filter"
+          ]
+        }
+      ]
+    },
+    "ResearchUniverseMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "symbol": {
+          "type": "string",
+          "pattern": "^[A-Z0-9]{5,20}$"
+        },
+        "dataset_id": {
+          "type": "string"
+        },
+        "bars": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "first_at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "last_at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "symbol",
+        "dataset_id",
+        "bars",
+        "first_at",
+        "last_at"
+      ]
+    },
+    "ResearchUniverse": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "timeframe_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ResearchUniverseMember"
+          },
+          "maxItems": 500
+        },
+        "market_factor": {
+          "$ref": "#/$defs/ResearchFactorDefinition"
+        },
+        "aligned_bars": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "first_at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "last_at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "retrieved_at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "aligned_close_times": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "missing": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          }
+        },
+        "selection_as_of": {
+          "type": "integer"
+        },
+        "selection_note": {
+          "type": "string"
+        },
+        "filter": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "exchange": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,40}$"
+            },
+            "quote": {
+              "type": "string",
+              "pattern": "^[A-Z0-9]{2,15}$"
+            },
+            "min_quote_volume_30d": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+            },
+            "listed_before_ms": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "exclude": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 500
+            }
+          },
+          "required": [
+            "exchange",
+            "quote",
+            "min_quote_volume_30d",
+            "listed_before_ms",
+            "exclude"
+          ]
+        },
+        "eligibility": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "listed_at": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "eligible_close_times": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                }
+              }
+            },
+            "required": [
+              "listed_at",
+              "eligible_close_times"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "id",
+        "timeframe_ms",
+        "members",
+        "market_factor",
+        "aligned_bars",
+        "first_at",
+        "last_at",
+        "retrieved_at",
+        "aligned_close_times",
+        "missing"
+      ]
+    },
+    "ResearchFactorMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "total_return": {
+          "type": "number"
+        },
+        "max_drawdown": {
+          "type": "number"
+        },
+        "drawdown_area": {
+          "type": "number"
+        },
+        "ulcer_index": {
+          "type": "number"
+        },
+        "sharpe": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "sortino": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "information_ratio": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "volatility": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "total_return",
+        "max_drawdown",
+        "drawdown_area",
+        "ulcer_index",
+        "sharpe",
+        "sortino",
+        "information_ratio",
+        "volatility"
+      ]
+    },
+    "ResearchFactorResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "enum": [
+            "ok",
+            "insufficient"
+          ]
+        },
+        "beta": {
+          "type": "number"
+        },
+        "alpha_per_bar": {
+          "type": "number"
+        },
+        "alpha_annualized": {
+          "type": "number"
+        },
+        "r2": {
+          "type": "number"
+        },
+        "residual_returns": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "raw": {
+          "$ref": "#/$defs/ResearchFactorMetrics"
+        },
+        "residual": {
+          "$ref": "#/$defs/ResearchFactorMetrics"
+        },
+        "alpha_share": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "beta_share": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "rolling": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "at_index": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "beta": {
+                "type": "number"
+              },
+              "alpha_annualized": {
+                "type": "number"
+              },
+              "r2": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "at_index",
+              "beta",
+              "alpha_annualized",
+              "r2"
+            ]
+          }
+        },
+        "note": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "note"
+      ]
+    },
+    "ResearchTrend": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "state": {
+          "enum": [
+            "up",
+            "down",
+            "range"
+          ]
+        },
+        "adx": {
+          "type": "number"
+        },
+        "ema_slope": {
+          "type": "number"
+        },
+        "donchian_pos": {
+          "type": "number"
+        },
+        "htf_state": {
+          "enum": [
+            "up",
+            "down",
+            "range"
+          ]
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "insufficient"
+          ]
+        }
+      },
+      "required": [
+        "state",
+        "adx",
+        "ema_slope",
+        "donchian_pos",
+        "htf_state",
+        "status"
+      ]
+    },
+    "ResearchScreenRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "symbol": {
+          "type": "string",
+          "pattern": "^[A-Z0-9]{5,20}$"
+        },
+        "bars": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "insufficient"
+          ]
+        },
+        "beta": {
+          "type": "number"
+        },
+        "alpha_annualized": {
+          "type": "number"
+        },
+        "r2": {
+          "type": "number"
+        },
+        "raw": {
+          "$ref": "#/$defs/ResearchFactorMetrics"
+        },
+        "residual": {
+          "$ref": "#/$defs/ResearchFactorMetrics"
+        },
+        "alpha_share": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "beta_share": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "trend": {
+          "$ref": "#/$defs/ResearchTrend"
+        },
+        "momentum_12_1": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "rank": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "residual_sharpe": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "alpha_share": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "composite": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "residual_sharpe",
+            "alpha_share",
+            "composite"
+          ]
+        },
+        "htf_structure": {
+          "$ref": "#/$defs/ResearchStructure"
+        }
+      },
+      "required": [
+        "symbol",
+        "bars",
+        "status",
+        "trend",
+        "momentum_12_1"
+      ]
+    },
+    "ResearchScreen": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "universe_id": {
+          "type": "string"
+        },
+        "as_of": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "window_bars": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "lookback_bars": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "market_factor": {
+          "$ref": "#/$defs/ResearchFactorDefinition"
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ResearchScreenRow"
+          }
+        },
+        "note": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "universe_id",
+        "as_of",
+        "window_bars",
+        "lookback_bars",
+        "market_factor",
+        "rows",
+        "note"
+      ]
+    },
+    "ResearchSymbolResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "symbol": {
+          "type": "string"
+        },
+        "closed_trades": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "net_pnl": {
+          "type": "string",
+          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+          "maxLength": 32
+        },
+        "win_rate": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "avg_net_r": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "contribution": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "symbol",
+        "closed_trades",
+        "net_pnl",
+        "win_rate",
+        "avg_net_r",
+        "contribution"
+      ]
+    },
+    "StrategyPrimitive": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "primitive": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "optional": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "primitive",
+        "params"
+      ]
+    },
+    "StrategyIR": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "enum": [
+            1,
+            2
+          ]
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 5000
+        },
+        "universe": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "screen": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "require_trend": {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "up",
+                      "down",
+                      "range"
+                    ]
+                  },
+                  "maxItems": 30
+                },
+                "min_residual_sharpe": {
+                  "type": "number"
+                },
+                "max_beta": {
+                  "type": "number"
+                },
+                "top_n": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 30
+                }
+              },
+              "required": []
+            }
+          },
+          "required": [
+            "screen"
+          ]
+        },
+        "signal": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StrategyPrimitive"
+          },
+          "maxItems": 30,
+          "minItems": 1
+        },
+        "entry": {
+          "$ref": "#/$defs/StrategyPrimitive"
+        },
+        "risk": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "stop": {
+              "$ref": "#/$defs/StrategyPrimitive"
+            },
+            "sizing": {
+              "$ref": "#/$defs/StrategyPrimitive"
+            }
+          },
+          "required": [
+            "stop",
+            "sizing"
+          ]
+        },
+        "exit": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StrategyPrimitive"
+          },
+          "maxItems": 30,
+          "minItems": 0,
+          "description": "带 order 块且给了止盈(order.take_profits)时可以为空:止损 + 多档止盈就是完整出场周期;不带 order 块时 checkIR 的 state_machine 仍要求走势跟踪出场或信号离场"
+        },
+        "regime": {
+          "$ref": "#/$defs/StrategyPrimitive"
+        },
+        "compatibility": {
+          "enum": [
+            "donchian_close_long_v1"
+          ]
+        },
+        "order": {
+          "$ref": "#/$defs/StrategyOrder"
+        },
+        "judge": {
+          "$ref": "#/$defs/StrategyJudge"
+        }
+      },
+      "required": [
+        "version",
+        "label",
+        "description",
+        "signal",
+        "entry",
+        "risk",
+        "exit"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "version": {
+                "const": 1
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "judge"
+              ]
+            }
+          },
+          "else": {
+            "required": [
+              "judge",
+              "order"
+            ]
+          }
+        }
+      ]
+    },
+    "StrategyCompileRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20000
+        },
+        "ir": {
+          "$ref": "#/$defs/StrategyIR"
+        },
+        "timeframe": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*(m|h|d)$"
+        },
+        "dataset_id": {
+          "type": "string"
+        },
+        "execution": {
+          "$ref": "#/$defs/ResearchExecution"
+        },
+        "order_gate": {
+          "$ref": "#/$defs/OrderGateParams"
+        }
+      },
+      "required": [
+        "timeframe"
+      ],
+      "anyOf": [
+        {
+          "required": [
+            "text"
+          ]
+        },
+        {
+          "required": [
+            "ir"
+          ]
+        }
+      ]
+    },
+    "StrategyCompileResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ir": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StrategyIR"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "ok": {
+                "type": "boolean"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "ok"
+            ]
+          },
+          "maxItems": 30
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "hash": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "summary": {
+          "type": "string"
+        },
+        "unmapped": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 30
+        },
+        "constraints": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "symbol": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "timeframe": {
+              "type": "string"
+            },
+            "round_trip_cost_pct": {
+              "type": "number"
+            },
+            "stop_floor_pct": {
+              "type": "number"
+            },
+            "min_rr": {
+              "type": "number"
+            },
+            "atr_pct_median": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "min_atr_multiple": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "strategy_stop_pct_median": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "stop_fit_rate": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "note": {
+              "type": "string"
+            },
+            "min_stop_atr": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "description": "结构口径:止损离入场不得小于该倍数×ATR(14),更近的单子不做;null/缺省=旧口径(成本下限+最小盈亏比)"
+            },
+            "stop_too_close_rate": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "description": "结构口径:本策略原始止损离收盘不到 min_stop_atr×ATR(14) 的信号比例(这些信号不做)"
+            }
+          },
+          "required": [
+            "symbol",
+            "timeframe",
+            "round_trip_cost_pct",
+            "stop_floor_pct",
+            "min_rr",
+            "atr_pct_median",
+            "min_atr_multiple",
+            "strategy_stop_pct_median",
+            "stop_fit_rate",
+            "note"
+          ]
+        },
+        "spec": {
+          "$ref": "#/$defs/StrategySpecReport"
+        },
+        "rules": {
+          "type": "array",
+          "maxItems": 40,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "category": {
+                "type": "string",
+                "enum": [
+                  "signal",
+                  "entry",
+                  "stop",
+                  "sizing",
+                  "exit",
+                  "regime"
+                ]
+              },
+              "primitive": {
+                "type": "string",
+                "maxLength": 80
+              },
+              "text": {
+                "type": "string",
+                "maxLength": 1000
+              },
+              "optional": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "category",
+              "primitive",
+              "text"
+            ]
+          }
+        }
+      },
+      "required": [
+        "ir",
+        "checks",
+        "ok",
+        "hash",
+        "summary",
+        "unmapped"
+      ]
+    },
+    "ResearchPrimitiveDescription": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "category": {
+          "enum": [
+            "signal",
+            "entry",
+            "stop",
+            "sizing",
+            "exit",
+            "regime",
+            "screen"
+          ]
+        },
+        "params_schema": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "description": {
+          "type": "string"
+        },
+        "warmup_note": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "category",
+        "params_schema",
+        "description",
+        "warmup_note"
+      ]
+    },
+    "PrimitiveParamsDonchianBreakout": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "lookback": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 5000
+        },
+        "basis": {
+          "enum": [
+            "close",
+            "high"
+          ]
+        },
+        "direction": {
+          "enum": [
+            "up",
+            "down"
+          ],
+          "description": "up(缺省)=收盘/最高价突破此前 lookback 根最高价;down=收盘/最低价跌破此前 lookback 根最低价(做空触发,如「跌破 20 日低点」);basis=high 时向下用最低价"
+        }
+      },
+      "required": [
+        "lookback",
+        "basis"
+      ]
+    },
+    "PrimitiveParamsVolumeSurge": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "lookback": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 5000
+        },
+        "multiple": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        }
+      },
+      "required": [
+        "lookback",
+        "multiple"
+      ]
+    },
+    "PrimitiveParamsEmaCross": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fast": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 5000
+        },
+        "slow": {
+          "type": "integer",
+          "minimum": 3,
+          "maximum": 5000
+        }
+      },
+      "required": [
+        "fast",
+        "slow"
+      ]
+    },
+    "PrimitiveParamsRsiThreshold": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "period": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 5000
+        },
+        "threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "operator": {
+          "enum": [
+            "above",
+            "below"
+          ]
+        }
+      },
+      "required": [
+        "period",
+        "threshold",
+        "operator"
+      ]
+    },
+    "PrimitiveParamsHigherLowSequence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 100
+        }
+      },
+      "required": [
+        "count"
+      ]
+    },
+    "PrimitiveParamsMacdCross": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fast": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 5000
+        },
+        "slow": {
+          "type": "integer",
+          "minimum": 3,
+          "maximum": 5000
+        },
+        "signal": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 5000
+        }
+      },
+      "required": [
+        "fast",
+        "slow",
+        "signal"
+      ]
+    },
+    "PrimitiveParamsMacdDivergence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fast": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 5000
+        },
+        "slow": {
+          "type": "integer",
+          "minimum": 3,
+          "maximum": 5000
+        },
+        "signal": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 5000
+        },
+        "swing_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50
+        },
+        "lookback": {
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 5000
+        },
+        "source": {
+          "enum": [
+            "histogram",
+            "macd"
+          ]
+        },
+        "htf": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*(m|h|d)$",
+          "description": "可选(2026-09-23 夜):在高周期上判背离。按 htf 把已收盘的执行周期 K 线分桶聚成完整高周期 K 线(未收完的桶不用),背离在高周期 K 线上判,确认那根高周期 K 线收盘的执行周期 K 线当根触发;不受决策视图 5000 根上限约束。缺省 = 在执行周期上判(旧口径)"
+        },
+        "direction": {
+          "enum": [
+            "bullish",
+            "bearish"
+          ],
+          "description": "可选(2026-09-23 夜):bullish(缺省)=底背离(价格更低的已确认 pivot low、MACD 抬高),做多触发;bearish=顶背离(价格更高的已确认 pivot high、MACD 走低),可作 short_signal 做空触发"
+        }
+      },
+      "required": [
+        "fast",
+        "slow",
+        "signal",
+        "swing_length",
+        "lookback"
+      ]
+    },
+    "PrimitiveParamsMacdDivergenceExit": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fast": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 5000
+        },
+        "slow": {
+          "type": "integer",
+          "minimum": 3,
+          "maximum": 5000
+        },
+        "signal": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 5000
+        },
+        "swing_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50
+        },
+        "lookback": {
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 5000
+        },
+        "source": {
+          "enum": [
+            "histogram",
+            "macd"
+          ]
+        },
+        "htf": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*(m|h|d)$",
+          "description": "可选(2026-09-23 夜):在高周期上判背离。按 htf 把已收盘的执行周期 K 线分桶聚成完整高周期 K 线(未收完的桶不用),背离在高周期 K 线上判,确认那根高周期 K 线收盘的执行周期 K 线当根触发;不受决策视图 5000 根上限约束。缺省 = 在执行周期上判(旧口径)"
+        }
+      },
+      "required": [
+        "fast",
+        "slow",
+        "signal",
+        "swing_length",
+        "lookback"
+      ]
+    },
+    "PrimitiveParamsPineSeries": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "script_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "inputs": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "maxLength": 64
+              },
+              "value": {}
+            },
+            "required": [
+              "name",
+              "value"
+            ]
+          }
+        },
+        "output": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "operator": {
+          "enum": [
+            "above",
+            "below",
+            "cross_above",
+            "cross_below"
+          ]
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "compare_to": {
+          "enum": [
+            "close",
+            "zero",
+            "threshold",
+            "output"
+          ]
+        },
+        "compare_output": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "warmup_bars": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5000
+        }
+      },
+      "required": [
+        "script_id",
+        "output",
+        "operator",
+        "warmup_bars"
+      ]
+    },
+    "PrimitiveParamsIndicatorCross": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "indicator": {
+          "enum": [
+            "ad",
+            "adx",
+            "ao",
+            "aroon",
+            "atr",
+            "bbands",
+            "cci",
+            "chaikin",
+            "chop",
+            "cmf",
+            "dema",
+            "donchian",
+            "elder_ray",
+            "ema",
+            "hma",
+            "ichimoku",
+            "kama",
+            "keltner",
+            "macd",
+            "mfi",
+            "momentum",
+            "natr",
+            "obv",
+            "price",
+            "psar",
+            "roc",
+            "rsi",
+            "sma",
+            "smma",
+            "stdev",
+            "stoch",
+            "stochrsi",
+            "supertrend",
+            "tema",
+            "trix",
+            "uo",
+            "volume_ratio",
+            "vortex",
+            "vwap",
+            "vwma",
+            "willr",
+            "wma"
+          ],
+          "description": "指标规范名。多输出指标用 output 选线:macd(macd/signal/hist)、adx(adx/plus_di/minus_di)、stoch 与 stochrsi(k/d)、bbands(middle/upper/lower/bandwidth/percent_b)、keltner 与 donchian(middle/upper/lower)、ichimoku(conversion/base/span_a/span_b/lagging/lagging_ref)、supertrend 与 psar(supertrend|psar/direction)、aroon(oscillator/up/down)、vortex(plus/minus)、trix(trix/signal)、elder_ray(bull/bear);其余为单输出,output 省略即可。"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "指标参数,省略则用目录默认值。各指标用到的键:period 通用周期;period_2/period_3 第二、三周期(KD 的两次平滑、StochRSI 的取值窗口、一目的基准与先行 B、肯特纳的 ATR 周期);fast/slow/signal(MACD、KAMA、AO、Chaikin、UO、TRIX);multiple(布林标准差倍数、肯特纳与超级趋势的 ATR 倍数);step/max_step(抛物线 SAR)。",
+          "properties": {
+            "period": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "period_2": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "period_3": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "fast": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "slow": {
+              "type": "integer",
+              "minimum": 2,
+              "maximum": 5000
+            },
+            "signal": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "multiple": {
+              "type": "number",
+              "minimum": 0.1,
+              "maximum": 100
+            },
+            "step": {
+              "type": "number",
+              "minimum": 0.001,
+              "maximum": 1
+            },
+            "max_step": {
+              "type": "number",
+              "minimum": 0.001,
+              "maximum": 1
+            }
+          },
+          "required": []
+        },
+        "output": {
+          "type": "string",
+          "maxLength": 32,
+          "description": "指标输出线名;省略或不认识时回落到该指标的主输出。"
+        },
+        "compare_to": {
+          "enum": [
+            "indicator",
+            "price",
+            "constant"
+          ],
+          "description": "被穿越的对象:另一个指标、价格序列或固定常数。"
+        },
+        "compare_indicator": {
+          "enum": [
+            "ad",
+            "adx",
+            "ao",
+            "aroon",
+            "atr",
+            "bbands",
+            "cci",
+            "chaikin",
+            "chop",
+            "cmf",
+            "dema",
+            "donchian",
+            "elder_ray",
+            "ema",
+            "hma",
+            "ichimoku",
+            "kama",
+            "keltner",
+            "macd",
+            "mfi",
+            "momentum",
+            "natr",
+            "obv",
+            "price",
+            "psar",
+            "roc",
+            "rsi",
+            "sma",
+            "smma",
+            "stdev",
+            "stoch",
+            "stochrsi",
+            "supertrend",
+            "tema",
+            "trix",
+            "uo",
+            "volume_ratio",
+            "vortex",
+            "vwap",
+            "vwma",
+            "willr",
+            "wma"
+          ],
+          "description": "compare_to=indicator 时的第二个指标;省略则复用同一个指标(用 compare_args 换参数,如 SMA50 穿 SMA200)。"
+        },
+        "compare_args": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "第二条线的指标参数,键同 args。",
+          "properties": {
+            "period": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "period_2": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "period_3": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "fast": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "slow": {
+              "type": "integer",
+              "minimum": 2,
+              "maximum": 5000
+            },
+            "signal": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "multiple": {
+              "type": "number",
+              "minimum": 0.1,
+              "maximum": 100
+            },
+            "step": {
+              "type": "number",
+              "minimum": 0.001,
+              "maximum": 1
+            },
+            "max_step": {
+              "type": "number",
+              "minimum": 0.001,
+              "maximum": 1
+            }
+          },
+          "required": []
+        },
+        "compare_output": {
+          "type": "string",
+          "maxLength": 32,
+          "description": "指标输出线名;省略或不认识时回落到该指标的主输出。"
+        },
+        "compare_price": {
+          "enum": [
+            "close",
+            "open",
+            "high",
+            "low",
+            "hl2",
+            "hlc3",
+            "ohlc4"
+          ],
+          "description": "compare_to=price 时用哪个价格,默认 close。"
+        },
+        "constant": {
+          "type": "number",
+          "description": "compare_to=constant 时的常数,默认 0(如 MACD 柱上穿 0 轴)。"
+        },
+        "direction": {
+          "enum": [
+            "cross_above",
+            "cross_below",
+            "above",
+            "below"
+          ],
+          "description": "cross_above/cross_below 是单根穿越事件;above/below 是状态(这一根主线在比较线上方/下方即成立),用于「回踩均线挂限价」这类要求持续处于趋势中的入场"
+        }
+      },
+      "required": [
+        "indicator",
+        "compare_to",
+        "direction"
+      ]
+    },
+    "PrimitiveParamsIndicatorCrossExit": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "indicator": {
+          "enum": [
+            "ad",
+            "adx",
+            "ao",
+            "aroon",
+            "atr",
+            "bbands",
+            "cci",
+            "chaikin",
+            "chop",
+            "cmf",
+            "dema",
+            "donchian",
+            "elder_ray",
+            "ema",
+            "hma",
+            "ichimoku",
+            "kama",
+            "keltner",
+            "macd",
+            "mfi",
+            "momentum",
+            "natr",
+            "obv",
+            "price",
+            "psar",
+            "roc",
+            "rsi",
+            "sma",
+            "smma",
+            "stdev",
+            "stoch",
+            "stochrsi",
+            "supertrend",
+            "tema",
+            "trix",
+            "uo",
+            "volume_ratio",
+            "vortex",
+            "vwap",
+            "vwma",
+            "willr",
+            "wma"
+          ],
+          "description": "指标规范名。多输出指标用 output 选线:macd(macd/signal/hist)、adx(adx/plus_di/minus_di)、stoch 与 stochrsi(k/d)、bbands(middle/upper/lower/bandwidth/percent_b)、keltner 与 donchian(middle/upper/lower)、ichimoku(conversion/base/span_a/span_b/lagging/lagging_ref)、supertrend 与 psar(supertrend|psar/direction)、aroon(oscillator/up/down)、vortex(plus/minus)、trix(trix/signal)、elder_ray(bull/bear);其余为单输出,output 省略即可。"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "指标参数,省略则用目录默认值。各指标用到的键:period 通用周期;period_2/period_3 第二、三周期(KD 的两次平滑、StochRSI 的取值窗口、一目的基准与先行 B、肯特纳的 ATR 周期);fast/slow/signal(MACD、KAMA、AO、Chaikin、UO、TRIX);multiple(布林标准差倍数、肯特纳与超级趋势的 ATR 倍数);step/max_step(抛物线 SAR)。",
+          "properties": {
+            "period": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "period_2": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "period_3": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "fast": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "slow": {
+              "type": "integer",
+              "minimum": 2,
+              "maximum": 5000
+            },
+            "signal": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "multiple": {
+              "type": "number",
+              "minimum": 0.1,
+              "maximum": 100
+            },
+            "step": {
+              "type": "number",
+              "minimum": 0.001,
+              "maximum": 1
+            },
+            "max_step": {
+              "type": "number",
+              "minimum": 0.001,
+              "maximum": 1
+            }
+          },
+          "required": []
+        },
+        "output": {
+          "type": "string",
+          "maxLength": 32,
+          "description": "指标输出线名;省略或不认识时回落到该指标的主输出。"
+        },
+        "compare_to": {
+          "enum": [
+            "indicator",
+            "price",
+            "constant"
+          ],
+          "description": "被穿越的对象:另一个指标、价格序列或固定常数。"
+        },
+        "compare_indicator": {
+          "enum": [
+            "ad",
+            "adx",
+            "ao",
+            "aroon",
+            "atr",
+            "bbands",
+            "cci",
+            "chaikin",
+            "chop",
+            "cmf",
+            "dema",
+            "donchian",
+            "elder_ray",
+            "ema",
+            "hma",
+            "ichimoku",
+            "kama",
+            "keltner",
+            "macd",
+            "mfi",
+            "momentum",
+            "natr",
+            "obv",
+            "price",
+            "psar",
+            "roc",
+            "rsi",
+            "sma",
+            "smma",
+            "stdev",
+            "stoch",
+            "stochrsi",
+            "supertrend",
+            "tema",
+            "trix",
+            "uo",
+            "volume_ratio",
+            "vortex",
+            "vwap",
+            "vwma",
+            "willr",
+            "wma"
+          ],
+          "description": "compare_to=indicator 时的第二个指标;省略则复用同一个指标(用 compare_args 换参数,如 SMA50 穿 SMA200)。"
+        },
+        "compare_args": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "第二条线的指标参数,键同 args。",
+          "properties": {
+            "period": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "period_2": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "period_3": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "fast": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "slow": {
+              "type": "integer",
+              "minimum": 2,
+              "maximum": 5000
+            },
+            "signal": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "multiple": {
+              "type": "number",
+              "minimum": 0.1,
+              "maximum": 100
+            },
+            "step": {
+              "type": "number",
+              "minimum": 0.001,
+              "maximum": 1
+            },
+            "max_step": {
+              "type": "number",
+              "minimum": 0.001,
+              "maximum": 1
+            }
+          },
+          "required": []
+        },
+        "compare_output": {
+          "type": "string",
+          "maxLength": 32,
+          "description": "指标输出线名;省略或不认识时回落到该指标的主输出。"
+        },
+        "compare_price": {
+          "enum": [
+            "close",
+            "open",
+            "high",
+            "low",
+            "hl2",
+            "hlc3",
+            "ohlc4"
+          ],
+          "description": "compare_to=price 时用哪个价格,默认 close。"
+        },
+        "constant": {
+          "type": "number",
+          "description": "compare_to=constant 时的常数,默认 0(如 MACD 柱上穿 0 轴)。"
+        },
+        "direction": {
+          "enum": [
+            "cross_above",
+            "cross_below"
+          ]
+        }
+      },
+      "required": [
+        "indicator",
+        "compare_to",
+        "direction"
+      ]
+    },
+    "PrimitiveParamsIndicatorThreshold": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "indicator": {
+          "enum": [
+            "ad",
+            "adx",
+            "ao",
+            "aroon",
+            "atr",
+            "bbands",
+            "cci",
+            "chaikin",
+            "chop",
+            "cmf",
+            "dema",
+            "donchian",
+            "elder_ray",
+            "ema",
+            "hma",
+            "ichimoku",
+            "kama",
+            "keltner",
+            "macd",
+            "mfi",
+            "momentum",
+            "natr",
+            "obv",
+            "price",
+            "psar",
+            "roc",
+            "rsi",
+            "sma",
+            "smma",
+            "stdev",
+            "stoch",
+            "stochrsi",
+            "supertrend",
+            "tema",
+            "trix",
+            "uo",
+            "volume_ratio",
+            "vortex",
+            "vwap",
+            "vwma",
+            "willr",
+            "wma"
+          ],
+          "description": "指标规范名。多输出指标用 output 选线:macd(macd/signal/hist)、adx(adx/plus_di/minus_di)、stoch 与 stochrsi(k/d)、bbands(middle/upper/lower/bandwidth/percent_b)、keltner 与 donchian(middle/upper/lower)、ichimoku(conversion/base/span_a/span_b/lagging/lagging_ref)、supertrend 与 psar(supertrend|psar/direction)、aroon(oscillator/up/down)、vortex(plus/minus)、trix(trix/signal)、elder_ray(bull/bear);其余为单输出,output 省略即可。"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "指标参数,省略则用目录默认值。各指标用到的键:period 通用周期;period_2/period_3 第二、三周期(KD 的两次平滑、StochRSI 的取值窗口、一目的基准与先行 B、肯特纳的 ATR 周期);fast/slow/signal(MACD、KAMA、AO、Chaikin、UO、TRIX);multiple(布林标准差倍数、肯特纳与超级趋势的 ATR 倍数);step/max_step(抛物线 SAR)。",
+          "properties": {
+            "period": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "period_2": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "period_3": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "fast": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "slow": {
+              "type": "integer",
+              "minimum": 2,
+              "maximum": 5000
+            },
+            "signal": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "multiple": {
+              "type": "number",
+              "minimum": 0.1,
+              "maximum": 100
+            },
+            "step": {
+              "type": "number",
+              "minimum": 0.001,
+              "maximum": 1
+            },
+            "max_step": {
+              "type": "number",
+              "minimum": 0.001,
+              "maximum": 1
+            }
+          },
+          "required": []
+        },
+        "output": {
+          "type": "string",
+          "maxLength": 32,
+          "description": "指标输出线名;省略或不认识时回落到该指标的主输出。"
+        },
+        "operator": {
+          "enum": [
+            "above",
+            "below",
+            "cross_above",
+            "cross_below"
+          ],
+          "description": "above/below 是状态(每根都可能成立),cross_* 是单根事件。"
+        },
+        "threshold": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "indicator",
+        "operator",
+        "threshold"
+      ]
+    },
+    "PrimitiveParamsIndicatorThresholdExit": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "indicator": {
+          "enum": [
+            "ad",
+            "adx",
+            "ao",
+            "aroon",
+            "atr",
+            "bbands",
+            "cci",
+            "chaikin",
+            "chop",
+            "cmf",
+            "dema",
+            "donchian",
+            "elder_ray",
+            "ema",
+            "hma",
+            "ichimoku",
+            "kama",
+            "keltner",
+            "macd",
+            "mfi",
+            "momentum",
+            "natr",
+            "obv",
+            "price",
+            "psar",
+            "roc",
+            "rsi",
+            "sma",
+            "smma",
+            "stdev",
+            "stoch",
+            "stochrsi",
+            "supertrend",
+            "tema",
+            "trix",
+            "uo",
+            "volume_ratio",
+            "vortex",
+            "vwap",
+            "vwma",
+            "willr",
+            "wma"
+          ],
+          "description": "指标规范名。多输出指标用 output 选线:macd(macd/signal/hist)、adx(adx/plus_di/minus_di)、stoch 与 stochrsi(k/d)、bbands(middle/upper/lower/bandwidth/percent_b)、keltner 与 donchian(middle/upper/lower)、ichimoku(conversion/base/span_a/span_b/lagging/lagging_ref)、supertrend 与 psar(supertrend|psar/direction)、aroon(oscillator/up/down)、vortex(plus/minus)、trix(trix/signal)、elder_ray(bull/bear);其余为单输出,output 省略即可。"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "指标参数,省略则用目录默认值。各指标用到的键:period 通用周期;period_2/period_3 第二、三周期(KD 的两次平滑、StochRSI 的取值窗口、一目的基准与先行 B、肯特纳的 ATR 周期);fast/slow/signal(MACD、KAMA、AO、Chaikin、UO、TRIX);multiple(布林标准差倍数、肯特纳与超级趋势的 ATR 倍数);step/max_step(抛物线 SAR)。",
+          "properties": {
+            "period": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "period_2": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "period_3": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "fast": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "slow": {
+              "type": "integer",
+              "minimum": 2,
+              "maximum": 5000
+            },
+            "signal": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "multiple": {
+              "type": "number",
+              "minimum": 0.1,
+              "maximum": 100
+            },
+            "step": {
+              "type": "number",
+              "minimum": 0.001,
+              "maximum": 1
+            },
+            "max_step": {
+              "type": "number",
+              "minimum": 0.001,
+              "maximum": 1
+            }
+          },
+          "required": []
+        },
+        "output": {
+          "type": "string",
+          "maxLength": 32,
+          "description": "指标输出线名;省略或不认识时回落到该指标的主输出。"
+        },
+        "operator": {
+          "enum": [
+            "above",
+            "below",
+            "cross_above",
+            "cross_below"
+          ],
+          "description": "above/below 是状态(每根都可能成立),cross_* 是单根事件。"
+        },
+        "threshold": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "indicator",
+        "operator",
+        "threshold"
+      ]
+    },
+    "PrimitiveParamsIndicatorDivergence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "indicator": {
+          "enum": [
+            "ad",
+            "adx",
+            "ao",
+            "aroon",
+            "atr",
+            "bbands",
+            "cci",
+            "chaikin",
+            "chop",
+            "cmf",
+            "dema",
+            "donchian",
+            "elder_ray",
+            "ema",
+            "hma",
+            "ichimoku",
+            "kama",
+            "keltner",
+            "macd",
+            "mfi",
+            "momentum",
+            "natr",
+            "obv",
+            "price",
+            "psar",
+            "roc",
+            "rsi",
+            "sma",
+            "smma",
+            "stdev",
+            "stoch",
+            "stochrsi",
+            "supertrend",
+            "tema",
+            "trix",
+            "uo",
+            "volume_ratio",
+            "vortex",
+            "vwap",
+            "vwma",
+            "willr",
+            "wma"
+          ],
+          "description": "指标规范名。多输出指标用 output 选线:macd(macd/signal/hist)、adx(adx/plus_di/minus_di)、stoch 与 stochrsi(k/d)、bbands(middle/upper/lower/bandwidth/percent_b)、keltner 与 donchian(middle/upper/lower)、ichimoku(conversion/base/span_a/span_b/lagging/lagging_ref)、supertrend 与 psar(supertrend|psar/direction)、aroon(oscillator/up/down)、vortex(plus/minus)、trix(trix/signal)、elder_ray(bull/bear);其余为单输出,output 省略即可。"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "指标参数,省略则用目录默认值。各指标用到的键:period 通用周期;period_2/period_3 第二、三周期(KD 的两次平滑、StochRSI 的取值窗口、一目的基准与先行 B、肯特纳的 ATR 周期);fast/slow/signal(MACD、KAMA、AO、Chaikin、UO、TRIX);multiple(布林标准差倍数、肯特纳与超级趋势的 ATR 倍数);step/max_step(抛物线 SAR)。",
+          "properties": {
+            "period": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "period_2": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "period_3": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "fast": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "slow": {
+              "type": "integer",
+              "minimum": 2,
+              "maximum": 5000
+            },
+            "signal": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "multiple": {
+              "type": "number",
+              "minimum": 0.1,
+              "maximum": 100
+            },
+            "step": {
+              "type": "number",
+              "minimum": 0.001,
+              "maximum": 1
+            },
+            "max_step": {
+              "type": "number",
+              "minimum": 0.001,
+              "maximum": 1
+            }
+          },
+          "required": []
+        },
+        "output": {
+          "type": "string",
+          "maxLength": 32,
+          "description": "指标输出线名;省略或不认识时回落到该指标的主输出。"
+        },
+        "swing_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50
+        },
+        "lookback": {
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 5000
+        }
+      },
+      "required": [
+        "indicator",
+        "swing_length",
+        "lookback"
+      ]
+    },
+    "PrimitiveParamsIndicatorDivergenceExit": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "indicator": {
+          "enum": [
+            "ad",
+            "adx",
+            "ao",
+            "aroon",
+            "atr",
+            "bbands",
+            "cci",
+            "chaikin",
+            "chop",
+            "cmf",
+            "dema",
+            "donchian",
+            "elder_ray",
+            "ema",
+            "hma",
+            "ichimoku",
+            "kama",
+            "keltner",
+            "macd",
+            "mfi",
+            "momentum",
+            "natr",
+            "obv",
+            "price",
+            "psar",
+            "roc",
+            "rsi",
+            "sma",
+            "smma",
+            "stdev",
+            "stoch",
+            "stochrsi",
+            "supertrend",
+            "tema",
+            "trix",
+            "uo",
+            "volume_ratio",
+            "vortex",
+            "vwap",
+            "vwma",
+            "willr",
+            "wma"
+          ],
+          "description": "指标规范名。多输出指标用 output 选线:macd(macd/signal/hist)、adx(adx/plus_di/minus_di)、stoch 与 stochrsi(k/d)、bbands(middle/upper/lower/bandwidth/percent_b)、keltner 与 donchian(middle/upper/lower)、ichimoku(conversion/base/span_a/span_b/lagging/lagging_ref)、supertrend 与 psar(supertrend|psar/direction)、aroon(oscillator/up/down)、vortex(plus/minus)、trix(trix/signal)、elder_ray(bull/bear);其余为单输出,output 省略即可。"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "指标参数,省略则用目录默认值。各指标用到的键:period 通用周期;period_2/period_3 第二、三周期(KD 的两次平滑、StochRSI 的取值窗口、一目的基准与先行 B、肯特纳的 ATR 周期);fast/slow/signal(MACD、KAMA、AO、Chaikin、UO、TRIX);multiple(布林标准差倍数、肯特纳与超级趋势的 ATR 倍数);step/max_step(抛物线 SAR)。",
+          "properties": {
+            "period": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "period_2": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "period_3": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "fast": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "slow": {
+              "type": "integer",
+              "minimum": 2,
+              "maximum": 5000
+            },
+            "signal": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "multiple": {
+              "type": "number",
+              "minimum": 0.1,
+              "maximum": 100
+            },
+            "step": {
+              "type": "number",
+              "minimum": 0.001,
+              "maximum": 1
+            },
+            "max_step": {
+              "type": "number",
+              "minimum": 0.001,
+              "maximum": 1
+            }
+          },
+          "required": []
+        },
+        "output": {
+          "type": "string",
+          "maxLength": 32,
+          "description": "指标输出线名;省略或不认识时回落到该指标的主输出。"
+        },
+        "swing_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50
+        },
+        "lookback": {
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 5000
+        }
+      },
+      "required": [
+        "indicator",
+        "swing_length",
+        "lookback"
+      ]
+    },
+    "PrimitiveParamsDoubleBottom": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "swing_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50
+        },
+        "lookback": {
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 5000
+        },
+        "tolerance_pct": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 50,
+          "description": "两个对称极值之间允许的价格偏差百分比。"
+        }
+      },
+      "required": [
+        "swing_length",
+        "lookback",
+        "tolerance_pct"
+      ]
+    },
+    "PrimitiveParamsDoubleTopExit": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "swing_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50
+        },
+        "lookback": {
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 5000
+        },
+        "tolerance_pct": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 50,
+          "description": "两个对称极值之间允许的价格偏差百分比。"
+        }
+      },
+      "required": [
+        "swing_length",
+        "lookback",
+        "tolerance_pct"
+      ]
+    },
+    "PrimitiveParamsHeadAndShouldersInverse": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "swing_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50
+        },
+        "lookback": {
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 5000
+        },
+        "tolerance_pct": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 50,
+          "description": "两个对称极值之间允许的价格偏差百分比。"
+        }
+      },
+      "required": [
+        "swing_length",
+        "lookback",
+        "tolerance_pct"
+      ]
+    },
+    "PrimitiveParamsBullishEngulfing": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "min_body_ratio": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "当根实体至少是前一根实体的多少倍。"
+        }
+      },
+      "required": [
+        "min_body_ratio"
+      ]
+    },
+    "PrimitiveParamsBearishEngulfingExit": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "min_body_ratio": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "当根实体至少是前一根实体的多少倍。"
+        }
+      },
+      "required": [
+        "min_body_ratio"
+      ]
+    },
+    "PrimitiveParamsPinBar": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tail_ratio": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 100,
+          "description": "下影至少是实体的多少倍。"
+        },
+        "max_body_pct": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "实体占整根振幅的上限。"
+        },
+        "max_upper_pct": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "上影占整根振幅的上限。"
+        }
+      },
+      "required": [
+        "tail_ratio",
+        "max_body_pct",
+        "max_upper_pct"
+      ]
+    },
+    "PrimitiveParamsFairValueGap": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "min_gap_pct": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "缺口宽度相对收盘价的百分比下限。"
+        }
+      },
+      "required": [
+        "min_gap_pct"
+      ]
+    },
+    "PrimitiveParamsInsideBarBreakout": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_inside_bars": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "description": "母线之后最多回溯多少根内包线。"
+        }
+      },
+      "required": [
+        "max_inside_bars"
+      ]
+    },
+    "PrimitiveParamsNextOpenMarket": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {},
+      "required": []
+    },
+    "PrimitiveParamsAtrStop": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "atr_period": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 5000
+        },
+        "multiple": {
+          "type": "number",
+          "minimum": 0.01,
+          "maximum": 100
+        }
+      },
+      "required": [
+        "atr_period",
+        "multiple"
+      ]
+    },
+    "PrimitiveParamsSwingLowStop": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "lookback": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 5000
+        }
+      },
+      "required": [
+        "lookback"
+      ]
+    },
+    "PrimitiveParamsChandelierTrail": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "atr_period": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 5000
+        },
+        "multiple": {
+          "type": "number",
+          "minimum": 0.01,
+          "maximum": 100
+        }
+      },
+      "required": [
+        "atr_period",
+        "multiple"
+      ]
+    },
+    "PrimitiveParamsSwingStructureStop": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "lookback": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 5000
+        }
+      },
+      "required": [
+        "lookback"
+      ]
+    },
+    "PrimitiveParamsTrendBreak": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ema_period": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 5000
+        },
+        "htf": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*(m|h|d)$"
+        }
+      },
+      "required": [
+        "ema_period",
+        "htf"
+      ]
+    },
+    "PrimitiveParamsBreakevenAfterR": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "r": {
+          "type": "number",
+          "minimum": 0.01,
+          "maximum": 100
+        }
+      },
+      "required": [
+        "r"
+      ]
+    },
+    "PrimitiveParamsTimeStop": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bars": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        }
+      },
+      "required": [
+        "bars"
+      ]
+    },
+    "PrimitiveParamsFixedRTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "r": {
+          "type": "number",
+          "minimum": 0.01,
+          "maximum": 100
+        }
+      },
+      "required": [
+        "r"
+      ]
+    },
+    "PrimitiveParamsRiskFraction": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fraction": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+        },
+        "max_allocation": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+        }
+      },
+      "required": [
+        "fraction",
+        "max_allocation"
+      ]
+    },
+    "PrimitiveParamsEqualNotional": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_allocation": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+        }
+      },
+      "required": [
+        "max_allocation"
+      ]
+    },
+    "PrimitiveParamsVolTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "波动率目标仓位(2026-09-23):每笔 100% 可用资金 × min(1, target_vol / 入场前已收盘 K 线的实现年化波动);lookback_bars 缺省 = 20 天折算根数",
+      "properties": {
+        "target_vol": {
+          "type": "number",
+          "minimum": 0.05,
+          "maximum": 5
+        },
+        "lookback_bars": {
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 4000
+        }
+      },
+      "required": [
+        "target_vol"
+      ]
+    },
+    "PrimitiveParamsResidualSharpeMin": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "minimum": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "minimum"
+      ]
+    },
+    "PrimitiveParamsBetaMax": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maximum": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "maximum"
+      ]
+    },
+    "PrimitiveParamsTrendRequired": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "states": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "up",
+              "down",
+              "range"
+            ]
+          },
+          "maxItems": 30
+        }
+      },
+      "required": [
+        "states"
+      ]
+    },
+    "PrimitiveParamsTrendState": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "adx_period": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 5000
+        },
+        "adx_min": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "ema_fast": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 5000
+        },
+        "ema_slow": {
+          "type": "integer",
+          "minimum": 3,
+          "maximum": 5000
+        },
+        "htf": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*(m|h|d)$"
+        }
+      },
+      "required": [
+        "adx_period",
+        "adx_min",
+        "ema_fast",
+        "ema_slow",
+        "htf"
+      ]
+    },
+    "PrimitiveParamsHtfMaState": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "高周期均线状态(2026-09-23 夜,regime):最近一根已收盘的 htf K 线收盘价在其 MA(period) 之上(side=above)/之下(side=below)。高周期 K 线由已收盘的执行周期 K 线按 htf 分桶聚成,只用完整的桶;从整段已收盘 K 线计算,不受决策视图 5000 根上限约束。可作 regime(做多)与 order.short_regime(做空)",
+      "properties": {
+        "htf": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*(m|h|d)$",
+          "description": "高周期,必须 ≥ 执行周期且可整除,如 1d / 4h"
+        },
+        "period": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 1000,
+          "description": "均线周期(高周期根数),如 60 = 日线 MA60"
+        },
+        "ma": {
+          "enum": [
+            "sma",
+            "ema"
+          ],
+          "description": "缺省 sma"
+        },
+        "side": {
+          "enum": [
+            "above",
+            "below"
+          ],
+          "description": "缺省 above;做空方向门用 below"
+        }
+      },
+      "required": [
+        "htf",
+        "period"
+      ]
+    },
+    "ResearchDiagnostics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "exit_reasons": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "reason": {
+                "type": "string"
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "avg_net_r": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "net_pnl": {
+                "type": "string",
+                "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+                "maxLength": 32
+              }
+            },
+            "required": [
+              "reason",
+              "count",
+              "avg_net_r",
+              "net_pnl"
+            ]
+          }
+        },
+        "r_histogram": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "bins": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            },
+            "counts": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "required": [
+            "bins",
+            "counts"
+          ]
+        },
+        "mae_mfe": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "avg_mae_r": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "avg_mfe_r": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "winners_avg_mfe_r": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "losers_avg_mfe_r": {
+              "type": [
+                "number",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "avg_mae_r",
+            "avg_mfe_r",
+            "winners_avg_mfe_r",
+            "losers_avg_mfe_r"
+          ]
+        },
+        "cost_share": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "fees": {
+              "type": "string",
+              "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+              "maxLength": 32
+            },
+            "slippage_est": {
+              "type": "string",
+              "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+              "maxLength": 32
+            },
+            "gross_pnl": {
+              "type": "string",
+              "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+              "maxLength": 32
+            },
+            "cost_over_gross_abs": {
+              "type": [
+                "number",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "fees",
+            "slippage_est",
+            "gross_pnl",
+            "cost_over_gross_abs"
+          ]
+        },
+        "factor": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "enum": [
+                "ok",
+                "insufficient"
+              ]
+            },
+            "beta": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "alpha_annualized": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "alpha_share": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "beta_share": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "residual_max_dd": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "residual_sharpe": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "r2": {
+              "type": [
+                "number",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "status"
+          ]
+        },
+        "holding_bars": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "avg": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "median": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "max": {
+              "type": [
+                "number",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "avg",
+            "median",
+            "max"
+          ]
+        },
+        "note": {
+          "type": "string"
+        },
+        "gate_stats": {
+          "type": "object",
+          "properties": {
+            "evaluated": {
+              "type": "integer"
+            },
+            "blocked_by": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "integer"
+              }
+            },
+            "passed": {
+              "type": "integer"
+            },
+            "adjusted": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "stop_widened": {
+                  "type": "integer"
+                },
+                "target_fallback": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "stop_widened",
+                "target_fallback"
+              ]
+            }
+          },
+          "required": [
+            "evaluated",
+            "blocked_by"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "exit_reasons",
+        "r_histogram",
+        "mae_mfe",
+        "cost_share",
+        "factor",
+        "holding_bars"
+      ]
+    },
+    "ResearchAttribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "parent_run_id": {
+          "type": "string"
+        },
+        "child_run_id": {
+          "type": "string"
+        },
+        "base_net_return": {
+          "type": "number"
+        },
+        "child_net_return": {
+          "type": "number"
+        },
+        "components": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "section": {
+                "enum": [
+                  "signal",
+                  "entry",
+                  "risk",
+                  "exit",
+                  "sizing",
+                  "regime",
+                  "screen"
+                ]
+              },
+              "changed": {
+                "type": "boolean"
+              },
+              "solo_net_return": {
+                "type": "number"
+              },
+              "delta": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "section",
+              "changed",
+              "solo_net_return",
+              "delta"
+            ]
+          }
+        },
+        "interaction": {
+          "type": "number"
+        },
+        "note": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "parent_run_id",
+        "child_run_id",
+        "base_net_return",
+        "child_net_return",
+        "components",
+        "interaction",
+        "note"
+      ]
+    },
+    "ResearchEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "candidate_id": {
+          "type": "string"
+        },
+        "stop": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+          "maxLength": 32
+        },
+        "target": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+              "maxLength": 32
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "target_r": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "screen_rank": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "reason": {
+          "type": "string"
+        },
+        "fit": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "stop_source": {
+              "type": "string",
+              "enum": [
+                "strategy",
+                "cost_floor"
+              ]
+            },
+            "target_source": {
+              "type": "string",
+              "enum": [
+                "strategy",
+                "fallback_r",
+                "none"
+              ]
+            },
+            "strategy_stop": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+              "maxLength": 32
+            },
+            "strategy_target": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+                  "maxLength": 32
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "stop_pct": {
+              "type": "number"
+            },
+            "target_pct": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "rr": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "floor_pct": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "stop_source",
+            "target_source",
+            "strategy_stop",
+            "strategy_target",
+            "stop_pct",
+            "target_pct",
+            "rr",
+            "floor_pct"
+          ]
+        }
+      },
+      "required": [
+        "candidate_id",
+        "stop",
+        "target",
+        "reason"
+      ]
+    },
+    "ResearchDecisionView": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "arm": {
+          "type": "string"
+        },
+        "symbol": {
+          "type": "string"
+        },
+        "timeframe_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "bars": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ResearchBar"
+          }
+        },
+        "policy": {
+          "$ref": "#/$defs/ResearchPolicy"
+        },
+        "candidate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResearchEntry"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "account": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "cash": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+              "maxLength": 32
+            },
+            "equity": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+              "maxLength": 32
+            }
+          },
+          "required": [
+            "cash",
+            "equity"
+          ]
+        },
+        "position": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "entry_at": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "entry_price": {
+                  "type": "string",
+                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+                  "maxLength": 32
+                },
+                "qty": {
+                  "type": "string",
+                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+                  "maxLength": 32
+                },
+                "stop": {
+                  "type": "string",
+                  "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+                  "maxLength": 32
+                },
+                "target": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+                      "maxLength": 32
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "bars_held": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "entry_at",
+                "entry_price",
+                "qty",
+                "stop",
+                "target",
+                "bars_held"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "strategy_ir": {
+          "$ref": "#/$defs/StrategyIR"
+        },
+        "screen": {
+          "$ref": "#/$defs/ResearchScreenRow"
+        },
+        "trend": {
+          "$ref": "#/$defs/ResearchTrend"
+        },
+        "portfolio": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "symbol": {
+                "type": "string"
+              },
+              "holdings": {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$",
+                "maxLength": 32
+              }
+            },
+            "required": [
+              "symbol",
+              "holdings"
+            ]
+          }
+        },
+        "previous_summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "opens_today": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "htf_structure": {
+          "$ref": "#/$defs/ResearchStructure"
+        }
+      },
+      "required": [
+        "at",
+        "arm",
+        "symbol",
+        "timeframe_ms",
+        "bars",
+        "policy",
+        "candidate",
+        "account",
+        "position",
+        "previous_summary",
+        "opens_today"
+      ]
+    },
+    "ResearchAgentAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "enter",
+            "follow",
+            "skip",
+            "hold",
+            "exit",
+            "reduce",
+            "no_trade",
+            "blocked",
+            "model_error"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "gate_errors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "entry": {
+          "$ref": "#/$defs/ResearchEntry"
+        }
+      },
+      "required": [
+        "action",
+        "reason",
+        "gate_errors",
+        "evidence_refs"
+      ]
+    },
+    "ResearchRecordedDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "input": {
+          "$ref": "#/$defs/ResearchDecisionView"
+        },
+        "input_hash": {
+          "type": "string"
+        },
+        "output": {
+          "$ref": "#/$defs/ResearchAgentAction"
+        }
+      },
+      "required": [
+        "input",
+        "input_hash",
+        "output"
+      ]
+    },
+    "OrderGateParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "min_rr": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "min_stop_cost_multiple": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "max_risk_fraction": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+        },
+        "require_target": {
+          "type": "boolean"
+        },
+        "stop_floor": {
+          "type": "string",
+          "enum": [
+            "widen",
+            "block",
+            "none"
+          ],
+          "description": "策略止损窄于成本下限时:widen=把止损放宽到 min_stop_cost_multiple×往返成本(旧缺省),block=直接拦,none=成本下限只作展示、不放宽也不拦(2026-09-23 结构口径缺省)"
+        },
+        "target_fallback_r": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 100,
+          "description": "策略没给出止盈(结构上方无阻力块)时,用止损距离的固定倍数补止盈;null=不补,直接 no_target"
+        },
+        "risk_cap_sizing": {
+          "type": "string",
+          "enum": [
+            "risk_fraction_only",
+            "all"
+          ],
+          "description": "单笔风险上限适用范围:默认只对 risk_fraction 仓位法;unit_notional 已剔除仓位因素不套"
+        },
+        "min_stop_atr": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 10,
+          "description": "结构口径(2026-09-23):止损离入场(市价=信号收盘价,限价=挂单价)不到 min_stop_atr×ATR(14,Wilder) 的单子直接不做(blocked stop_too_close),代码不会把止损挪远;缺省 0.5。字段存在(非 null)即启用结构口径:不再用盈亏比拦单(只认 IR 的 order.min_rr)、不放宽止损、不按 R 倍数补止盈"
+        }
+      },
+      "required": [
+        "min_rr",
+        "min_stop_cost_multiple",
+        "max_risk_fraction",
+        "require_target"
+      ]
+    },
+    "ResearchStructure": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "as_of": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "insufficient"
+          ]
+        },
+        "support": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "lower": {
+              "type": "string"
+            },
+            "upper": {
+              "type": "string"
+            },
+            "formed_at": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "lower",
+            "upper",
+            "formed_at"
+          ]
+        },
+        "resistance": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "lower": {
+              "type": "string"
+            },
+            "upper": {
+              "type": "string"
+            },
+            "formed_at": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "lower",
+            "upper",
+            "formed_at"
+          ]
+        },
+        "position": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "bos_direction": {
+          "enum": [
+            "up",
+            "down",
+            null
+          ]
+        },
+        "pivot_low": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "as_of",
+        "status",
+        "support",
+        "resistance",
+        "position",
+        "bos_direction",
+        "pivot_low"
+      ]
+    },
+    "PrimitiveParamsStructurePivots": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "swing_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "confirmation": {
+          "enum": [
+            "close",
+            "wick"
+          ]
+        },
+        "zone": {
+          "enum": [
+            "body",
+            "wick"
+          ]
+        }
+      },
+      "required": [
+        "swing_length"
+      ]
+    },
+    "PrimitiveParamsStructureBos": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "swing_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "confirmation": {
+          "enum": [
+            "close",
+            "wick"
+          ]
+        },
+        "zone": {
+          "enum": [
+            "body",
+            "wick"
+          ]
+        }
+      },
+      "required": [
+        "swing_length"
+      ]
+    },
+    "PrimitiveParamsOrderBlocks": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "swing_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "confirmation": {
+          "enum": [
+            "close",
+            "wick"
+          ]
+        },
+        "zone": {
+          "enum": [
+            "body",
+            "wick"
+          ]
+        }
+      },
+      "required": [
+        "swing_length"
+      ]
+    },
+    "PrimitiveParamsHtfStructure": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "swing_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "confirmation": {
+          "enum": [
+            "close",
+            "wick"
+          ]
+        },
+        "zone": {
+          "enum": [
+            "body",
+            "wick"
+          ]
+        },
+        "htf": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*(m|h|d)$"
+        }
+      },
+      "required": [
+        "swing_length"
+      ]
+    },
+    "PrimitiveParamsStructureTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "swing_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "confirmation": {
+          "enum": [
+            "close",
+            "wick"
+          ]
+        },
+        "zone": {
+          "enum": [
+            "body",
+            "wick"
+          ]
+        },
+        "htf": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*(m|h|d)$"
+        }
+      },
+      "required": [
+        "swing_length"
+      ]
+    },
+    "PrimitiveParamsPivotTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "swing_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "确认 pivot 左右各几根(与几何实验室 pivots(L=R) 同定义,最右等值为准)"
+        },
+        "lookback": {
+          "type": "integer",
+          "minimum": 20,
+          "maximum": 5000,
+          "description": "在最近多少根里找摆动高点,缺省 480(与几何实验室视图一致)"
+        },
+        "min_atr": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 50,
+          "description": "目标离入场至少几倍 ATR(14),缺省 1"
+        },
+        "max_atr": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "目标离入场至多几倍 ATR(14),缺省 6;更远视为图上没有近端目标,不设止盈"
+        },
+        "unswept": {
+          "type": "boolean",
+          "description": "只取之后没被扫过(没有更高的高点越过)的摆动高点,缺省 true;false 时与几何实验室 arm A 的目标同一规则"
+        },
+        "atr_period": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 500,
+          "description": "ATR 周期,缺省 14(Wilder)"
+        }
+      },
+      "required": [
+        "swing_length"
+      ]
+    },
+    "PrimitiveParamsPivotStop": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "swing_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "确认 pivot 左右各几根(与几何实验室 pivots(L=R) 同定义)"
+        },
+        "pick": {
+          "enum": [
+            "recent",
+            "nearest"
+          ],
+          "description": "recent(缺省)=按时间最近的一个摆动低点(上一个更高低点);nearest=价格最接近收盘的摆动低点(= 几何实验室 D 臂菜单 1h swing low #1)"
+        },
+        "lookback": {
+          "type": "integer",
+          "minimum": 20,
+          "maximum": 5000,
+          "description": "在最近多少根里找摆动低点,缺省 480"
+        },
+        "buffer_atr": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10,
+          "description": "摆动低点下方再让出几倍 ATR(14),缺省 0.1(几何实验室同口径)"
+        },
+        "fallback_lookback": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 500,
+          "description": "视图里没有低于现价的已确认摆动低点时,退回最近 N 根最低价(再减缓冲),缺省 10"
+        },
+        "atr_period": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 500,
+          "description": "ATR 周期,缺省 14(Wilder)"
+        }
+      },
+      "required": [
+        "swing_length"
+      ]
+    },
+    "ResearchPrecheckRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ir": {
+          "$ref": "#/$defs/StrategyIR"
+        },
+        "dataset_id": {
+          "type": "string"
+        },
+        "universe_id": {
+          "type": "string"
+        },
+        "from_ms": {
+          "type": "integer"
+        },
+        "to_ms": {
+          "type": "integer"
+        },
+        "execution": {
+          "$ref": "#/$defs/ResearchExecution"
+        },
+        "order_gate": {
+          "$ref": "#/$defs/OrderGateParams"
+        },
+        "thresholds": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "min_trades": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "min_gate_pass_rate": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "min_holding_bars": {
+              "type": "number",
+              "minimum": 0
+            },
+            "min_regime_coverage": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "max_stop_fit_rate": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "ir",
+        "from_ms",
+        "to_ms",
+        "execution"
+      ],
+      "oneOf": [
+        {
+          "required": [
+            "dataset_id"
+          ],
+          "not": {
+            "required": [
+              "universe_id"
+            ]
+          }
+        },
+        {
+          "required": [
+            "universe_id"
+          ],
+          "not": {
+            "required": [
+              "dataset_id"
+            ]
+          }
+        }
+      ]
+    },
+    "ResearchPrecheckResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ok": {
+          "type": "boolean"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "ok": {
+                "type": "boolean"
+              },
+              "value": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "threshold": {
+                "type": "number"
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "ok",
+              "value"
+            ]
+          }
+        },
+        "suggestions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "ok",
+        "items",
+        "suggestions"
+      ]
+    },
+    "ResearchAsset": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "symbol": {
+          "type": "string"
+        },
+        "exchange": {
+          "type": "string"
+        },
+        "ccxt_symbol": {
+          "type": "string"
+        },
+        "quote": {
+          "type": "string"
+        },
+        "first_available_at": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "quote_volume_30d": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "volume_bars": {
+          "type": "integer"
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "unavailable"
+          ]
+        },
+        "note": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "symbol",
+        "exchange",
+        "ccxt_symbol",
+        "quote",
+        "first_available_at",
+        "quote_volume_30d",
+        "volume_bars",
+        "status"
+      ]
+    },
+    "ResearchArtifactSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "chart",
+            "table",
+            "markdown"
+          ]
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "title"
+      ]
+    },
+    "ResearchArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "chat_id": {
+          "type": "string"
+        },
+        "run_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "enum": [
+            "chart",
+            "table",
+            "markdown"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "content": {},
+        "created_at": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "chat_id",
+        "run_id",
+        "kind",
+        "title",
+        "content",
+        "created_at"
+      ]
+    },
+    "ResearchChatTask": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "parent_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "running",
+            "done",
+            "failed"
+          ]
+        },
+        "detail": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "parent_id",
+        "title",
+        "status",
+        "detail"
+      ]
+    },
+    "ResearchChatEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "chat_id": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "at": {
+          "type": "integer"
+        },
+        "event": {
+          "enum": [
+            "task",
+            "tool",
+            "artifact",
+            "final",
+            "error"
+          ]
+        },
+        "data": {}
+      },
+      "required": [
+        "chat_id",
+        "seq",
+        "at",
+        "event",
+        "data"
+      ]
+    },
+    "PrimitiveParamsHtfStructureRegime": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "htf": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*(m|h|d)$"
+        },
+        "swing_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "confirmation": {
+          "enum": [
+            "close",
+            "wick"
+          ]
+        },
+        "zone": {
+          "enum": [
+            "body",
+            "wick"
+          ]
+        },
+        "max_position": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "当前价在高周期支撑块上沿到阻力块下沿之间的位置上限(0=贴支撑,1=贴阻力);高于此值离阻力太近不做多"
+        },
+        "require_bos": {
+          "type": "boolean",
+          "description": "是否要求高周期最近一次结构突破向上(BOS up / CHoCH up)"
+        }
+      },
+      "required": [
+        "htf",
+        "swing_length"
+      ]
+    },
+    "StrategySpecReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "type": "string"
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "violations": {
+          "type": "array",
+          "maxItems": 40,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "code": {
+                "type": "string",
+                "maxLength": 80
+              },
+              "severity": {
+                "type": "string",
+                "enum": [
+                  "block",
+                  "warn"
+                ]
+              },
+              "message": {
+                "type": "string",
+                "maxLength": 2000
+              },
+              "field": {
+                "type": "string",
+                "maxLength": 120
+              }
+            },
+            "required": [
+              "code",
+              "severity",
+              "message"
+            ]
+          }
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 20000
+        }
+      },
+      "required": [
+        "version",
+        "ok",
+        "violations",
+        "text"
+      ]
+    },
+    "StrategyOrderEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "入场单:market=信号下一根 open 市价成交;limit=在 expiry_bars 根内触价才成交(开盘已越过按 open,钳制到当根),否则 no_fill",
+      "properties": {
+        "type": {
+          "enum": [
+            "market",
+            "limit"
+          ]
+        },
+        "price": {
+          "$ref": "#/$defs/StrategyPrimitive",
+          "description": "限价来源(价位原语):structure_level(回踩支撑近端)/indicator_level(回踩某指标线)/atr_offset_level(收盘价回撤 N×ATR)/pct_offset_level;limit 必填"
+        },
+        "expiry_bars": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5000,
+          "description": "挂单时效(根);缺省按周期分档:≤1h 24 小时、≤3h 48 小时、≥4h 72 小时(对齐 8794)"
+        }
+      },
+      "required": [
+        "type"
+      ]
+    },
+    "StrategyOrderTakeProfit": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "一档止盈:限价单,跳空按更优 open 成交",
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/StrategyPrimitive",
+          "description": "止盈价位原语:structure_target(上方阻力/做空时下方支撑)/fixed_r_target(按初始止损 R 倍数)/indicator_level(如布林上轨)/atr_offset_level/pct_offset_level/structure_level"
+        },
+        "size_pct": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "description": "该档平掉的仓位比例,小数;各档缺省等权,合计不为 1 时按比例归一"
+        }
+      },
+      "required": [
+        "source"
+      ]
+    },
+    "StrategyOrderOnNewSignal": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "同一资产同向新信号到来时:unfilled=前一计划尚未成交(replace 整体替换 / keep 保留旧单);filled=已成交(roll 旧计划按下一根 open 结转、新计划的止损止盈接管仓位 / add 等权加仓腿 / ignore 忽略)。缺省 replace / roll(8794 v7/v8)",
+      "properties": {
+        "unfilled": {
+          "enum": [
+            "replace",
+            "keep"
+          ]
+        },
+        "filled": {
+          "enum": [
+            "roll",
+            "add",
+            "ignore"
+          ]
+        }
+      },
+      "required": []
+    },
+    "StrategyOrder": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "可选的订单周期块。有它时回测按「计划 → 限价/市价 → 止损 + 多档止盈 → 结转/加仓/反手」逐单模拟,并出 K 线回放;没有它时行为与旧 IR 完全相同。止损仍用 risk.stop(做空时同一原语镜像到上方),止盈缺省=结构阻力(structure_target)单档",
+      "properties": {
+        "direction": {
+          "enum": [
+            "long",
+            "short",
+            "both"
+          ],
+          "description": "short/both 仅限 market=perp;short 时 signal 就是做空条件;both 时 signal 做多、short_signal 做空"
+        },
+        "market": {
+          "enum": [
+            "spot",
+            "perp"
+          ],
+          "description": "spot 禁止做空与杠杆;perp 计资金费(8h 真实序列)与逐仓强平"
+        },
+        "leverage": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 125,
+          "description": "杠杆倍数,缺省 1;spot 必须为 1"
+        },
+        "entry": {
+          "$ref": "#/$defs/StrategyOrderEntry"
+        },
+        "take_profits": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StrategyOrderTakeProfit"
+          },
+          "minItems": 1,
+          "maxItems": 5
+        },
+        "min_rr": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 50,
+          "description": "用户硬约束盈亏比:放置时加权止盈距离/止损距离低于它就不下单(计入 blocked 统计);缺省用策略规范的最小盈亏比"
+        },
+        "on_new_signal": {
+          "$ref": "#/$defs/StrategyOrderOnNewSignal"
+        },
+        "max_adds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5,
+          "description": "filled=add 时最多加仓腿数;每腿等权,首腿只占 1/(max_adds+1) 的仓位额度。缺省 2"
+        },
+        "max_holding_bars": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000,
+          "description": "周期上限:持仓满这么多根后下一根 open 按 time 出场;缺省取 exit 里 time_stop 的 bars"
+        },
+        "breakeven_after_tp": {
+          "type": "boolean",
+          "description": "首档止盈成交后把剩余仓位止损移到入场均价(8794 breakeven 口径),缺省 false"
+        },
+        "short_signal": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StrategyPrimitive"
+          },
+          "minItems": 1,
+          "maxItems": 30,
+          "description": "direction=both 时的做空条件(同一根 AND,按原文在真实 K 线上判定)"
+        },
+        "short_regime": {
+          "$ref": "#/$defs/StrategyPrimitive",
+          "description": "direction=both 时做空一侧的方向门;缺省不设门(regime 只作用于 signal 一侧)"
+        }
+      },
+      "required": [
+        "direction",
+        "market"
+      ]
+    },
+    "PrimitiveParamsIndicatorLevel": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "indicator": {
+          "enum": [
+            "ad",
+            "adx",
+            "ao",
+            "aroon",
+            "atr",
+            "bbands",
+            "cci",
+            "chaikin",
+            "chop",
+            "cmf",
+            "dema",
+            "donchian",
+            "elder_ray",
+            "ema",
+            "hma",
+            "ichimoku",
+            "kama",
+            "keltner",
+            "macd",
+            "mfi",
+            "momentum",
+            "natr",
+            "obv",
+            "price",
+            "psar",
+            "roc",
+            "rsi",
+            "sma",
+            "smma",
+            "stdev",
+            "stoch",
+            "stochrsi",
+            "supertrend",
+            "tema",
+            "trix",
+            "uo",
+            "volume_ratio",
+            "vortex",
+            "vwap",
+            "vwma",
+            "willr",
+            "wma"
+          ],
+          "description": "指标规范名。多输出指标用 output 选线:macd(macd/signal/hist)、adx(adx/plus_di/minus_di)、stoch 与 stochrsi(k/d)、bbands(middle/upper/lower/bandwidth/percent_b)、keltner 与 donchian(middle/upper/lower)、ichimoku(conversion/base/span_a/span_b/lagging/lagging_ref)、supertrend 与 psar(supertrend|psar/direction)、aroon(oscillator/up/down)、vortex(plus/minus)、trix(trix/signal)、elder_ray(bull/bear);其余为单输出,output 省略即可。"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "指标参数,省略则用目录默认值。各指标用到的键:period 通用周期;period_2/period_3 第二、三周期(KD 的两次平滑、StochRSI 的取值窗口、一目的基准与先行 B、肯特纳的 ATR 周期);fast/slow/signal(MACD、KAMA、AO、Chaikin、UO、TRIX);multiple(布林标准差倍数、肯特纳与超级趋势的 ATR 倍数);step/max_step(抛物线 SAR)。",
+          "properties": {
+            "period": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "period_2": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "period_3": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "fast": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "slow": {
+              "type": "integer",
+              "minimum": 2,
+              "maximum": 5000
+            },
+            "signal": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "multiple": {
+              "type": "number",
+              "minimum": 0.1,
+              "maximum": 100
+            },
+            "step": {
+              "type": "number",
+              "minimum": 0.001,
+              "maximum": 1
+            },
+            "max_step": {
+              "type": "number",
+              "minimum": 0.001,
+              "maximum": 1
+            }
+          },
+          "required": []
+        },
+        "output": {
+          "type": "string",
+          "maxLength": 32,
+          "description": "指标输出线名;省略或不认识时回落到该指标的主输出。"
+        },
+        "buffer_atr": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10,
+          "description": "止损角色时向外让出的 ATR 倍数(多单往下、空单往上),缺省 0"
+        },
+        "atr_period": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500,
+          "description": "buffer_atr 用的 ATR 周期,缺省 14"
+        }
+      },
+      "required": [
+        "indicator"
+      ]
+    },
+    "PrimitiveParamsStructureLevel": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "swing_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "confirmation": {
+          "enum": [
+            "close",
+            "wick"
+          ]
+        },
+        "zone": {
+          "enum": [
+            "body",
+            "wick"
+          ]
+        },
+        "htf": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*(m|h|d)$",
+          "description": "结构所在周期,缺省为基础周期"
+        },
+        "buffer_atr": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10,
+          "description": "止损角色时向外让出的 ATR 倍数(多单往下、空单往上),缺省 0"
+        },
+        "atr_period": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500,
+          "description": "buffer_atr 用的 ATR 周期,缺省 14"
+        }
+      },
+      "required": [
+        "swing_length"
+      ]
+    },
+    "PrimitiveParamsAtrOffsetLevel": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "atr_period": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500
+        },
+        "multiple": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 50
+        }
+      },
+      "required": [
+        "atr_period",
+        "multiple"
+      ]
+    },
+    "PrimitiveParamsPctOffsetLevel": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pct": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 0.9,
+          "description": "相对收盘价的比例,小数(0.02=2%)"
+        }
+      },
+      "required": [
+        "pct"
+      ]
+    },
+    "PrimitiveParamsNoStop": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {},
+      "description": "用户明确说不设止损时用;止损价放在收盘价的 0.01%(等于不触发),风险 R 不再有意义"
+    },
+    "PrimitiveParamsSmcBos": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "enum": [
+            "internal",
+            "swing"
+          ],
+          "description": "结构级别:internal 内部结构 / swing 摆动结构,缺省 internal"
+        },
+        "direction": {
+          "enum": [
+            "bullish",
+            "bearish"
+          ],
+          "description": "方向:bullish 看涨(缺省)/ bearish 看跌"
+        },
+        "kind": {
+          "enum": [
+            "bos",
+            "choch",
+            "any"
+          ],
+          "description": "bos 顺势突破 / choch 反转突破 / any 都算(缺省)"
+        },
+        "internal_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "description": "内部结构 pivot 左右各几根,缺省 5"
+        },
+        "swing_length": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 200,
+          "description": "摆动结构 pivot 左右各几根,缺省 50"
+        },
+        "confirmation": {
+          "enum": [
+            "close",
+            "wick"
+          ],
+          "description": "结构突破确认口径:收盘(缺省)或影线"
+        },
+        "mitigation": {
+          "enum": [
+            "close",
+            "wick"
+          ],
+          "description": "订单块失效口径:影线穿过远端(缺省)或收盘穿过"
+        },
+        "ob_filter": {
+          "enum": [
+            "atr",
+            "range",
+            "none"
+          ],
+          "description": "挑订单块 K 线时剔除高波动 K 线:振幅 ≥ 2×ATR(缺省)/ ≥ 2×累计平均振幅 / 不过滤"
+        },
+        "atr_period": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 1000,
+          "description": "高波动过滤、等高等低容差与止损缓冲用的 ATR 周期,缺省 200"
+        },
+        "eq_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "description": "等高等低 pivot 左右各几根,缺省 3"
+        },
+        "eq_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 5,
+          "description": "等高等低容差 = eq_threshold × ATR,缺省 0.1"
+        },
+        "fvg_auto": {
+          "type": "boolean",
+          "description": "FVG 自动阈值:缺口幅度不小于迄今平均缺口幅度才保留,缺省 true"
+        }
+      }
+    },
+    "PrimitiveParamsSmcObRetest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "enum": [
+            "internal",
+            "swing"
+          ],
+          "description": "结构级别:internal 内部结构 / swing 摆动结构,缺省 internal"
+        },
+        "direction": {
+          "enum": [
+            "bullish",
+            "bearish"
+          ],
+          "description": "方向:bullish 看涨(缺省)/ bearish 看跌"
+        },
+        "internal_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "description": "内部结构 pivot 左右各几根,缺省 5"
+        },
+        "swing_length": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 200,
+          "description": "摆动结构 pivot 左右各几根,缺省 50"
+        },
+        "confirmation": {
+          "enum": [
+            "close",
+            "wick"
+          ],
+          "description": "结构突破确认口径:收盘(缺省)或影线"
+        },
+        "mitigation": {
+          "enum": [
+            "close",
+            "wick"
+          ],
+          "description": "订单块失效口径:影线穿过远端(缺省)或收盘穿过"
+        },
+        "ob_filter": {
+          "enum": [
+            "atr",
+            "range",
+            "none"
+          ],
+          "description": "挑订单块 K 线时剔除高波动 K 线:振幅 ≥ 2×ATR(缺省)/ ≥ 2×累计平均振幅 / 不过滤"
+        },
+        "atr_period": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 1000,
+          "description": "高波动过滤、等高等低容差与止损缓冲用的 ATR 周期,缺省 200"
+        },
+        "eq_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "description": "等高等低 pivot 左右各几根,缺省 3"
+        },
+        "eq_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 5,
+          "description": "等高等低容差 = eq_threshold × ATR,缺省 0.1"
+        },
+        "fvg_auto": {
+          "type": "boolean",
+          "description": "FVG 自动阈值:缺口幅度不小于迄今平均缺口幅度才保留,缺省 true"
+        }
+      }
+    },
+    "PrimitiveParamsSmcFvgFill": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "direction": {
+          "enum": [
+            "bullish",
+            "bearish"
+          ],
+          "description": "方向:bullish 看涨(缺省)/ bearish 看跌"
+        },
+        "mode": {
+          "enum": [
+            "touch",
+            "fill"
+          ],
+          "description": "touch 首次触及缺口(缺省)/ fill 完全回补到缺口远端"
+        },
+        "internal_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "description": "内部结构 pivot 左右各几根,缺省 5"
+        },
+        "swing_length": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 200,
+          "description": "摆动结构 pivot 左右各几根,缺省 50"
+        },
+        "confirmation": {
+          "enum": [
+            "close",
+            "wick"
+          ],
+          "description": "结构突破确认口径:收盘(缺省)或影线"
+        },
+        "mitigation": {
+          "enum": [
+            "close",
+            "wick"
+          ],
+          "description": "订单块失效口径:影线穿过远端(缺省)或收盘穿过"
+        },
+        "ob_filter": {
+          "enum": [
+            "atr",
+            "range",
+            "none"
+          ],
+          "description": "挑订单块 K 线时剔除高波动 K 线:振幅 ≥ 2×ATR(缺省)/ ≥ 2×累计平均振幅 / 不过滤"
+        },
+        "atr_period": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 1000,
+          "description": "高波动过滤、等高等低容差与止损缓冲用的 ATR 周期,缺省 200"
+        },
+        "eq_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "description": "等高等低 pivot 左右各几根,缺省 3"
+        },
+        "eq_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 5,
+          "description": "等高等低容差 = eq_threshold × ATR,缺省 0.1"
+        },
+        "fvg_auto": {
+          "type": "boolean",
+          "description": "FVG 自动阈值:缺口幅度不小于迄今平均缺口幅度才保留,缺省 true"
+        }
+      }
+    },
+    "PrimitiveParamsSmcDiscount": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "zone": {
+          "enum": [
+            "discount",
+            "premium",
+            "equilibrium"
+          ],
+          "description": "discount 折价区(区间下半,缺省)/ premium 溢价区(上半)/ equilibrium 均衡区(中线 ±2.5%)"
+        },
+        "internal_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "description": "内部结构 pivot 左右各几根,缺省 5"
+        },
+        "swing_length": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 200,
+          "description": "摆动结构 pivot 左右各几根,缺省 50"
+        },
+        "confirmation": {
+          "enum": [
+            "close",
+            "wick"
+          ],
+          "description": "结构突破确认口径:收盘(缺省)或影线"
+        },
+        "mitigation": {
+          "enum": [
+            "close",
+            "wick"
+          ],
+          "description": "订单块失效口径:影线穿过远端(缺省)或收盘穿过"
+        },
+        "ob_filter": {
+          "enum": [
+            "atr",
+            "range",
+            "none"
+          ],
+          "description": "挑订单块 K 线时剔除高波动 K 线:振幅 ≥ 2×ATR(缺省)/ ≥ 2×累计平均振幅 / 不过滤"
+        },
+        "atr_period": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 1000,
+          "description": "高波动过滤、等高等低容差与止损缓冲用的 ATR 周期,缺省 200"
+        },
+        "eq_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "description": "等高等低 pivot 左右各几根,缺省 3"
+        },
+        "eq_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 5,
+          "description": "等高等低容差 = eq_threshold × ATR,缺省 0.1"
+        },
+        "fvg_auto": {
+          "type": "boolean",
+          "description": "FVG 自动阈值:缺口幅度不小于迄今平均缺口幅度才保留,缺省 true"
+        }
+      }
+    },
+    "PrimitiveParamsSmcTrend": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "enum": [
+            "internal",
+            "swing"
+          ],
+          "description": "结构级别:internal 内部结构 / swing 摆动结构,缺省 swing"
+        },
+        "direction": {
+          "enum": [
+            "bullish",
+            "bearish"
+          ],
+          "description": "方向:bullish 看涨(缺省)/ bearish 看跌"
+        },
+        "internal_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "description": "内部结构 pivot 左右各几根,缺省 5"
+        },
+        "swing_length": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 200,
+          "description": "摆动结构 pivot 左右各几根,缺省 50"
+        },
+        "confirmation": {
+          "enum": [
+            "close",
+            "wick"
+          ],
+          "description": "结构突破确认口径:收盘(缺省)或影线"
+        },
+        "mitigation": {
+          "enum": [
+            "close",
+            "wick"
+          ],
+          "description": "订单块失效口径:影线穿过远端(缺省)或收盘穿过"
+        },
+        "ob_filter": {
+          "enum": [
+            "atr",
+            "range",
+            "none"
+          ],
+          "description": "挑订单块 K 线时剔除高波动 K 线:振幅 ≥ 2×ATR(缺省)/ ≥ 2×累计平均振幅 / 不过滤"
+        },
+        "atr_period": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 1000,
+          "description": "高波动过滤、等高等低容差与止损缓冲用的 ATR 周期,缺省 200"
+        },
+        "eq_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "description": "等高等低 pivot 左右各几根,缺省 3"
+        },
+        "eq_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 5,
+          "description": "等高等低容差 = eq_threshold × ATR,缺省 0.1"
+        },
+        "fvg_auto": {
+          "type": "boolean",
+          "description": "FVG 自动阈值:缺口幅度不小于迄今平均缺口幅度才保留,缺省 true"
+        }
+      }
+    },
+    "PrimitiveParamsSmcObLevel": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "enum": [
+            "internal",
+            "swing"
+          ],
+          "description": "结构级别:internal 内部结构 / swing 摆动结构,缺省 internal"
+        },
+        "buffer_atr": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10,
+          "description": "止损角色向外让出的 ATR 倍数,缺省 0"
+        },
+        "internal_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "description": "内部结构 pivot 左右各几根,缺省 5"
+        },
+        "swing_length": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 200,
+          "description": "摆动结构 pivot 左右各几根,缺省 50"
+        },
+        "confirmation": {
+          "enum": [
+            "close",
+            "wick"
+          ],
+          "description": "结构突破确认口径:收盘(缺省)或影线"
+        },
+        "mitigation": {
+          "enum": [
+            "close",
+            "wick"
+          ],
+          "description": "订单块失效口径:影线穿过远端(缺省)或收盘穿过"
+        },
+        "ob_filter": {
+          "enum": [
+            "atr",
+            "range",
+            "none"
+          ],
+          "description": "挑订单块 K 线时剔除高波动 K 线:振幅 ≥ 2×ATR(缺省)/ ≥ 2×累计平均振幅 / 不过滤"
+        },
+        "atr_period": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 1000,
+          "description": "高波动过滤、等高等低容差与止损缓冲用的 ATR 周期,缺省 200"
+        },
+        "eq_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "description": "等高等低 pivot 左右各几根,缺省 3"
+        },
+        "eq_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 5,
+          "description": "等高等低容差 = eq_threshold × ATR,缺省 0.1"
+        },
+        "fvg_auto": {
+          "type": "boolean",
+          "description": "FVG 自动阈值:缺口幅度不小于迄今平均缺口幅度才保留,缺省 true"
+        }
+      }
+    },
+    "PrimitiveParamsSmcLiquidityTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "enum": [
+            "internal",
+            "swing"
+          ],
+          "description": "结构级别:internal 内部结构 / swing 摆动结构,缺省 swing"
+        },
+        "source": {
+          "enum": [
+            "liquidity",
+            "swing",
+            "equal",
+            "premium",
+            "prev_day",
+            "prev_week"
+          ],
+          "description": "止盈来源:liquidity 最近的流动性(未扫 pivot/等高点/区间顶取最近,缺省)/ swing 未扫 pivot / equal 等高(低)点 / premium 溢价区(空单为折价区)/ prev_day 前日高(低)/ prev_week 前周高(低)"
+        },
+        "internal_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "description": "内部结构 pivot 左右各几根,缺省 5"
+        },
+        "swing_length": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 200,
+          "description": "摆动结构 pivot 左右各几根,缺省 50"
+        },
+        "confirmation": {
+          "enum": [
+            "close",
+            "wick"
+          ],
+          "description": "结构突破确认口径:收盘(缺省)或影线"
+        },
+        "mitigation": {
+          "enum": [
+            "close",
+            "wick"
+          ],
+          "description": "订单块失效口径:影线穿过远端(缺省)或收盘穿过"
+        },
+        "ob_filter": {
+          "enum": [
+            "atr",
+            "range",
+            "none"
+          ],
+          "description": "挑订单块 K 线时剔除高波动 K 线:振幅 ≥ 2×ATR(缺省)/ ≥ 2×累计平均振幅 / 不过滤"
+        },
+        "atr_period": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 1000,
+          "description": "高波动过滤、等高等低容差与止损缓冲用的 ATR 周期,缺省 200"
+        },
+        "eq_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "description": "等高等低 pivot 左右各几根,缺省 3"
+        },
+        "eq_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 5,
+          "description": "等高等低容差 = eq_threshold × ATR,缺省 0.1"
+        },
+        "fvg_auto": {
+          "type": "boolean",
+          "description": "FVG 自动阈值:缺口幅度不小于迄今平均缺口幅度才保留,缺省 true"
+        }
+      }
+    },
+    "PrimitiveParamsSmcChochExit": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "enum": [
+            "internal",
+            "swing"
+          ],
+          "description": "结构级别:internal 内部结构 / swing 摆动结构,缺省 internal"
+        },
+        "kind": {
+          "enum": [
+            "choch",
+            "any"
+          ],
+          "description": "choch 只认反向 CHoCH(缺省)/ any 反向 BOS 也离场"
+        },
+        "internal_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "description": "内部结构 pivot 左右各几根,缺省 5"
+        },
+        "swing_length": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 200,
+          "description": "摆动结构 pivot 左右各几根,缺省 50"
+        },
+        "confirmation": {
+          "enum": [
+            "close",
+            "wick"
+          ],
+          "description": "结构突破确认口径:收盘(缺省)或影线"
+        },
+        "mitigation": {
+          "enum": [
+            "close",
+            "wick"
+          ],
+          "description": "订单块失效口径:影线穿过远端(缺省)或收盘穿过"
+        },
+        "ob_filter": {
+          "enum": [
+            "atr",
+            "range",
+            "none"
+          ],
+          "description": "挑订单块 K 线时剔除高波动 K 线:振幅 ≥ 2×ATR(缺省)/ ≥ 2×累计平均振幅 / 不过滤"
+        },
+        "atr_period": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 1000,
+          "description": "高波动过滤、等高等低容差与止损缓冲用的 ATR 周期,缺省 200"
+        },
+        "eq_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "description": "等高等低 pivot 左右各几根,缺省 3"
+        },
+        "eq_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 5,
+          "description": "等高等低容差 = eq_threshold × ATR,缺省 0.1"
+        },
+        "fvg_auto": {
+          "type": "boolean",
+          "description": "FVG 自动阈值:缺口幅度不小于迄今平均缺口幅度才保留,缺省 true"
+        }
+      }
+    },
+    "SmcOverlay": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "params": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "structures": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "at": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "from": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "level": {
+                "type": "number"
+              },
+              "kind": {
+                "enum": [
+                  "BOS",
+                  "CHoCH"
+                ]
+              },
+              "scope": {
+                "enum": [
+                  "internal",
+                  "swing"
+                ]
+              },
+              "dir": {
+                "enum": [
+                  "bullish",
+                  "bearish"
+                ]
+              }
+            },
+            "required": [
+              "at",
+              "from",
+              "level",
+              "kind",
+              "scope",
+              "dir"
+            ]
+          }
+        },
+        "order_blocks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "from": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "formed_at": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "to": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "top": {
+                "type": "number"
+              },
+              "bottom": {
+                "type": "number"
+              },
+              "dir": {
+                "enum": [
+                  "bullish",
+                  "bearish"
+                ]
+              },
+              "scope": {
+                "enum": [
+                  "internal",
+                  "swing"
+                ]
+              },
+              "mitigated_at": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "from",
+              "formed_at",
+              "to",
+              "top",
+              "bottom",
+              "dir",
+              "scope",
+              "mitigated_at"
+            ]
+          }
+        },
+        "fvgs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "from": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "formed_at": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "top": {
+                "type": "number"
+              },
+              "bottom": {
+                "type": "number"
+              },
+              "dir": {
+                "enum": [
+                  "bullish",
+                  "bearish"
+                ]
+              },
+              "touched_at": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "filled_at": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "from",
+              "formed_at",
+              "top",
+              "bottom",
+              "dir",
+              "touched_at",
+              "filled_at"
+            ]
+          }
+        },
+        "eq": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "enum": [
+                  "EQH",
+                  "EQL"
+                ]
+              },
+              "from": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "to": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "level": {
+                "type": "number"
+              },
+              "confirmed_at": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "swept_at": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "from",
+              "to",
+              "level",
+              "confirmed_at",
+              "swept_at"
+            ]
+          }
+        },
+        "zones": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "from": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "to": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "premium": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "top": {
+                      "type": "number"
+                    },
+                    "bottom": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "top",
+                    "bottom"
+                  ]
+                },
+                "equilibrium": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "top": {
+                      "type": "number"
+                    },
+                    "bottom": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "top",
+                    "bottom"
+                  ]
+                },
+                "discount": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "top": {
+                      "type": "number"
+                    },
+                    "bottom": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "top",
+                    "bottom"
+                  ]
+                },
+                "strong_high": {
+                  "type": "boolean"
+                },
+                "strong_low": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "from",
+                "to",
+                "premium",
+                "equilibrium",
+                "discount",
+                "strong_high",
+                "strong_low"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "htf_levels": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "enum": [
+                  "PDH",
+                  "PDL",
+                  "PWH",
+                  "PWL"
+                ]
+              },
+              "from": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "to": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "level": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "kind",
+              "from",
+              "to",
+              "level"
+            ]
+          }
+        },
+        "trend": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "internal": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "bullish",
+                    "bearish"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "swing": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "bullish",
+                    "bearish"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "internal",
+            "swing"
+          ]
+        }
+      },
+      "required": [
+        "params",
+        "structures",
+        "order_blocks",
+        "fvgs",
+        "eq",
+        "zones",
+        "htf_levels",
+        "trend"
+      ],
+      "description": "回放图层(GET /api/research/backtests/:id/replay?overlay=smc 的 smc_overlay 字段):时间一律为 K 线 open_time(ms)"
+    },
+    "JudgeStateField": {
+      "enum": [
+        "candidate.direction",
+        "candidate.stop_distance_atr",
+        "candidate.reward_risk",
+        "features.trend",
+        "features.volatility",
+        "features.volume_ratio",
+        "features.funding",
+        "features.market_regime"
+      ]
+    },
+    "JudgeQuestion": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,47}$"
+        },
+        "type": {
+          "enum": [
+            "noul",
+            "choice",
+            "score"
+          ]
+        },
+        "instructions": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "criteria": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "minItems": 2,
+          "maxItems": 16
+        },
+        "state_fields": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/JudgeStateField"
+          },
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,47}$"
+          },
+          "minItems": 2,
+          "maxItems": 16,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "key",
+        "type",
+        "instructions",
+        "criteria",
+        "state_fields"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "noul"
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "labels"
+              ]
+            }
+          },
+          "else": {
+            "required": [
+              "labels"
+            ]
+          }
+        }
+      ]
+    },
+    "JudgePredicate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "question_key": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,47}$"
+        },
+        "label": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,47}$"
+        },
+        "operator": {
+          "enum": [
+            "gte",
+            "lte"
+          ]
+        },
+        "threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "margin": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "required": [
+        "question_key",
+        "label",
+        "operator",
+        "threshold",
+        "margin"
+      ]
+    },
+    "JudgeAllRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "all": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/JudgePredicate"
+          },
+          "minItems": 1,
+          "maxItems": 16
+        }
+      },
+      "required": [
+        "all"
+      ]
+    },
+    "StrategyJudge": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "engine": {
+          "enum": [
+            "jev",
+            "llm"
+          ]
+        },
+        "model_profile_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "state_schema_version": {
+          "const": "judge_state_v1"
+        },
+        "questions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/JudgeQuestion"
+          },
+          "minItems": 1,
+          "maxItems": 8
+        },
+        "rule": {
+          "$ref": "#/$defs/JudgeAllRule"
+        },
+        "on_uncertain": {
+          "const": "skip"
+        },
+        "on_error": {
+          "const": "skip"
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 60000
+        },
+        "max_attempts": {
+          "const": 1
+        }
+      },
+      "required": [
+        "version",
+        "engine",
+        "model_profile_ref",
+        "state_schema_version",
+        "questions",
+        "rule",
+        "on_uncertain",
+        "on_error",
+        "timeout_ms",
+        "max_attempts"
+      ]
+    },
+    "FrozenModelProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "connection_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "connection_revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "model_revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "routing": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "parser_version": {
+          "const": "judge_answers_v1"
+        },
+        "max_call_usd": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,12})?$"
+        },
+        "retry_policy": {
+          "const": "none"
+        }
+      },
+      "required": [
+        "ref",
+        "connection_id",
+        "connection_revision",
+        "model",
+        "model_revision",
+        "routing",
+        "parser_version",
+        "max_call_usd",
+        "retry_policy"
+      ]
+    },
+    "JudgeCandidateSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "symbol": {
+          "type": "string",
+          "pattern": "^[A-Z0-9]+USDT$"
+        },
+        "as_of": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "timeframe_ms": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "direction": {
+          "enum": [
+            "long",
+            "short"
+          ]
+        },
+        "entry": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,12})?$"
+        },
+        "stop": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,12})?$"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,12})?$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reward_risk": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "symbol",
+        "as_of",
+        "timeframe_ms",
+        "direction",
+        "entry",
+        "stop",
+        "target",
+        "reward_risk"
+      ]
+    },
+    "JudgeStateV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "const": "judge_state_v1"
+        },
+        "as_of": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "timeframe_ms": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "candidate": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "direction": {
+              "enum": [
+                "long",
+                "short"
+              ]
+            },
+            "stop_distance_atr": {
+              "type": "number",
+              "minimum": 0
+            },
+            "reward_risk": {
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": []
+        },
+        "features": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "trend": {
+              "enum": [
+                "up",
+                "down"
+              ]
+            },
+            "volatility": {
+              "type": "number",
+              "minimum": 0
+            },
+            "volume_ratio": {
+              "type": "number",
+              "minimum": 0
+            },
+            "funding": {
+              "type": "number"
+            },
+            "market_regime": {
+              "enum": [
+                "up",
+                "down",
+                "volatile"
+              ]
+            }
+          },
+          "required": []
+        }
+      },
+      "required": [
+        "version",
+        "as_of",
+        "timeframe_ms",
+        "candidate",
+        "features"
+      ]
+    },
+    "NormalizedAnswer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "question_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "probabilities": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      },
+      "required": [
+        "question_key",
+        "probabilities"
+      ]
+    },
+    "PredicateEvaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "question_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "probability": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "conservative": {
+          "type": "number"
+        },
+        "passed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "question_key",
+        "label",
+        "probability",
+        "conservative",
+        "passed"
+      ]
+    },
+    "JudgeResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "enum": [
+            "ok",
+            "uncertain",
+            "error"
+          ]
+        },
+        "action": {
+          "enum": [
+            "follow",
+            "skip"
+          ]
+        },
+        "decision_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "state_hash": {
+          "type": "string"
+        },
+        "request_hash": {
+          "type": "string"
+        },
+        "raw_response_ref": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "answers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/NormalizedAnswer"
+          }
+        },
+        "predicates": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PredicateEvaluation"
+          }
+        },
+        "model_revision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "latency_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "cost_usd": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,12})?$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cost_status": {
+          "enum": [
+            "actual",
+            "estimated",
+            "unknown"
+          ]
+        },
+        "reason_codes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "status",
+        "action",
+        "decision_id",
+        "state_hash",
+        "request_hash",
+        "raw_response_ref",
+        "answers",
+        "predicates",
+        "model_revision",
+        "latency_ms",
+        "cost_usd",
+        "cost_status",
+        "reason_codes"
+      ]
+    }
+  },
+  "description": " IR v1 不加字段、不改哈希；v2 必须含 judge，只有订单执行核支持 judge。"
+}

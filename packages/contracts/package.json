@@ -1,0 +1,28 @@
+{
+  "name": "@trading-swarm/contracts",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "唯一契约源:JSON Schema(schema/)+ 状态转移表(transitions/)+ 生成的 TS 类型与 ajv 校验器",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "generate": "node --experimental-strip-types scripts/generate.ts",
+    "generate:check": "node --experimental-strip-types scripts/generate.ts --check",
+    "build": "tsc -b",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1"
+  },
+  "devDependencies": {
+    "json-schema-to-typescript": "^16.0.0"
+  }
+}

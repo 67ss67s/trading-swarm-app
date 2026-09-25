@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trading-swarm.dev/schema/authorization.json",
+  "title": "Authorization",
+  "description": "对某个 plan_hash 的授权(设计 §5.1)。by=user 需要 confirm_echo(结构化确认:审批面逐字回填关键字段,execd 与 plan 派生的 confirm_fields 逐字比对);by=policy 只在 LiveCapped 且上限内出现(v1 feature-gate 关闭)。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "authorization_id",
+    "intent_id",
+    "plan_id",
+    "plan_hash",
+    "by",
+    "status",
+    "granted_at",
+    "expires_at"
+  ],
+  "properties": {
+    "schema_version": { "$ref": "common.json#/$defs/SchemaVersion" },
+    "authorization_id": { "$ref": "common.json#/$defs/Uuid" },
+    "intent_id": { "$ref": "common.json#/$defs/Uuid" },
+    "plan_id": { "$ref": "common.json#/$defs/Uuid" },
+    "plan_hash": { "$ref": "common.json#/$defs/Hash256" },
+    "by": { "type": "string", "enum": ["user", "policy"] },
+    "principal": { "$ref": "common.json#/$defs/Principal" },
+    "surface": { "$ref": "common.json#/$defs/Surface" },
+    "actor_ref": {
+      "type": "string",
+      "maxLength": 256,
+      "description": "谁批的:设备/会话/RPC 连接标识;by=policy 时为 policy 版本"
+    },
+    "status": { "$ref": "common.json#/$defs/AuthorizationStatus" },
+    "status_reason": { "type": "string", "maxLength": 1000 },
+    "confirm_echo": {
+      "type": "object",
+      "additionalProperties": { "type": "string", "maxLength": 200 },
+      "description": "审批面回填的字段(见 docs/contracts/README.md「confirm_fields」);by=user 必填"
+    },
+    "granted_at": { "$ref": "common.json#/$defs/TimestampMs" },
+    "expires_at": { "$ref": "common.json#/$defs/TimestampMs" },
+    "consumed_at": { "$ref": "common.json#/$defs/TimestampMs" },
+    "consumed_by_attempt_id": { "$ref": "common.json#/$defs/Uuid" }
+  },
+  "if": { "properties": { "by": { "const": "user" } }, "required": ["by"] },
+  "then": { "required": ["confirm_echo", "principal", "surface"] }
+}

@@ -1,0 +1,270 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trading-swarm.dev/schema/intent.json",
+  "title": "Intent",
+  "description": "动钱的唯一提议记录(设计 §5.1)。模型/UI/Exit DSL 只能提议;经济字段在 ExecutableOrderPlan 里物化并哈希;状态只按 transitions/intent_status.json 迁移。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "intent_id",
+    "account",
+    "principal",
+    "surface",
+    "params",
+    "status",
+    "gate_rejections",
+    "ttl_seconds",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "schema_version": { "$ref": "common.json#/$defs/SchemaVersion" },
+    "intent_id": { "$ref": "common.json#/$defs/Uuid" },
+    "account": {
+      "$ref": "common.json#/$defs/AccountRef",
+      "description": "效果落在哪个账户;transfer 类以 from_account 为 lane"
+    },
+    "principal": { "$ref": "common.json#/$defs/Principal" },
+    "surface": { "$ref": "common.json#/$defs/Surface" },
+    "session_id": { "type": "string", "maxLength": 128 },
+    "run_id": { "type": "string", "maxLength": 128 },
+    "origin": {
+      "type": "string",
+      "maxLength": 256,
+      "description": "来源说明,如 recipe:w4-judgment / ui:trade-page / exit-dsl:thread-42"
+    },
+    "idempotency_key": {
+      "type": "string",
+      "maxLength": 128,
+      "description": "提议方幂等键;execd 按 (principal, idempotency_key) 去重,同键不同内容 = corruption"
+    },
+    "params": { "$ref": "#/$defs/IntentParams" },
+    "status": { "$ref": "common.json#/$defs/IntentStatus" },
+    "status_reason": { "type": "string", "maxLength": 1000 },
+    "gate_rejections": {
+      "type": "array",
+      "items": { "$ref": "common.json#/$defs/GateRejection" },
+      "description": "每次闸拒都追加,不覆盖"
+    },
+    "current_plan_id": { "$ref": "common.json#/$defs/Uuid" },
+    "authorization_id": { "$ref": "common.json#/$defs/Uuid" },
+    "ttl_seconds": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 86400,
+      "description": "提议有效期;到期未进入 authorized 即 expired"
+    },
+    "created_at": { "$ref": "common.json#/$defs/TimestampMs" },
+    "updated_at": { "$ref": "common.json#/$defs/TimestampMs" },
+    "expires_at": { "$ref": "common.json#/$defs/TimestampMs" },
+    "terminal_at": { "$ref": "common.json#/$defs/TimestampMs" }
+  },
+  "$defs": {
+    "IntentParams": {
+      "oneOf": [
+        { "$ref": "#/$defs/OpenParams" },
+        { "$ref": "#/$defs/CloseParams" },
+        { "$ref": "#/$defs/CancelOrderParams" },
+        { "$ref": "#/$defs/ProtectParams" },
+        { "$ref": "#/$defs/TransferParams" }
+      ]
+    },
+    "SizeSpec": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "hint"],
+          "properties": {
+            "mode": { "const": "hint" },
+            "hint": {
+              "type": "string",
+              "enum": ["full", "half", "quarter"],
+              "description": "模型只给档位;qty 由代码按止损距离与风险预算反推"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "qty"],
+          "properties": {
+            "mode": { "const": "qty" },
+            "qty": { "$ref": "common.json#/$defs/UnsignedDecimal" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "notional"],
+          "properties": {
+            "mode": { "const": "notional" },
+            "notional": {
+              "$ref": "common.json#/$defs/UnsignedDecimal",
+              "description": "计价币名义(USDT)"
+            }
+          }
+        }
+      ]
+    },
+    "EntrySpec": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type"],
+          "properties": {
+            "type": { "const": "market" },
+            "max_slippage_bps": { "type": "integer", "minimum": 0, "maximum": 10000 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "price"],
+          "properties": {
+            "type": { "const": "limit" },
+            "price": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+            "time_in_force": { "$ref": "common.json#/$defs/TimeInForce" },
+            "post_only": { "type": "boolean" }
+          }
+        }
+      ]
+    },
+    "StopRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["price", "trigger"],
+      "properties": {
+        "price": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+        "trigger": { "$ref": "common.json#/$defs/WorkingType" }
+      }
+    },
+    "TakeProfitSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["price", "pct"],
+      "properties": {
+        "price": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+        "pct": {
+          "$ref": "common.json#/$defs/UnsignedDecimal",
+          "description": "占仓位百分比 (0,100]"
+        },
+        "trigger": { "$ref": "common.json#/$defs/WorkingType" }
+      }
+    },
+    "OrderRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "exchange_order_id": { "type": "string", "maxLength": 64 },
+        "client_order_id": { "$ref": "common.json#/$defs/ClientOrderId" }
+      }
+    },
+    "OpenParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "product", "symbol", "side", "size", "entry", "stop", "evidence_refs"],
+      "properties": {
+        "kind": { "const": "open" },
+        "product": { "$ref": "common.json#/$defs/Product" },
+        "symbol": { "$ref": "common.json#/$defs/Symbol" },
+        "side": { "$ref": "common.json#/$defs/Side" },
+        "position_side": { "$ref": "common.json#/$defs/PositionSide" },
+        "size": { "$ref": "#/$defs/SizeSpec" },
+        "entry": { "$ref": "#/$defs/EntrySpec" },
+        "stop": {
+          "$ref": "#/$defs/StopRef",
+          "description": "开仓必须带止损(设计 §5.4 保护腿协议)"
+        },
+        "take_profits": {
+          "type": "array",
+          "maxItems": 4,
+          "items": { "$ref": "#/$defs/TakeProfitSpec" }
+        },
+        "leverage": { "type": "integer", "minimum": 1, "maximum": 125 },
+        "margin_type": { "$ref": "common.json#/$defs/MarginType" },
+        "thesis": { "type": "string", "maxLength": 2000 },
+        "evidence_refs": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 64 },
+          "description": "必须 ⊆ 本轮/上一轮 evidence registry(设计 §7.3);用户手动单可为空数组"
+        },
+        "invalidation": { "type": "string", "maxLength": 1000 }
+      }
+    },
+    "CloseParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "product", "symbol", "pct", "order"],
+      "properties": {
+        "kind": { "const": "close" },
+        "product": { "$ref": "common.json#/$defs/Product" },
+        "symbol": { "$ref": "common.json#/$defs/Symbol" },
+        "position_side": { "$ref": "common.json#/$defs/PositionSide" },
+        "pct": {
+          "$ref": "common.json#/$defs/UnsignedDecimal",
+          "description": "平掉当前持仓的百分比 (0,100];reduce-only,不得翻仓"
+        },
+        "order": { "$ref": "#/$defs/EntrySpec" },
+        "reason": { "type": "string", "maxLength": 1000 },
+        "evidence_refs": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 64 }
+        }
+      }
+    },
+    "CancelOrderParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "product", "symbol", "order_ref"],
+      "properties": {
+        "kind": { "const": "cancel_order" },
+        "product": { "$ref": "common.json#/$defs/Product" },
+        "symbol": { "$ref": "common.json#/$defs/Symbol" },
+        "order_ref": { "$ref": "#/$defs/OrderRef" },
+        "reason": { "type": "string", "maxLength": 1000 }
+      }
+    },
+    "ProtectParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "product", "symbol", "replace"],
+      "properties": {
+        "kind": { "const": "protect" },
+        "product": { "$ref": "common.json#/$defs/Product" },
+        "symbol": { "$ref": "common.json#/$defs/Symbol" },
+        "position_side": { "$ref": "common.json#/$defs/PositionSide" },
+        "stop": { "$ref": "#/$defs/StopRef" },
+        "take_profits": {
+          "type": "array",
+          "maxItems": 4,
+          "items": { "$ref": "#/$defs/TakeProfitSpec" }
+        },
+        "replace": {
+          "type": "boolean",
+          "description": "true=撤掉本机已有保护腿后重挂;false=只补缺"
+        },
+        "reason": { "type": "string", "maxLength": 1000 }
+      }
+    },
+    "TransferParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "asset", "amount", "from_account", "from_wallet", "to_account", "to_wallet"],
+      "properties": {
+        "kind": { "const": "transfer" },
+        "asset": { "$ref": "common.json#/$defs/Asset" },
+        "amount": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+        "from_account": { "$ref": "common.json#/$defs/AccountRef" },
+        "from_wallet": { "$ref": "common.json#/$defs/Wallet" },
+        "to_account": { "$ref": "common.json#/$defs/AccountRef" },
+        "to_wallet": { "$ref": "common.json#/$defs/Wallet" },
+        "reason": { "type": "string", "maxLength": 1000 }
+      },
+      "description": "只允许 principal=user 且 surface=rpc;agent 没有任何划转工具(设计 §3.5)。提币不在 v1 契约内(§16 Q7,延后到 Jacky 拍板 + IP 白名单)。"
+    }
+  }
+}

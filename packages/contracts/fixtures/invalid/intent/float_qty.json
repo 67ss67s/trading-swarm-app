@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "intent_id": "0f8fad5b-d9cb-469f-a165-70867728950e",
+  "account": "sub",
+  "principal": "model",
+  "surface": "model",
+  "session_id": "main",
+  "run_id": "run-20260902-0001",
+  "origin": "recipe:w4-judgment",
+  "idempotency_key": "run-20260902-0001:BTCUSDT:1",
+  "params": {
+    "kind": "open",
+    "product": "usdm_perp",
+    "symbol": "BTCUSDT",
+    "side": "buy",
+    "position_side": "both",
+    "size": {
+      "mode": "qty",
+      "qty": 0.002
+    },
+    "entry": {
+      "type": "limit",
+      "price": "60000.5",
+      "time_in_force": "gtc",
+      "post_only": false
+    },
+    "stop": {
+      "price": "59000",
+      "trigger": "mark_price"
+    },
+    "take_profits": [
+      {
+        "price": "62000",
+        "pct": "50",
+        "trigger": "mark_price"
+      }
+    ],
+    "leverage": 2,
+    "margin_type": "isolated",
+    "thesis": "4h 结构回踩支撑,量能收缩",
+    "evidence_refs": [
+      "T7.E1",
+      "T7.E3"
+    ],
+    "invalidation": "收盘跌破 58800"
+  },
+  "status": "awaiting_approval",
+  "gate_rejections": [],
+  "current_plan_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+  "ttl_seconds": 600,
+  "created_at": 1788350000000,
+  "updated_at": 1788350001000,
+  "expires_at": 1788350600000
+}

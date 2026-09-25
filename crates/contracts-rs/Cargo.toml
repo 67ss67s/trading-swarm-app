@@ -1,0 +1,17 @@
+[package]
+name = "contracts-rs"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "trading-swarm 契约的 Rust 侧:与 packages/contracts 的 JSON Schema 逐字段对拍的 serde 结构、canonical_json/plan_hash、状态转移表、RPC 帧与 NDJSON 编解码"
+
+[dependencies]
+hex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+jsonschema.workspace = true

@@ -1,0 +1,16 @@
+{
+  "jsonrpc": "2.0",
+  "id": "req-0002",
+  "error": {
+    "code": 1006,
+    "message": "plan_hash mismatch: authorization refers to a superseded plan",
+    "data": {
+      "kind": "conflict",
+      "retryable": false,
+      "details": {
+        "expected": "474838171b83561288f58fc3ebdaf96c236f5ff4983b1556cac37ee8cc22433c",
+        "got": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    }
+  }
+}

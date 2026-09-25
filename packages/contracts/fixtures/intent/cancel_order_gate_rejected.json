@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "intent_id": "3c4d5e6f-7081-4293-a4b5-c6d7e8f9a0b1",
+  "account": "sub",
+  "principal": "model",
+  "surface": "model",
+  "params": {
+    "kind": "cancel_order",
+    "product": "usdm_perp",
+    "symbol": "BTCUSDT",
+    "order_ref": {
+      "client_order_id": "tg-0f8fad5bd9cb-e0-1"
+    },
+    "reason": "入场失效"
+  },
+  "status": "rejected",
+  "status_reason": "gate policy.mode",
+  "gate_rejections": [
+    {
+      "gate": "policy.mode",
+      "value": "halt_all",
+      "limit": "run",
+      "message": "HALT_ALL 期间拒绝一切新提议"
+    }
+  ],
+  "ttl_seconds": 120,
+  "created_at": 1788350000000,
+  "updated_at": 1788350000020,
+  "terminal_at": 1788350000020
+}

@@ -1,0 +1,11 @@
+import {structure} from './structure.js';
+import { define,n,atr,last } from './registry.js';
+import { ema,trendState,trendWarmup } from './trend-state.js';
+export const chandelier_trail=define('chandelier_trail','exit','持仓以来最高价减 ATR 倍数，止损只上移',p=>n(p,'atr_period')+1,(ctx,p)=>({stop:ctx.position?Math.max(ctx.position.high_water??0,...ctx.bars.filter(b=>b.open_time>=ctx.position!.entry_at).map(b=>Number(b.high)))-atr(ctx.bars,n(p,'atr_period'))*n(p,'multiple'):undefined}));
+export const swing_structure_stop=define('swing_structure_stop','exit','最近结构低点作为下一根保护止损',p=>2*n(p,'lookback')+1,(ctx,p)=>({stop:ctx.position?Number(structure(ctx.bars,Math.min(100,n(p,'lookback'))).pivots.filter(x=>x.kind==='low').at(-1)?.price):undefined}));
+export const trend_break=define('trend_break','exit','收盘跌破 EMA 或已完成高周期趋势向下时退出',(p,base)=>trendWarmup({ema_slow:n(p,'ema_period'),ema_fast:Math.max(2,Math.floor(n(p,'ema_period')/2)),htf:String(p.htf)},base),(ctx,p)=>{const line=ema(ctx.bars.map(b=>Number(b.close)),n(p,'ema_period')),trend=trendState(ctx,{ema_slow:n(p,'ema_period'),ema_fast:Math.max(2,Math.floor(n(p,'ema_period')/2)),htf:String(p.htf)});return {exit:!!ctx.position&&(last(ctx)<line.at(-1)!||(trend.status==='ok'&&trend.htf_state==='down'))};});
+export const breakeven_after_r=define('breakeven_after_r','exit','达到指定 R 后止损上移至含双边费用成本',()=>1,(ctx,p)=>{const pos=ctx.position,high=Math.max(...ctx.bars.filter(b=>b.open_time>=(pos?.entry_at??Infinity)).map(b=>Number(b.high)));return {stop:pos&&high>=pos.entry_price+n(p,'r')*pos.initial_distance?pos.entry_price*(1+(ctx.fee_rate??0))/(1-(ctx.fee_rate??0)):undefined};});
+export const time_stop=define('time_stop','exit','可选持仓根数上限，下一根 open 退出',()=>0,(ctx,p)=>({exit:!!ctx.position&&ctx.position.bars_held>=n(p,'bars')}));
+export const fixed_r_target=define('fixed_r_target','exit','可选固定初始风险倍数目标',()=>0,(ctx,p)=>({exit:!!ctx.position&&last(ctx)>=ctx.position.entry_price+n(p,'r')*ctx.position.initial_distance}));
+import { divergenceAt,divergenceViewWarmup,divergenceHistory } from './signals.js';
+export const macd_divergence_exit=define('macd_divergence_exit','exit','MACD 顶背离:价格创更高的已确认 pivot high 而 MACD 柱/线走低,确认当根离场(htf=在高周期 K 线上判,那根高周期 K 线收盘时离场)',divergenceViewWarmup,(ctx,p)=>({exit:!!ctx.position&&divergenceAt(ctx,p,'bearish')}),divergenceHistory);

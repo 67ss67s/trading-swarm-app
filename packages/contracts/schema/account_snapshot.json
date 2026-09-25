@@ -1,0 +1,253 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trading-swarm.dev/schema/account_snapshot.json",
+  "title": "AccountSnapshot",
+  "description": "账户真相(设计 §6.2 account.truth / Codex review #6):每个组件各自 observed_at、取数区间、completeness;经济组件哈希 = account_version;组件缺失或跨度过大 → inconsistent(gate 拒开仓);不可得 → unavailable。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "account", "channel", "computed_at", "consistency", "components"],
+  "properties": {
+    "schema_version": { "$ref": "common.json#/$defs/SchemaVersion" },
+    "account": { "$ref": "common.json#/$defs/AccountRef" },
+    "channel": { "$ref": "common.json#/$defs/Channel" },
+    "computed_at": { "$ref": "common.json#/$defs/TimestampMs" },
+    "consistency": { "$ref": "common.json#/$defs/Consistency" },
+    "consistency_reason": { "type": "string", "maxLength": 500 },
+    "account_version": {
+      "$ref": "common.json#/$defs/Hash256",
+      "description": "sha256(canonical_json({balances,positions,open_orders,position_mode} 的 data)),见 docs/contracts/README.md"
+    },
+    "span_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "各必需组件 observed_at 的最大差"
+    },
+    "components": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["balances", "positions", "open_orders", "position_mode"],
+      "properties": {
+        "balances": { "$ref": "#/$defs/BalancesComponent" },
+        "positions": { "$ref": "#/$defs/PositionsComponent" },
+        "open_orders": { "$ref": "#/$defs/OrdersComponent" },
+        "position_mode": { "$ref": "#/$defs/PositionModeComponent" },
+        "recent_fills": { "$ref": "#/$defs/FillsComponent" },
+        "order_history": { "$ref": "#/$defs/OrdersComponent" },
+        "margin": { "$ref": "#/$defs/MarginComponent" }
+      }
+    },
+    "summary": { "$ref": "#/$defs/AccountSummary" }
+  },
+  "$defs": {
+    "BalanceRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["asset", "wallet", "wallet_balance", "available"],
+      "properties": {
+        "asset": { "$ref": "common.json#/$defs/Asset" },
+        "wallet": { "$ref": "common.json#/$defs/Wallet" },
+        "wallet_balance": { "$ref": "common.json#/$defs/Decimal" },
+        "available": { "$ref": "common.json#/$defs/Decimal" },
+        "unrealized_pnl": { "$ref": "common.json#/$defs/Decimal" }
+      }
+    },
+    "PositionRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["symbol", "product", "position_side", "qty", "entry_price"],
+      "properties": {
+        "symbol": { "$ref": "common.json#/$defs/Symbol" },
+        "product": { "$ref": "common.json#/$defs/Product" },
+        "position_side": { "$ref": "common.json#/$defs/PositionSide" },
+        "qty": {
+          "$ref": "common.json#/$defs/Decimal",
+          "description": "one_way 下带符号(空头为负);hedge 下按 position_side 为正"
+        },
+        "entry_price": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+        "mark_price": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+        "unrealized_pnl": { "$ref": "common.json#/$defs/Decimal" },
+        "leverage": { "type": "integer", "minimum": 1, "maximum": 125 },
+        "margin_type": { "$ref": "common.json#/$defs/MarginType" },
+        "isolated_margin": { "$ref": "common.json#/$defs/Decimal" },
+        "liquidation_price": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+        "notional": { "$ref": "common.json#/$defs/Decimal" },
+        "exchange_update_time": { "$ref": "common.json#/$defs/TimestampMs" }
+      }
+    },
+    "OrderRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exchange_order_id",
+        "symbol",
+        "product",
+        "side",
+        "position_side",
+        "order_type",
+        "status",
+        "orig_qty",
+        "executed_qty",
+        "reduce_only",
+        "origin"
+      ],
+      "properties": {
+        "exchange_order_id": { "type": "string", "maxLength": 64 },
+        "client_order_id": { "$ref": "common.json#/$defs/ClientOrderId" },
+        "symbol": { "$ref": "common.json#/$defs/Symbol" },
+        "product": { "$ref": "common.json#/$defs/Product" },
+        "side": { "$ref": "common.json#/$defs/Side" },
+        "position_side": { "$ref": "common.json#/$defs/PositionSide" },
+        "order_type": { "$ref": "common.json#/$defs/OrderType" },
+        "status": { "$ref": "common.json#/$defs/ExchangeOrderStatus" },
+        "orig_qty": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+        "executed_qty": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+        "avg_price": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+        "price": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+        "stop_price": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+        "reduce_only": { "type": "boolean" },
+        "close_position": { "type": "boolean" },
+        "time_in_force": { "$ref": "common.json#/$defs/TimeInForce" },
+        "working_type": { "$ref": "common.json#/$defs/WorkingType" },
+        "origin": { "$ref": "common.json#/$defs/OrderOrigin" },
+        "exchange_update_time": { "$ref": "common.json#/$defs/TimestampMs" },
+        "exchange_create_time": { "$ref": "common.json#/$defs/TimestampMs" }
+      }
+    },
+    "FillRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["trade_id", "exchange_order_id", "symbol", "product", "side", "qty", "price", "trade_time"],
+      "properties": {
+        "trade_id": { "type": "string", "maxLength": 64 },
+        "exchange_order_id": { "type": "string", "maxLength": 64 },
+        "client_order_id": { "$ref": "common.json#/$defs/ClientOrderId" },
+        "symbol": { "$ref": "common.json#/$defs/Symbol" },
+        "product": { "$ref": "common.json#/$defs/Product" },
+        "side": { "$ref": "common.json#/$defs/Side" },
+        "position_side": { "$ref": "common.json#/$defs/PositionSide" },
+        "qty": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+        "price": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+        "quote_qty": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+        "commission": { "$ref": "common.json#/$defs/Decimal" },
+        "commission_asset": { "$ref": "common.json#/$defs/Asset" },
+        "realized_pnl": { "$ref": "common.json#/$defs/Decimal" },
+        "is_maker": { "type": "boolean" },
+        "trade_time": { "$ref": "common.json#/$defs/TimestampMs" }
+      }
+    },
+    "MarginInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "margin_ratio": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+        "maintenance_margin": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+        "margin_balance": { "$ref": "common.json#/$defs/Decimal" },
+        "available_balance": { "$ref": "common.json#/$defs/Decimal" }
+      }
+    },
+    "BalancesComponent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observed_at", "fetched_from", "fetched_to", "completeness", "source"],
+      "properties": {
+        "observed_at": { "$ref": "common.json#/$defs/TimestampMs" },
+        "fetched_from": { "$ref": "common.json#/$defs/TimestampMs" },
+        "fetched_to": { "$ref": "common.json#/$defs/TimestampMs" },
+        "completeness": { "$ref": "common.json#/$defs/Completeness" },
+        "source": { "$ref": "common.json#/$defs/ObservationSource" },
+        "error": { "$ref": "common.json#/$defs/ErrorInfo" },
+        "data": { "type": "array", "items": { "$ref": "#/$defs/BalanceRow" } }
+      }
+    },
+    "PositionsComponent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observed_at", "fetched_from", "fetched_to", "completeness", "source"],
+      "properties": {
+        "observed_at": { "$ref": "common.json#/$defs/TimestampMs" },
+        "fetched_from": { "$ref": "common.json#/$defs/TimestampMs" },
+        "fetched_to": { "$ref": "common.json#/$defs/TimestampMs" },
+        "completeness": { "$ref": "common.json#/$defs/Completeness" },
+        "source": { "$ref": "common.json#/$defs/ObservationSource" },
+        "error": { "$ref": "common.json#/$defs/ErrorInfo" },
+        "data": { "type": "array", "items": { "$ref": "#/$defs/PositionRow" } }
+      }
+    },
+    "OrdersComponent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observed_at", "fetched_from", "fetched_to", "completeness", "source"],
+      "properties": {
+        "observed_at": { "$ref": "common.json#/$defs/TimestampMs" },
+        "fetched_from": { "$ref": "common.json#/$defs/TimestampMs" },
+        "fetched_to": { "$ref": "common.json#/$defs/TimestampMs" },
+        "completeness": { "$ref": "common.json#/$defs/Completeness" },
+        "source": { "$ref": "common.json#/$defs/ObservationSource" },
+        "error": { "$ref": "common.json#/$defs/ErrorInfo" },
+        "data": { "type": "array", "items": { "$ref": "#/$defs/OrderRow" } }
+      }
+    },
+    "PositionModeComponent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observed_at", "fetched_from", "fetched_to", "completeness", "source"],
+      "properties": {
+        "observed_at": { "$ref": "common.json#/$defs/TimestampMs" },
+        "fetched_from": { "$ref": "common.json#/$defs/TimestampMs" },
+        "fetched_to": { "$ref": "common.json#/$defs/TimestampMs" },
+        "completeness": { "$ref": "common.json#/$defs/Completeness" },
+        "source": { "$ref": "common.json#/$defs/ObservationSource" },
+        "error": { "$ref": "common.json#/$defs/ErrorInfo" },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode"],
+          "properties": { "mode": { "$ref": "common.json#/$defs/PositionMode" } }
+        }
+      }
+    },
+    "FillsComponent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observed_at", "fetched_from", "fetched_to", "completeness", "source"],
+      "properties": {
+        "observed_at": { "$ref": "common.json#/$defs/TimestampMs" },
+        "fetched_from": { "$ref": "common.json#/$defs/TimestampMs" },
+        "fetched_to": { "$ref": "common.json#/$defs/TimestampMs" },
+        "completeness": { "$ref": "common.json#/$defs/Completeness" },
+        "source": { "$ref": "common.json#/$defs/ObservationSource" },
+        "error": { "$ref": "common.json#/$defs/ErrorInfo" },
+        "data": { "type": "array", "items": { "$ref": "#/$defs/FillRow" } }
+      }
+    },
+    "MarginComponent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observed_at", "fetched_from", "fetched_to", "completeness", "source"],
+      "properties": {
+        "observed_at": { "$ref": "common.json#/$defs/TimestampMs" },
+        "fetched_from": { "$ref": "common.json#/$defs/TimestampMs" },
+        "fetched_to": { "$ref": "common.json#/$defs/TimestampMs" },
+        "completeness": { "$ref": "common.json#/$defs/Completeness" },
+        "source": { "$ref": "common.json#/$defs/ObservationSource" },
+        "error": { "$ref": "common.json#/$defs/ErrorInfo" },
+        "data": { "$ref": "#/$defs/MarginInfo" }
+      }
+    },
+    "AccountSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["quote_asset", "wallet_balance", "available_balance", "unrealized_pnl", "open_position_count", "open_order_count"],
+      "properties": {
+        "quote_asset": { "$ref": "common.json#/$defs/Asset" },
+        "wallet_balance": { "$ref": "common.json#/$defs/Decimal" },
+        "margin_balance": { "$ref": "common.json#/$defs/Decimal" },
+        "available_balance": { "$ref": "common.json#/$defs/Decimal" },
+        "unrealized_pnl": { "$ref": "common.json#/$defs/Decimal" },
+        "today_realized_pnl": { "$ref": "common.json#/$defs/Decimal" },
+        "open_position_count": { "type": "integer", "minimum": 0 },
+        "open_order_count": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

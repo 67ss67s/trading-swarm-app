@@ -1,0 +1,247 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trading-swarm.dev/schema/plan.json",
+  "title": "ExecutableOrderPlan",
+  "description": "审批前物化的可执行计划(设计 §5.1)。审批绑定的是 plan_hash = sha256(canonical_json(economic));basis 不进哈希。重闸只能拒绝,不能改 economic;经济字段实质变化 → 新 plan(version+1)+ 作废旧授权。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "intent_id",
+    "version",
+    "plan_hash",
+    "account",
+    "channel",
+    "economic",
+    "basis",
+    "authorization_ttl_seconds",
+    "created_at",
+    "expires_at"
+  ],
+  "properties": {
+    "schema_version": { "$ref": "common.json#/$defs/SchemaVersion" },
+    "plan_id": { "$ref": "common.json#/$defs/Uuid" },
+    "intent_id": { "$ref": "common.json#/$defs/Uuid" },
+    "version": { "type": "integer", "minimum": 1 },
+    "plan_hash": { "$ref": "common.json#/$defs/Hash256" },
+    "account": { "$ref": "common.json#/$defs/AccountRef" },
+    "channel": { "$ref": "common.json#/$defs/Channel" },
+    "economic": { "$ref": "#/$defs/PlanEconomics" },
+    "basis": { "$ref": "#/$defs/PlanBasis" },
+    "authorization_ttl_seconds": {
+      "type": "integer",
+      "minimum": 5,
+      "maximum": 3600,
+      "description": "授权有效期:市价 30s / 限价 120s(设计 §10.3)"
+    },
+    "created_at": { "$ref": "common.json#/$defs/TimestampMs" },
+    "expires_at": { "$ref": "common.json#/$defs/TimestampMs" }
+  },
+  "$defs": {
+    "PlanEconomics": {
+      "oneOf": [
+        { "$ref": "#/$defs/OrderEconomics" },
+        { "$ref": "#/$defs/ProtectEconomics" },
+        { "$ref": "#/$defs/CancelEconomics" },
+        { "$ref": "#/$defs/TransferEconomics" }
+      ]
+    },
+    "ProtectionLeg": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["order_type", "trigger_price", "working_type", "close_position"],
+      "properties": {
+        "order_type": {
+          "type": "string",
+          "enum": ["stop_market", "stop_limit", "take_profit_market", "take_profit_limit"]
+        },
+        "trigger_price": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+        "price": {
+          "$ref": "common.json#/$defs/UnsignedDecimal",
+          "description": "*_limit 类的委托价"
+        },
+        "qty": {
+          "$ref": "common.json#/$defs/UnsignedDecimal",
+          "description": "close_position=false 时必填;true 时不填(全平)"
+        },
+        "working_type": { "$ref": "common.json#/$defs/WorkingType" },
+        "close_position": { "type": "boolean" }
+      },
+      "description": "交易所原生保护腿;永远 reduce-only(执行层强制,不作为字段)"
+    },
+    "Protection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["take_profits"],
+      "properties": {
+        "stop": { "$ref": "#/$defs/ProtectionLeg" },
+        "take_profits": {
+          "type": "array",
+          "maxItems": 4,
+          "items": { "$ref": "#/$defs/ProtectionLeg" }
+        }
+      }
+    },
+    "OrderEconomics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "product",
+        "symbol",
+        "side",
+        "position_side",
+        "position_mode",
+        "order_type",
+        "qty",
+        "reduce_only",
+        "close_position",
+        "protection",
+        "max_naked_seconds"
+      ],
+      "properties": {
+        "kind": { "const": "order" },
+        "product": { "$ref": "common.json#/$defs/Product" },
+        "symbol": { "$ref": "common.json#/$defs/Symbol" },
+        "side": { "$ref": "common.json#/$defs/Side" },
+        "position_side": { "$ref": "common.json#/$defs/PositionSide" },
+        "position_mode": { "$ref": "common.json#/$defs/PositionMode" },
+        "order_type": { "$ref": "common.json#/$defs/OrderType" },
+        "qty": {
+          "$ref": "common.json#/$defs/UnsignedDecimal",
+          "description": "已按 step_size 向下取整"
+        },
+        "price": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+        "time_in_force": { "$ref": "common.json#/$defs/TimeInForce" },
+        "reduce_only": { "type": "boolean" },
+        "close_position": { "type": "boolean" },
+        "leverage": { "type": "integer", "minimum": 1, "maximum": 125 },
+        "margin_type": { "$ref": "common.json#/$defs/MarginType" },
+        "trigger_price": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+        "working_type": { "$ref": "common.json#/$defs/WorkingType" },
+        "protection": { "$ref": "#/$defs/Protection" },
+        "max_naked_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 600,
+          "description": "首笔成交后保护腿必须在此秒数内确认在交易所,否则补偿平仓(设计 §5.4,默认 20)"
+        }
+      },
+      "description": "open / close 两类 intent 的计划;close 时 reduce_only=true 且 protection 为空"
+    },
+    "ProtectEconomics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "product", "symbol", "position_side", "legs", "replace_order_ids"],
+      "properties": {
+        "kind": { "const": "protect" },
+        "product": { "$ref": "common.json#/$defs/Product" },
+        "symbol": { "$ref": "common.json#/$defs/Symbol" },
+        "position_side": { "$ref": "common.json#/$defs/PositionSide" },
+        "legs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 5,
+          "items": { "$ref": "#/$defs/ProtectionLeg" }
+        },
+        "replace_order_ids": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 64 },
+          "description": "先撤再挂的本机保护单 exchange_order_id 列表(replace=false 时为空)"
+        }
+      }
+    },
+    "CancelEconomics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "product", "symbol"],
+      "anyOf": [{ "required": ["exchange_order_id"] }, { "required": ["client_order_id"] }],
+      "properties": {
+        "kind": { "const": "cancel" },
+        "product": { "$ref": "common.json#/$defs/Product" },
+        "symbol": { "$ref": "common.json#/$defs/Symbol" },
+        "exchange_order_id": { "type": "string", "maxLength": 64 },
+        "client_order_id": { "$ref": "common.json#/$defs/ClientOrderId" }
+      }
+    },
+    "TransferEconomics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "asset", "amount", "from_account", "from_wallet", "to_account", "to_wallet"],
+      "properties": {
+        "kind": { "const": "transfer" },
+        "asset": { "$ref": "common.json#/$defs/Asset" },
+        "amount": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+        "from_account": { "$ref": "common.json#/$defs/AccountRef" },
+        "from_wallet": { "$ref": "common.json#/$defs/Wallet" },
+        "to_account": { "$ref": "common.json#/$defs/AccountRef" },
+        "to_wallet": { "$ref": "common.json#/$defs/Wallet" }
+      }
+    },
+    "SymbolFilters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tick_size", "step_size", "min_qty", "min_notional", "observed_at"],
+      "properties": {
+        "tick_size": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+        "step_size": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+        "min_qty": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+        "max_qty": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+        "min_notional": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+        "price_precision": { "type": "integer", "minimum": 0, "maximum": 18 },
+        "qty_precision": { "type": "integer", "minimum": 0, "maximum": 18 },
+        "observed_at": { "$ref": "common.json#/$defs/TimestampMs" }
+      }
+    },
+    "SizingBasis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "raw_qty", "rounding"],
+      "properties": {
+        "method": {
+          "type": "string",
+          "enum": ["risk_pct_by_stop_distance", "explicit_qty", "explicit_notional", "pct_of_position"]
+        },
+        "equity": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+        "risk_pct": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+        "stop_distance": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+        "reference_price": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+        "position_qty_before": { "$ref": "common.json#/$defs/Decimal" },
+        "raw_qty": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+        "rounding": { "type": "string", "enum": ["down"] }
+      }
+    },
+    "MarketRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observed_at"],
+      "properties": {
+        "mark_price": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+        "last_price": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+        "observed_at": { "$ref": "common.json#/$defs/TimestampMs" }
+      }
+    },
+    "PlanBasis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["notes"],
+      "properties": {
+        "filters": { "$ref": "#/$defs/SymbolFilters" },
+        "sizing": { "$ref": "#/$defs/SizingBasis" },
+        "account_version": {
+          "$ref": "common.json#/$defs/Hash256",
+          "description": "物化时的 AccountSnapshot.account_version;派发前变了要重闸"
+        },
+        "market_ref": { "$ref": "#/$defs/MarketRef" },
+        "position_mode_observed": { "$ref": "common.json#/$defs/PositionMode" },
+        "policy_version": { "type": "integer", "minimum": 0 },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 500 }
+        }
+      },
+      "description": "物化依据,给 UI/审计看;不进 plan_hash"
+    }
+  }
+}

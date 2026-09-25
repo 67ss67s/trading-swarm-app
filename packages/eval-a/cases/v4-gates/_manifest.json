@@ -1,0 +1,13 @@
+{
+  "generated_with": {
+    "generator": "gen-gates",
+    "graph": "判断图见 packages/gateway/src/demo/graph.ts"
+  },
+  "cases": 85,
+  "covers": {
+    "model_edge": 14,
+    "event_edge": 49,
+    "guard": 20,
+    "gate_pass": 2
+  }
+}

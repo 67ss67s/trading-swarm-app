@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trading-swarm.dev/schema/policy.json",
+  "title": "ExecPolicy",
+  "description": "execd 持有的 policy 子集(设计 §10):模式、authority、上限。gateway 的 gate v2 与 execd 的重闸读同一份;改动需 policy.set + confirm 回填。金丝雀期默认值取 Codex 保守值(§17.2),向导里显式输入。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "version",
+    "updated_at",
+    "mode",
+    "authority",
+    "emergency_stop",
+    "live_capped_enabled",
+    "symbol_allowlist",
+    "product_allowlist",
+    "caps",
+    "main_account",
+    "canary"
+  ],
+  "properties": {
+    "schema_version": { "$ref": "common.json#/$defs/SchemaVersion" },
+    "version": { "type": "integer", "minimum": 0 },
+    "updated_at": { "$ref": "common.json#/$defs/TimestampMs" },
+    "mode": { "$ref": "common.json#/$defs/PolicyMode" },
+    "authority": { "$ref": "common.json#/$defs/Authority" },
+    "emergency_stop": { "type": "boolean" },
+    "live_capped_enabled": {
+      "type": "boolean",
+      "description": "feature gate;v1 保持 false,延后到 §16 Q6(Binance 对 standing authorization 的书面口径)解决"
+    },
+    "symbol_allowlist": {
+      "type": "array",
+      "items": { "$ref": "common.json#/$defs/Symbol" }
+    },
+    "product_allowlist": {
+      "type": "array",
+      "items": { "$ref": "common.json#/$defs/Product" }
+    },
+    "caps": { "$ref": "#/$defs/Caps" },
+    "main_account": { "$ref": "#/$defs/MainAccountPolicy" },
+    "canary": { "$ref": "#/$defs/CanaryPolicy" }
+  },
+  "$defs": {
+    "Caps": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_leverage",
+        "risk_pct_per_trade",
+        "max_order_notional",
+        "max_position_notional",
+        "max_daily_opens",
+        "daily_loss_stop_pct",
+        "symbol_cooldown_seconds",
+        "max_naked_seconds",
+        "account_truth_max_age_ms",
+        "market_max_age_ms",
+        "authorization_ttl_market_seconds",
+        "authorization_ttl_limit_seconds",
+        "max_price_deviation_bps",
+        "ntp_drift_block_ms",
+        "ntp_drift_halt_ms"
+      ],
+      "properties": {
+        "max_leverage": { "type": "integer", "minimum": 1, "maximum": 125 },
+        "risk_pct_per_trade": {
+          "$ref": "common.json#/$defs/UnsignedDecimal",
+          "description": "单笔风险占权益百分比,金丝雀默认 0.25"
+        },
+        "max_order_notional": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+        "max_position_notional": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+        "max_daily_opens": { "type": "integer", "minimum": 0, "description": "金丝雀期默认 2,之后 6" },
+        "daily_loss_stop_pct": { "$ref": "common.json#/$defs/UnsignedDecimal", "description": "默认 1" },
+        "symbol_cooldown_seconds": { "type": "integer", "minimum": 0, "description": "默认 3600" },
+        "max_naked_seconds": { "type": "integer", "minimum": 1, "maximum": 600, "description": "默认 20" },
+        "account_truth_max_age_ms": { "type": "integer", "minimum": 1000, "description": "默认 15000" },
+        "market_max_age_ms": { "type": "integer", "minimum": 500, "description": "默认 5000" },
+        "authorization_ttl_market_seconds": { "type": "integer", "minimum": 5, "maximum": 3600, "description": "默认 30" },
+        "authorization_ttl_limit_seconds": { "type": "integer", "minimum": 5, "maximum": 3600, "description": "默认 120" },
+        "max_price_deviation_bps": { "type": "integer", "minimum": 0, "maximum": 10000, "description": "下单价 vs 现价偏离上限" },
+        "ntp_drift_block_ms": { "type": "integer", "minimum": 0, "description": "默认 2000:超过禁新增风险" },
+        "ntp_drift_halt_ms": { "type": "integer", "minimum": 0, "description": "默认 10000:超过 HALT" }
+      }
+    },
+    "MainAccountPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manual_trading_enabled", "transfers_enabled", "withdraw_enabled"],
+      "properties": {
+        "manual_trading_enabled": { "type": "boolean" },
+        "transfers_enabled": { "type": "boolean", "description": "main↔sub 划转(A1 验证可行后才开)" },
+        "withdraw_enabled": {
+          "type": "boolean",
+          "const": false,
+          "description": "v1 恒 false(§16 Q7 默认不勾提币;提币走 Binance UI 深链)"
+        }
+      }
+    },
+    "CanaryPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "max_loss_quote": { "$ref": "common.json#/$defs/UnsignedDecimal", "description": "§16 Q2,未答前为空 = 不允许真钱" },
+        "max_notional_quote": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+        "max_leverage": { "type": "integer", "minimum": 1, "maximum": 125 },
+        "funded_balance_quote": { "$ref": "common.json#/$defs/UnsignedDecimal" }
+      }
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "intent_id": "5e6f7081-92a3-4b4c-8d5e-6f708192a3b4",
+  "account": "sub",
+  "principal": "model",
+  "surface": "model",
+  "params": {
+    "kind": "open",
+    "product": "usdm_perp",
+    "symbol": "SOLUSDT",
+    "side": "sell",
+    "size": {
+      "mode": "hint",
+      "hint": "quarter"
+    },
+    "entry": {
+      "type": "market"
+    },
+    "stop": {
+      "price": "150.25",
+      "trigger": "mark_price"
+    },
+    "evidence_refs": [
+      "T1.E2"
+    ]
+  },
+  "status": "proposed",
+  "gate_rejections": [],
+  "ttl_seconds": 120,
+  "created_at": 1788350000000,
+  "updated_at": 1788350000000
+}

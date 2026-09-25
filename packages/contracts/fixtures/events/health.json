@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "seq": 1,
+  "event": "health",
+  "at": 1788350000000,
+  "payload": {
+    "ok": true
+  }
+}

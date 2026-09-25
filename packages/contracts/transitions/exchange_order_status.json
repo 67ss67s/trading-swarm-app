@@ -1,0 +1,18 @@
+{
+  "machine": "exchange_order_status",
+  "version": 1,
+  "description": "交易所订单状态的合法前进方向,用于校验观察序列的单调性(乱序/倒退 → ORDER_STATE_UNKNOWN attention)。同状态的新观察(如更多部分成交)不是状态变化。",
+  "initial": "new",
+  "states": ["new", "partially_filled", "filled", "canceled", "expired", "rejected"],
+  "terminal": ["filled", "canceled", "expired", "rejected"],
+  "transitions": [
+    { "from": "new", "to": "partially_filled", "event": "partial_fill" },
+    { "from": "new", "to": "filled", "event": "fill" },
+    { "from": "new", "to": "canceled", "event": "cancel" },
+    { "from": "new", "to": "expired", "event": "expire" },
+    { "from": "new", "to": "rejected", "event": "reject" },
+    { "from": "partially_filled", "to": "filled", "event": "fill" },
+    { "from": "partially_filled", "to": "canceled", "event": "cancel", "note": "部分成交后撤单:executed_qty 保留" },
+    { "from": "partially_filled", "to": "expired", "event": "expire" }
+  ]
+}

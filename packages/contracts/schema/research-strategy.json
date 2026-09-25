@@ -1,0 +1,622 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trading-swarm.local/schema/research-strategy.json",
+  "title": "ResearchStrategyObject",
+  "anyOf": [
+    {
+      "$ref": "#/$defs/ResearchStrategyList"
+    },
+    {
+      "$ref": "#/$defs/ResearchStrategyDetail"
+    }
+  ],
+  "$defs": {
+    "ResearchStrategyStatus": {
+      "enum": [
+        "draft",
+        "backtested",
+        "paper",
+        "live",
+        "published",
+        "archived"
+      ]
+    },
+    "ResearchStrategyOrigin": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "session_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4000
+        },
+        "inquiry_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4000
+        },
+        "source": {
+          "enum": [
+            "research_loop",
+            "manual",
+            "import"
+          ]
+        }
+      },
+      "required": [
+        "session_id",
+        "inquiry_id",
+        "source"
+      ]
+    },
+    "ResearchStrategySummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "total_return": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "sharpe": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "max_drawdown": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "win_rate": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "trades": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "score": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "score_label": {
+          "anyOf": [
+            {
+              "$ref": "research-backtest.json#/$defs/BacktestScoreLabel"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sparkline": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 200
+        },
+        "report_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4000
+        },
+        "backtested_at": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "total_return",
+        "sharpe",
+        "max_drawdown",
+        "win_rate",
+        "trades",
+        "score",
+        "score_label",
+        "sparkline",
+        "report_id",
+        "backtested_at"
+      ]
+    },
+    "ResearchStrategy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "status": {
+          "$ref": "#/$defs/ResearchStrategyStatus"
+        },
+        "symbol": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "timeframe": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "watchlist": {
+          "type": "boolean"
+        },
+        "alerts": {
+          "type": "boolean"
+        },
+        "current_version": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "created_at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "updated_at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "origin": {
+          "$ref": "#/$defs/ResearchStrategyOrigin"
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResearchStrategySummary"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lab_strategy_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4000
+        },
+        "published_listing_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4000
+        },
+        "session_bound": {
+          "description": "经 attach-session 绑定到研究会话:该会话后续回测报告都挂到这条策略",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description",
+        "status",
+        "symbol",
+        "timeframe",
+        "watchlist",
+        "alerts",
+        "current_version",
+        "created_at",
+        "updated_at",
+        "origin",
+        "summary",
+        "lab_strategy_id",
+        "published_listing_id"
+      ]
+    },
+    "ResearchStrategyVersion": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "strategy_id": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "ir_hash": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "strategy_ir": {
+          "anyOf": [
+            {
+              "$ref": "research.json#/$defs/StrategyIR"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "created_at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "report_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "maxItems": 500
+        },
+        "run_ids": {
+          "description": "「策略 → 版本 → run」链:该版本回测报告引用的 research_runs.id,以及 manifest.request.strategy_ir 同哈希的 run",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "maxItems": 500
+        },
+        "revision_refs": {
+          "description": "研究 loop 修订草稿(research_artifacts 里 view=strategy_draft 且 IR 同哈希)的 artifact id",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "maxItems": 200
+        },
+        "lab_strategy_ref": {
+          "description": "该版本所用 run 的 source_strategy(交易侧 lab 策略库 id@version),只读留痕",
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4000
+        }
+      },
+      "required": [
+        "strategy_id",
+        "version",
+        "ir_hash",
+        "strategy_ir",
+        "note",
+        "created_at",
+        "report_ids"
+      ]
+    },
+    "ResearchStrategyEventKind": {
+      "enum": [
+        "created",
+        "version_added",
+        "backtested",
+        "transition",
+        "renamed",
+        "flag_changed",
+        "archived",
+        "session_attached"
+      ]
+    },
+    "ResearchStrategyEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "kind": {
+          "$ref": "#/$defs/ResearchStrategyEventKind"
+        },
+        "from": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResearchStrategyStatus"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "to": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResearchStrategyStatus"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "version": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 4000
+        }
+      },
+      "required": [
+        "at",
+        "kind",
+        "from",
+        "to",
+        "version",
+        "note"
+      ]
+    },
+    "ResearchStrategyCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "all": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "live": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "watchlist": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "alerts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "draft": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "all",
+        "live",
+        "watchlist",
+        "alerts",
+        "draft"
+      ]
+    },
+    "ResearchStrategyList": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "strategies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ResearchStrategy"
+          },
+          "maxItems": 5000
+        },
+        "counts": {
+          "$ref": "#/$defs/ResearchStrategyCounts"
+        }
+      },
+      "required": [
+        "strategies",
+        "counts"
+      ]
+    },
+    "ResearchStrategyDetail": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "strategy": {
+          "$ref": "#/$defs/ResearchStrategy"
+        },
+        "versions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ResearchStrategyVersion"
+          },
+          "maxItems": 1000
+        },
+        "report": {
+          "anyOf": [
+            {
+              "$ref": "research-backtest.json#/$defs/BacktestReport"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reports": {
+          "type": "array",
+          "items": {
+            "$ref": "research-backtest.json#/$defs/BacktestReportSummary"
+          },
+          "maxItems": 500
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ResearchStrategyEvent"
+          },
+          "maxItems": 2000
+        },
+        "allowed_transitions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ResearchStrategyStatus"
+          },
+          "maxItems": 8
+        }
+      },
+      "required": [
+        "strategy",
+        "versions",
+        "report",
+        "reports",
+        "events",
+        "allowed_transitions"
+      ]
+    },
+    "ResearchStrategyCreate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "symbol": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "timeframe": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "strategy_ir": {
+          "$ref": "research.json#/$defs/StrategyIR"
+        }
+      },
+      "required": [
+        "name"
+      ]
+    },
+    "ResearchStrategyPatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "watchlist": {
+          "type": "boolean"
+        },
+        "alerts": {
+          "type": "boolean"
+        }
+      },
+      "required": []
+    },
+    "ResearchStrategyTransition": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "to": {
+          "$ref": "#/$defs/ResearchStrategyStatus"
+        },
+        "confirm": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 4000
+        }
+      },
+      "required": [
+        "to"
+      ]
+    },
+    "ResearchStrategyBacktestRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "symbols": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "maxItems": 8
+        },
+        "timeframe": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "from_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "to_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": []
+    },
+    "ResearchStrategyAttachSession": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        }
+      },
+      "required": [
+        "session_id"
+      ]
+    }
+  }
+}

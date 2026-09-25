@@ -1,0 +1,14 @@
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "exec.event",
+  "params": {
+    "schema_version": 1,
+    "seq": 1,
+    "event": "health",
+    "at": 1788350000000,
+    "payload": {
+      "ok": true
+    }
+  }
+}

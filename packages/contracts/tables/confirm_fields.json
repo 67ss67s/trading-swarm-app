@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "description": "结构化确认(设计 §10.4):审批面必须逐字回填这些字段;execd 用 plan.economic 派生同一张 map 逐字比对。值一律字符串:缺省(null/undefined)字段不出现;布尔写 'true'/'false';整数十进制;数组/对象字段写 canonical_json 字符串。plan_hash 永远参与。",
+  "always": ["plan_hash"],
+  "by_kind": {
+    "order": ["symbol", "side", "qty", "order_type", "price", "trigger_price", "leverage", "reduce_only"],
+    "protect": ["symbol", "position_side", "legs"],
+    "cancel": ["symbol", "exchange_order_id", "client_order_id"],
+    "transfer": ["asset", "amount", "from_account", "to_account"]
+  }
+}

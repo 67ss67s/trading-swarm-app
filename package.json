@@ -1,0 +1,27 @@
+{
+  "name": "trading-swarm",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "description": "Trading Swarm: chat-to-strategy research and role-based trading agents (TS gateway + React UI + Rust executor)",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "dev": "bash scripts/dev.sh",
+    "lab": "node scripts/lab-cache.mjs",
+    "generate": "npm run generate --workspaces --if-present",
+    "generate:check": "npm run generate:check --workspaces --if-present",
+    "typecheck": "tsc -b",
+    "test": "npm run test --workspaces --if-present",
+    "check": "npm run generate:check && npm run typecheck && npm test"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "typescript": "5.9.3",
+    "vitest": "4.1.11"
+  }
+}

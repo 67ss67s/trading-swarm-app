@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trading-swarm.dev/schema/position_effect.json",
+  "title": "PositionEffect",
+  "description": "intent 的经济完成定义(设计 §5.1):开仓=目标数量成交且剩余已撤且保护腿已确认在交易所;平仓=数量核实;保护=腿存在;撤单=订单终态;划转=交易所回执可查。由 reconciler 按读派生并落库,intent 只在 status=satisfied 时才 completed。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "effect_id",
+    "intent_id",
+    "plan_id",
+    "kind",
+    "account",
+    "status",
+    "filled_qty",
+    "remaining_qty",
+    "remaining_canceled",
+    "protection_required",
+    "protection_confirmed",
+    "protection_order_ids",
+    "evaluated_at"
+  ],
+  "properties": {
+    "schema_version": { "$ref": "common.json#/$defs/SchemaVersion" },
+    "effect_id": { "$ref": "common.json#/$defs/Uuid" },
+    "intent_id": { "$ref": "common.json#/$defs/Uuid" },
+    "plan_id": { "$ref": "common.json#/$defs/Uuid" },
+    "kind": { "$ref": "common.json#/$defs/IntentKind" },
+    "account": { "$ref": "common.json#/$defs/AccountRef" },
+    "symbol": { "$ref": "common.json#/$defs/Symbol" },
+    "status": { "$ref": "common.json#/$defs/EffectStatus" },
+    "target_qty": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+    "filled_qty": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+    "remaining_qty": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+    "remaining_canceled": {
+      "type": "boolean",
+      "description": "未成交部分是否已确认撤销(或本就无剩余)"
+    },
+    "avg_fill_price": { "$ref": "common.json#/$defs/UnsignedDecimal" },
+    "first_fill_at": { "$ref": "common.json#/$defs/TimestampMs" },
+    "protection_required": { "type": "boolean" },
+    "protection_confirmed": { "type": "boolean" },
+    "protection_confirmed_at": { "$ref": "common.json#/$defs/TimestampMs" },
+    "protection_order_ids": {
+      "type": "array",
+      "items": { "type": "string", "maxLength": 64 }
+    },
+    "naked_seconds": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "首笔成交到保护腿确认(或到现在)的秒数"
+    },
+    "compensation_close_attempt_id": {
+      "$ref": "common.json#/$defs/Uuid",
+      "description": "超过 max_naked_seconds 触发的补偿平仓 attempt"
+    },
+    "position_qty_after": { "$ref": "common.json#/$defs/Decimal" },
+    "exchange_ref": { "type": "string", "maxLength": 128 },
+    "failure_reason": { "type": "string", "maxLength": 1000 },
+    "evaluated_at": { "$ref": "common.json#/$defs/TimestampMs" }
+  }
+}

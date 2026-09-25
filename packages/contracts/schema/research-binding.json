@@ -1,0 +1,844 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trading-swarm.local/schema/research-binding.json",
+  "title": "ResearchStrategyBinding",
+  "description": "§9.47 StrategyBinding:研究台策略版本(StrategyIR,唯一真源)编译出来的实盘绑定(只读编译产物)。字段对齐 docs/design/strategy-apply-spec-2026-09-23.md §3 与 Codex 复审修订;实盘侧(radar / 候选生成 / holding-policy / gates)按这些字段消费,字段名保持稳定。部署模式、仓位 cap 不在这里(属于部署,由实盘注册表管)。",
+  "anyOf": [
+    {
+      "$ref": "#/$defs/StrategyBindingResponse"
+    },
+    {
+      "$ref": "#/$defs/BuiltinImportResult"
+    }
+  ],
+  "$defs": {
+    "BindingExecutor": {
+      "description": "这条规则由谁执行:code = 代码逐根算/挂单/改单,不叫模型;model = 模型判断(只在 judge 切片出现,且只决定做/不做)",
+      "enum": [
+        "code",
+        "model"
+      ]
+    },
+    "BindingRole": {
+      "description": "规则拆给哪个角色:radar 唤醒 / judge 入场过滤(模型)/ geometry 止损止盈放置 / risk 仓位与杠杆 / holding 持仓管理 / execution 下单方式",
+      "enum": [
+        "radar",
+        "judge",
+        "geometry",
+        "risk",
+        "holding",
+        "execution"
+      ]
+    },
+    "BindingRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "executor": {
+          "$ref": "#/$defs/BindingExecutor"
+        },
+        "ref": {
+          "description": "来自 IR 的哪个位置(如 signal[0]、order.entry.price、risk.stop);编译器补的缺省规则为 null",
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 200
+        },
+        "primitive": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 80
+        }
+      },
+      "required": [
+        "text",
+        "executor",
+        "ref",
+        "primitive"
+      ]
+    },
+    "BindingRoleSlice": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "role": {
+          "$ref": "#/$defs/BindingRole"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "summary": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BindingRule"
+          },
+          "maxItems": 60
+        }
+      },
+      "required": [
+        "role",
+        "title",
+        "summary",
+        "rules"
+      ]
+    },
+    "BindingUnmapped": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "path": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 200
+        },
+        "severity": {
+          "description": "block = 编译失败、不能下发(不近似);warn = 能下发,但语义有损或需要实盘侧补能力",
+          "enum": [
+            "block",
+            "warn"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "source": {
+          "description": "compiler = IR 里实盘不支持的原语/字段;import = 内置策略译成 IR 时丢掉的原规则语义",
+          "enum": [
+            "compiler",
+            "import"
+          ]
+        }
+      },
+      "required": [
+        "code",
+        "path",
+        "severity",
+        "message",
+        "source"
+      ]
+    },
+    "BindingEvidenceIndicator": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "规范化 id:<indicator>(<args>)[.<output>]@<timeframe>,同一条线去重",
+          "type": "string",
+          "maxLength": 200
+        },
+        "indicator": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
+          }
+        },
+        "output": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 40
+        },
+        "timeframe": {
+          "type": "string",
+          "maxLength": 16
+        },
+        "from": {
+          "description": "由哪些 IR 位置推导出来",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "maxItems": 30
+        }
+      },
+      "required": [
+        "id",
+        "indicator",
+        "args",
+        "output",
+        "timeframe",
+        "from"
+      ]
+    },
+    "BindingEvidencePlan": {
+      "description": "模型做入场过滤时看的证据:全部由 IR 原语的输入推导,不手填",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "indicators": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BindingEvidenceIndicator"
+          },
+          "maxItems": 60
+        },
+        "structure": {
+          "description": "结构证据:swing_pivots / order_blocks / htf_structure@<tf> / volume_ratio 等",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "maxItems": 30
+        },
+        "info_topics": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "maxItems": 12
+        }
+      },
+      "required": [
+        "indicators",
+        "structure",
+        "info_topics"
+      ]
+    },
+    "BindingTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "$ref": "research.json#/$defs/StrategyPrimitive"
+        },
+        "size_pct": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        },
+        "kind": {
+          "description": "chart = 图上价位(前高/摆动高点/结构阻力);indicator = 用户指定的指标线;r_multiple = 用户原话要求的 R 倍数",
+          "enum": [
+            "chart",
+            "indicator",
+            "r_multiple"
+          ]
+        }
+      },
+      "required": [
+        "source",
+        "size_pct",
+        "kind"
+      ]
+    },
+    "StrategyBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "strategy-binding/v1"
+        },
+        "compiler_version": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "strategy_id": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "ir_hash": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "content_hash": {
+          "description": "绑定内容哈希(不含 compiled_at 与 content_hash 本身);同 IR + 同编译器/库版本 → 同哈希",
+          "type": "string",
+          "maxLength": 200
+        },
+        "compiled_at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "libs": {
+          "description": "编译时的原语库/订单门口径/策略规范/周期策略版本;任一变化都可能让同一 IR 产出不同候选",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "primitive_registry": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "order_gate": {
+              "enum": [
+                "structure",
+                "legacy"
+              ]
+            },
+            "strategy_spec": {
+              "type": "string",
+              "maxLength": 80
+            },
+            "horizon_policy": {
+              "type": "string",
+              "maxLength": 80
+            }
+          },
+          "required": [
+            "primitive_registry",
+            "order_gate",
+            "strategy_spec",
+            "horizon_policy"
+          ]
+        },
+        "horizon": {
+          "description": "从 IR 主周期推;1m/3m/5m(scalp)不接受,为 null 并在 unmapped 里 block",
+          "enum": [
+            "intraday",
+            "swing",
+            "position",
+            null
+          ]
+        },
+        "timeframe": {
+          "type": "string",
+          "maxLength": 16
+        },
+        "confirm_timeframe": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 16
+        },
+        "symbol": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "market": {
+          "enum": [
+            "spot",
+            "perp"
+          ]
+        },
+        "direction": {
+          "enum": [
+            "long",
+            "short",
+            "both"
+          ]
+        },
+        "trigger": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "primitives": {
+              "type": "array",
+              "items": {
+                "$ref": "research.json#/$defs/StrategyPrimitive"
+              },
+              "maxItems": 30
+            },
+            "regime": {
+              "anyOf": [
+                {
+                  "$ref": "research.json#/$defs/StrategyPrimitive"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "short_primitives": {
+              "type": "array",
+              "items": {
+                "$ref": "research.json#/$defs/StrategyPrimitive"
+              },
+              "maxItems": 30
+            },
+            "short_regime": {
+              "anyOf": [
+                {
+                  "$ref": "research.json#/$defs/StrategyPrimitive"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "eval_on": {
+              "const": "bar_close"
+            },
+            "cooldown_bars": {
+              "description": "IR 没有冷却字段:null = 不另设冷却,同向新信号按 entry.on_new_signal 处理",
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 100000
+            }
+          },
+          "required": [
+            "primitives",
+            "regime",
+            "short_primitives",
+            "short_regime",
+            "eval_on",
+            "cooldown_bars"
+          ]
+        },
+        "evidence_plan": {
+          "$ref": "#/$defs/BindingEvidencePlan"
+        },
+        "entry": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "enum": [
+                "market",
+                "limit"
+              ]
+            },
+            "price": {
+              "anyOf": [
+                {
+                  "$ref": "research.json#/$defs/StrategyPrimitive"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "expiry_bars": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "on_new_signal": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "unfilled": {
+                  "enum": [
+                    "replace",
+                    "keep"
+                  ]
+                },
+                "filled": {
+                  "enum": [
+                    "roll",
+                    "add",
+                    "ignore"
+                  ]
+                }
+              },
+              "required": [
+                "unfilled",
+                "filled"
+              ]
+            },
+            "max_adds": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 5
+            },
+            "chase_atr_max": {
+              "type": [
+                "number",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "price",
+            "expiry_bars",
+            "on_new_signal",
+            "max_adds",
+            "chase_atr_max"
+          ]
+        },
+        "stop": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "primitive": {
+              "$ref": "research.json#/$defs/StrategyPrimitive"
+            },
+            "buffer_atr": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "is_invalidation": {
+              "description": "一条线:硬止损 = 失效线(+ buffer)",
+              "const": true
+            },
+            "min_stop_atr": {
+              "description": "结构口径:止损离入场不到 k×ATR(14) 的单子不做(不把止损挪远);旧口径为 null",
+              "type": [
+                "number",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "primitive",
+            "buffer_atr",
+            "is_invalidation",
+            "min_stop_atr"
+          ]
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BindingTarget"
+          },
+          "description": "最多 5 档(order.take_profits 上限)"
+        },
+        "target_policy": {
+          "description": "chart = 图上价位止盈,算不出就不设、交给追踪止损;user_r = 用户原话要求的 R 倍数;signal_exit = 止盈由用户的信号离场决定,不补价位;trail_only = 只有追踪止损",
+          "enum": [
+            "chart",
+            "user_r",
+            "signal_exit",
+            "trail_only"
+          ]
+        },
+        "trail": {
+          "anyOf": [
+            {
+              "$ref": "research.json#/$defs/StrategyPrimitive"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "breakeven_after_tp": {
+          "type": "boolean"
+        },
+        "breakeven_after_r": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "max_holding_bars": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "signal_exits": {
+          "type": "array",
+          "items": {
+            "$ref": "research.json#/$defs/StrategyPrimitive"
+          },
+          "maxItems": 30
+        },
+        "min_rr": {
+          "description": "只有用户硬约束(order.min_rr)才有值、才拦单;结构口径下盈亏比只计算展示",
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "risk": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "sizing": {
+              "$ref": "research.json#/$defs/StrategyPrimitive"
+            },
+            "leverage": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 125
+            },
+            "leverage_cap": {
+              "description": "实盘杠杆上限(研究侧 MAX_RESEARCH_LEVERAGE);IR 超过它编译 block",
+              "type": "number"
+            },
+            "max_risk_fraction": {
+              "description": "单笔初始风险占权益上限(订单门 max_risk_fraction,小数字符串)",
+              "type": "string",
+              "maxLength": 20
+            }
+          },
+          "required": [
+            "sizing",
+            "leverage",
+            "leverage_cap",
+            "max_risk_fraction"
+          ]
+        },
+        "model": {
+          "description": "模型在这条策略里的角色(Codex 复审:agent_mode 拆成 entry_filter / exit_discretion)。缺省 entry_filter=on、exit_discretion=off:模型只决定做/不做,不改任何价位,持仓期零模型调用;最终取值由 A/C 臂配对证据定,属于部署决定",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "entry_filter": {
+              "enum": [
+                "on",
+                "off"
+              ]
+            },
+            "exit_discretion": {
+              "enum": [
+                "on",
+                "off"
+              ]
+            },
+            "outputs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 40
+              },
+              "maxItems": 10
+            },
+            "forbidden": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "maxItems": 20
+            }
+          },
+          "required": [
+            "entry_filter",
+            "exit_discretion",
+            "outputs",
+            "forbidden"
+          ]
+        },
+        "roles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BindingRoleSlice"
+          },
+          "description": "固定六片,顺序 radar / judge / geometry / risk / holding / execution"
+        },
+        "unmapped": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BindingUnmapped"
+          },
+          "maxItems": 100
+        },
+        "deployable": {
+          "description": "unmapped 里没有 block;false = 编译失败,不能下发",
+          "type": "boolean"
+        },
+        "evidence_refs": {
+          "description": "evidence 会变,不嵌进绑定:只存这版的回测报告 id",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "report_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 4000
+              },
+              "maxItems": 500
+            }
+          },
+          "required": [
+            "report_ids"
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "compiler_version",
+        "strategy_id",
+        "version",
+        "ir_hash",
+        "content_hash",
+        "compiled_at",
+        "libs",
+        "horizon",
+        "timeframe",
+        "confirm_timeframe",
+        "symbol",
+        "market",
+        "direction",
+        "trigger",
+        "evidence_plan",
+        "entry",
+        "stop",
+        "targets",
+        "target_policy",
+        "trail",
+        "breakeven_after_tp",
+        "breakeven_after_r",
+        "max_holding_bars",
+        "signal_exits",
+        "min_rr",
+        "risk",
+        "model",
+        "roles",
+        "unmapped",
+        "deployable",
+        "evidence_refs"
+      ]
+    },
+    "StrategyBindingResponse": {
+      "description": "GET /api/research/strategies/:id/binding[?version=] 只读编译结果;策略还没有 IR(规则未编码的草稿)时 binding=null,unmapped 说明缺什么",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "strategy_id": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "version": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "lab_strategy_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4000
+        },
+        "binding": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StrategyBinding"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "unmapped": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BindingUnmapped"
+          },
+          "maxItems": 100
+        }
+      },
+      "required": [
+        "strategy_id",
+        "version",
+        "lab_strategy_id",
+        "binding",
+        "unmapped"
+      ]
+    },
+    "BuiltinImportItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "builtin_id": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "strategy_id": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "created": {
+          "description": "true = 本次新建;false = 已存在(幂等,不重复建)",
+          "type": "boolean"
+        },
+        "version": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "translation": {
+          "description": "full = 整条译成 IR;partial = 部分可译,其余进 unmapped;none = 规则未编码(缺原语),只建草稿",
+          "enum": [
+            "full",
+            "partial",
+            "none"
+          ]
+        },
+        "report_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4000
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 2000
+        }
+      },
+      "required": [
+        "builtin_id",
+        "strategy_id",
+        "created",
+        "version",
+        "translation",
+        "report_id",
+        "error"
+      ]
+    },
+    "BuiltinImportResult": {
+      "description": "POST /api/research/strategies/import-builtin {backtest?, ids?} 的结果;按 origin.source='import' + lab_strategy_id=<内置 id> 幂等",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BuiltinImportItem"
+          },
+          "maxItems": 50
+        }
+      },
+      "required": [
+        "items"
+      ]
+    }
+  }
+}

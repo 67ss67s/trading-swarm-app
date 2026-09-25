@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "account": "main",
+  "channel": "rest",
+  "computed_at": 1788350000000,
+  "consistency": "consistent",
+  "account_version": "0000000000000000000000000000000000000000000000000000000000000000",
+  "span_ms": 40,
+  "components": {
+    "balances": {
+      "observed_at": 1788349999960,
+      "fetched_from": 1788349999910,
+      "fetched_to": 1788349999960,
+      "completeness": "complete",
+      "source": "rest",
+      "data": [
+        {
+          "asset": "USDT",
+          "wallet": "usdm_futures",
+          "wallet_balance": "2500",
+          "available": "2100.25",
+          "unrealized_pnl": "-12.5"
+        },
+        {
+          "asset": "USDT",
+          "wallet": "spot",
+          "wallet_balance": "300",
+          "available": "300"
+        }
+      ]
+    },
+    "positions": {
+      "observed_at": 1788349999970,
+      "fetched_from": 1788349999920,
+      "fetched_to": 1788349999970,
+      "completeness": "complete",
+      "source": "ws",
+      "data": [
+        {
+          "symbol": "ETHUSDT",
+          "product": "usdm_perp",
+          "position_side": "both",
+          "qty": "-0.5",
+          "entry_price": "2950.4",
+          "mark_price": "2975.4",
+          "unrealized_pnl": "-12.5",
+          "leverage": 3,
+          "margin_type": "isolated",
+          "isolated_margin": "491.7",
+          "liquidation_price": "3890.2",
+          "notional": "-1487.7",
+          "exchange_update_time": 1788349999969
+        }
+      ]
+    },
+    "open_orders": {
+      "observed_at": 1788350000000,
+      "fetched_from": 1788349999980,
+      "fetched_to": 1788350000000,
+      "completeness": "complete",
+      "source": "ws",
+      "data": [
+        {
+          "exchange_order_id": "112233445566",
+          "client_order_id": "web_abc123",
+          "symbol": "ETHUSDT",
+          "product": "usdm_perp",
+          "side": "buy",
+          "position_side": "both",
+          "order_type": "stop_market",
+          "status": "new",
+          "orig_qty": "0.5",
+          "executed_qty": "0",
+          "stop_price": "3100",
+          "reduce_only": true,
+          "close_position": true,
+          "working_type": "mark_price",
+          "origin": "foreign",
+          "exchange_update_time": 1788349995000
+        }
+      ]
+    },
+    "position_mode": {
+      "observed_at": 1788349999960,
+      "fetched_from": 1788349999955,
+      "fetched_to": 1788349999960,
+      "completeness": "complete",
+      "source": "rest",
+      "data": {
+        "mode": "one_way"
+      }
+    }
+  },
+  "summary": {
+    "quote_asset": "USDT",
+    "wallet_balance": "2500",
+    "margin_balance": "2487.5",
+    "available_balance": "2100.25",
+    "unrealized_pnl": "-12.5",
+    "today_realized_pnl": "3.2",
+    "open_position_count": 1,
+    "open_order_count": 1
+  }
+}

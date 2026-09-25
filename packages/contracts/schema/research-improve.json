@@ -1,0 +1,1629 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trading-swarm.local/schema/research-improve.json",
+  "title": "ResearchImproveObject",
+  "description": "策略自动改进与复验环(Improver)第一阶段:POST/GET /api/research/improve 的请求与响应,SSE 事件 research.improve。设计见 docs/research/improver-design-2026-09-23.md。",
+  "anyOf": [
+    {
+      "$ref": "#/$defs/ImproveJobDetail"
+    },
+    {
+      "$ref": "#/$defs/ImproveJobList"
+    },
+    {
+      "$ref": "#/$defs/ImproveAccepted"
+    },
+    {
+      "$ref": "#/$defs/ImproveJobSummary"
+    },
+    {
+      "$ref": "#/$defs/ImproveEvent"
+    }
+  ],
+  "$defs": {
+    "ImproveRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "strategy_id": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "strategy_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "strategy_ir": {
+          "$ref": "research.json#/$defs/StrategyIR"
+        },
+        "timeframe": {
+          "type": "string",
+          "maxLength": 16
+        },
+        "universe": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 30,
+          "items": {
+            "type": "string",
+            "maxLength": 40
+          }
+        },
+        "from_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "to_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "objective": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "min_trades_per_fold": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "min_trades_total": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "max_drawdown": {
+              "type": "number"
+            },
+            "require_stress_positive": {
+              "type": "boolean"
+            },
+            "require_beats_exposure_matched_hold": {
+              "type": "boolean"
+            },
+            "plateau_ratio": {
+              "type": "number"
+            },
+            "stability_penalty": {
+              "type": "number"
+            }
+          }
+        },
+        "budget": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "generations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "candidates_per_generation": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "promote_per_generation": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "wall_clock_ms": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "model_calls": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "patience": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "generators": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 5,
+          "items": {
+            "enum": [
+              "baseline",
+              "diagnosis",
+              "neighborhood",
+              "swap",
+              "oracle",
+              "model"
+            ]
+          }
+        },
+        "dataset_ids": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "maxLength": 64
+          }
+        },
+        "random_entry_runs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "seed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "write_version": {
+          "type": "boolean"
+        }
+      },
+      "required": []
+    },
+    "ImproveAccepted": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "job_id": {
+          "type": "string",
+          "maxLength": 80
+        }
+      },
+      "required": [
+        "job_id"
+      ]
+    },
+    "ImproveObjective": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "min_trades_per_fold": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "min_trades_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_drawdown": {
+          "type": "number"
+        },
+        "require_stress_positive": {
+          "type": "boolean"
+        },
+        "require_beats_exposure_matched_hold": {
+          "type": "boolean"
+        },
+        "plateau_ratio": {
+          "type": "number"
+        },
+        "stability_penalty": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "min_trades_per_fold",
+        "min_trades_total",
+        "max_drawdown",
+        "require_stress_positive",
+        "require_beats_exposure_matched_hold",
+        "plateau_ratio"
+      ]
+    },
+    "ImproveBudget": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "generations": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "candidates_per_generation": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "promote_per_generation": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "wall_clock_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "model_calls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "patience": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "allow_explore": {
+          "type": "boolean",
+          "description": "多步搜索(缺省 true):没有 promote 的代,训练目标高于父策略的最好候选(门槛没过也行)作下一代父策略;冠军只从门槛全过且验证段优于基线的候选里选"
+        }
+      },
+      "required": [
+        "generations",
+        "candidates_per_generation",
+        "promote_per_generation",
+        "wall_clock_ms",
+        "model_calls"
+      ]
+    },
+    "ImproveSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "strategy_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 80
+        },
+        "strategy_version": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "strategy_ir": {
+          "$ref": "research.json#/$defs/StrategyIR"
+        },
+        "timeframe": {
+          "type": "string",
+          "maxLength": 16
+        },
+        "universe": {
+          "type": "array",
+          "maxItems": 30,
+          "items": {
+            "type": "string",
+            "maxLength": 40
+          }
+        },
+        "from_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "to_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "objective": {
+          "$ref": "#/$defs/ImproveObjective"
+        },
+        "budget": {
+          "$ref": "#/$defs/ImproveBudget"
+        },
+        "generators": {
+          "type": "array",
+          "maxItems": 5,
+          "items": {
+            "enum": [
+              "baseline",
+              "diagnosis",
+              "neighborhood",
+              "swap",
+              "oracle",
+              "model"
+            ]
+          }
+        },
+        "dataset_ids": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string",
+            "maxLength": 64
+          }
+        },
+        "random_entry_runs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "seed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "write_version": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "strategy_id",
+        "strategy_version",
+        "strategy_ir",
+        "timeframe",
+        "universe",
+        "from_ms",
+        "to_ms",
+        "objective",
+        "budget",
+        "generators",
+        "dataset_ids",
+        "random_entry_runs",
+        "seed",
+        "write_version"
+      ]
+    },
+    "ImproveFrozen": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "universe": {
+          "type": "array",
+          "maxItems": 30,
+          "items": {
+            "type": "string",
+            "maxLength": 40
+          }
+        },
+        "timeframe": {
+          "type": "string",
+          "maxLength": 16
+        },
+        "timeframe_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "warmup_bars": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "segments": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "folds": {
+              "type": "array",
+              "maxItems": 20,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "from_ms": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "to_ms": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "from_ms",
+                  "to_ms"
+                ]
+              }
+            },
+            "train": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "from_ms": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "to_ms": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "from_ms",
+                "to_ms"
+              ]
+            },
+            "validation": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "from_ms": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "to_ms": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "from_ms",
+                "to_ms"
+              ]
+            },
+            "holdout": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "from_ms": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "to_ms": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "from_ms",
+                "to_ms"
+              ]
+            }
+          },
+          "required": [
+            "folds",
+            "train",
+            "validation",
+            "holdout"
+          ]
+        },
+        "dataset_ids": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "maxLength": 64
+          }
+        },
+        "bars": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "market": {
+          "enum": [
+            "spot",
+            "perp"
+          ]
+        }
+      },
+      "required": [
+        "universe",
+        "timeframe",
+        "timeframe_ms",
+        "warmup_bars",
+        "segments",
+        "dataset_ids",
+        "bars"
+      ]
+    },
+    "ImproveSegmentScore": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "segment": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "trades": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total_return": {
+          "type": "number"
+        },
+        "sharpe": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "max_drawdown": {
+          "type": "number"
+        },
+        "exposure": {
+          "type": "number"
+        },
+        "exposure_matched_hold": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "stressed_return": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "from_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "to_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "hold_return": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "btc_hold_return": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "daily_sharpe": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "days": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "win_rate": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "profit_factor": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "fees": {
+          "type": "number"
+        },
+        "per_asset": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "symbol": {
+                "type": "string",
+                "maxLength": 40
+              },
+              "total_return": {
+                "type": "number"
+              },
+              "trades": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "hold_return": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "status": {
+                "type": "string",
+                "maxLength": 40
+              }
+            },
+            "required": [
+              "symbol",
+              "total_return",
+              "trades",
+              "hold_return",
+              "status"
+            ]
+          }
+        }
+      },
+      "required": [
+        "segment",
+        "trades",
+        "total_return",
+        "sharpe",
+        "max_drawdown",
+        "exposure",
+        "exposure_matched_hold",
+        "stressed_return"
+      ]
+    },
+    "ImproveGateResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "value": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "threshold": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 4000
+        }
+      },
+      "required": [
+        "name",
+        "ok",
+        "value",
+        "threshold"
+      ]
+    },
+    "ImproveEvaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "candidate_id": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "folds": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "$ref": "#/$defs/ImproveSegmentScore"
+          }
+        },
+        "train": {
+          "$ref": "#/$defs/ImproveSegmentScore"
+        },
+        "validation": {
+          "$ref": "#/$defs/ImproveSegmentScore"
+        },
+        "holdout": {
+          "$ref": "#/$defs/ImproveSegmentScore"
+        },
+        "objective": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "gates": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "$ref": "#/$defs/ImproveGateResult"
+          }
+        },
+        "passed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "folds",
+        "objective",
+        "gates",
+        "passed"
+      ]
+    },
+    "ImproveDiff": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "from": {},
+        "to": {}
+      },
+      "required": [
+        "path",
+        "from",
+        "to"
+      ]
+    },
+    "ImproveCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "parent_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 80
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "generator": {
+          "enum": [
+            "baseline",
+            "diagnosis",
+            "neighborhood",
+            "swap",
+            "oracle",
+            "model"
+          ]
+        },
+        "status": {
+          "enum": [
+            "rejected",
+            "evaluated",
+            "gated_out",
+            "plateau_failed",
+            "validated",
+            "parent",
+            "explore_parent",
+            "champion"
+          ]
+        },
+        "ir_hash": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "strategy_ir": {
+          "$ref": "research.json#/$defs/StrategyIR"
+        },
+        "diff": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "$ref": "#/$defs/ImproveDiff"
+          }
+        },
+        "rationale": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "evidence": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "evaluation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ImproveEvaluation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "parent_id",
+        "generation",
+        "generator",
+        "status",
+        "ir_hash",
+        "strategy_ir",
+        "diff",
+        "rationale",
+        "evidence",
+        "evaluation"
+      ]
+    },
+    "ImproveLeaderboardRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "generator": {
+          "enum": [
+            "baseline",
+            "diagnosis",
+            "neighborhood",
+            "swap",
+            "oracle",
+            "model"
+          ]
+        },
+        "status": {
+          "enum": [
+            "rejected",
+            "evaluated",
+            "gated_out",
+            "plateau_failed",
+            "validated",
+            "parent",
+            "explore_parent",
+            "champion"
+          ]
+        },
+        "objective": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "failed_gates": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "train_return": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "train_sharpe": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "train_trades": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "validation_return": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "validation_sharpe": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "holdout_return": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "generation",
+        "generator",
+        "status",
+        "objective",
+        "passed",
+        "failed_gates",
+        "train_return",
+        "train_sharpe",
+        "train_trades",
+        "validation_return",
+        "validation_sharpe",
+        "holdout_return"
+      ]
+    },
+    "ImproveGenerationProgress": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "generation": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "parent_id": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "candidates": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "evaluated": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "passed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "promoted": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "improved": {
+          "type": "boolean"
+        },
+        "best_candidate_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 80
+        },
+        "best_objective": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "mode": {
+          "enum": [
+            "promote",
+            "explore",
+            null
+          ],
+          "description": "这一代怎么选出下一代父策略:promote=门槛全过且验证段优于冠军;explore=训练目标更高的多步搜索父策略(不能当冠军);null=都没有"
+        },
+        "champion_id": {
+          "type": "string",
+          "maxLength": 80,
+          "description": "这一代结束时的冠军"
+        }
+      },
+      "required": [
+        "generation",
+        "parent_id",
+        "candidates",
+        "evaluated",
+        "passed",
+        "promoted",
+        "improved",
+        "best_candidate_id",
+        "best_objective",
+        "note"
+      ]
+    },
+    "ImproveProgress": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "phase": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "generations": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "$ref": "#/$defs/ImproveGenerationProgress"
+          }
+        },
+        "trials": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "single_runs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "started_at": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "elapsed_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "stop_reason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 80
+        },
+        "notes": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "type": "string",
+            "maxLength": 4000
+          }
+        }
+      },
+      "required": [
+        "phase",
+        "message",
+        "generation",
+        "generations",
+        "trials",
+        "single_runs",
+        "started_at",
+        "elapsed_ms",
+        "stop_reason",
+        "notes"
+      ]
+    },
+    "ImproveRandomEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "runs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "seed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "segment": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "returns": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "type": "number"
+          }
+        },
+        "trades": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "sharpes": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "median_return": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "champion_return": {
+          "type": "number"
+        },
+        "champion_percentile": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 4000
+        }
+      },
+      "required": [
+        "runs",
+        "seed",
+        "segment",
+        "returns",
+        "trades",
+        "sharpes",
+        "median_return",
+        "champion_return",
+        "champion_percentile",
+        "note"
+      ]
+    },
+    "ImproveLedger": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "trials": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "deflated_sharpe": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "pbo": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "random_entry_baseline": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ImproveSegmentScore"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "notes": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "type": "string",
+            "maxLength": 4000
+          }
+        },
+        "deflated_inputs": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "sharpe": {
+                  "type": "number"
+                },
+                "sharpe_variance": {
+                  "type": "number"
+                },
+                "expected_max_sharpe": {
+                  "type": "number"
+                },
+                "days": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "skew": {
+                  "type": "number"
+                },
+                "kurtosis": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "sharpe",
+                "sharpe_variance",
+                "expected_max_sharpe",
+                "days",
+                "skew",
+                "kurtosis"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "plateau_checks": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "random_entry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ImproveRandomEntry"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "trials",
+        "deflated_sharpe",
+        "pbo",
+        "random_entry_baseline",
+        "notes"
+      ]
+    },
+    "ImproveResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "champion_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 80
+        },
+        "baseline_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 80
+        },
+        "champion_is_baseline": {
+          "type": "boolean"
+        },
+        "holdout": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ImproveSegmentScore"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "baseline_validation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ImproveSegmentScore"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "strategy_version_written": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "stop_reason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 80
+        },
+        "summary": {
+          "type": "string",
+          "maxLength": 4000
+        }
+      },
+      "required": [
+        "champion_id",
+        "baseline_id",
+        "champion_is_baseline",
+        "holdout",
+        "baseline_validation",
+        "strategy_version_written",
+        "stop_reason",
+        "summary"
+      ]
+    },
+    "ImproveJobSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "status": {
+          "enum": [
+            "queued",
+            "running",
+            "completed",
+            "failed",
+            "cancelled",
+            "interrupted"
+          ]
+        },
+        "strategy_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 80
+        },
+        "strategy_version": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "timeframe": {
+          "type": "string",
+          "maxLength": 16
+        },
+        "universe": {
+          "type": "array",
+          "maxItems": 30,
+          "items": {
+            "type": "string",
+            "maxLength": 40
+          }
+        },
+        "created_at": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "updated_at": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "finished_at": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "phase": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 40
+        },
+        "message": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4000
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "trials": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "champion_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 80
+        },
+        "summary": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4000
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4000
+        }
+      },
+      "required": [
+        "id",
+        "status",
+        "strategy_id",
+        "strategy_version",
+        "label",
+        "timeframe",
+        "universe",
+        "created_at",
+        "updated_at",
+        "finished_at",
+        "phase",
+        "message",
+        "generation",
+        "trials",
+        "champion_id",
+        "summary",
+        "error"
+      ]
+    },
+    "ImproveJobList": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "jobs": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "$ref": "#/$defs/ImproveJobSummary"
+          }
+        }
+      },
+      "required": [
+        "jobs"
+      ]
+    },
+    "ImproveJobDetail": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "job": {
+          "$ref": "#/$defs/ImproveJobSummary"
+        },
+        "spec": {
+          "$ref": "#/$defs/ImproveSpec"
+        },
+        "frozen": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ImproveFrozen"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "progress": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ImproveProgress"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ledger": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ImproveLedger"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "result": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ImproveResult"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lineage": {
+          "type": "array",
+          "maxItems": 500,
+          "items": {
+            "$ref": "#/$defs/ImproveCandidate"
+          }
+        },
+        "leaderboard": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "$ref": "#/$defs/ImproveLeaderboardRow"
+          }
+        },
+        "generators_available": {
+          "type": "array",
+          "maxItems": 10,
+          "items": {
+            "enum": [
+              "baseline",
+              "diagnosis",
+              "neighborhood",
+              "swap",
+              "oracle",
+              "model"
+            ]
+          }
+        }
+      },
+      "required": [
+        "job",
+        "spec",
+        "frozen",
+        "progress",
+        "ledger",
+        "result",
+        "lineage",
+        "leaderboard",
+        "generators_available"
+      ]
+    },
+    "ImproveEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "job_id": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "phase": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "trials": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "status": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "candidate": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string",
+              "maxLength": 80
+            },
+            "generator": {
+              "enum": [
+                "baseline",
+                "diagnosis",
+                "neighborhood",
+                "swap",
+                "oracle",
+                "model"
+              ]
+            },
+            "objective": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "passed": {
+              "type": "boolean"
+            },
+            "status": {
+              "enum": [
+                "rejected",
+                "evaluated",
+                "gated_out",
+                "plateau_failed",
+                "validated",
+                "parent",
+                "explore_parent",
+                "champion"
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "generator",
+            "objective",
+            "passed",
+            "status"
+          ]
+        }
+      },
+      "required": [
+        "job_id",
+        "phase",
+        "generation",
+        "message",
+        "trials"
+      ]
+    }
+  }
+}

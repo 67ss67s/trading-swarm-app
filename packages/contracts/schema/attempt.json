@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trading-swarm.dev/schema/attempt.json",
+  "title": "ExecutionAttempt",
+  "description": "一次对交易所的写调用(设计 §5.1)。clientOrderId 与完整订单指纹在调用前持久化(stage=before_submit);同 id 重发必须是交易所级幂等,否则不重发;结果 unknown 非终态,由 reconciler 按 clientOrderId 收敛。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "attempt_id",
+    "intent_id",
+    "plan_id",
+    "plan_hash",
+    "attempt_no",
+    "leg",
+    "leg_index",
+    "account",
+    "channel",
+    "client_order_id",
+    "order_fingerprint",
+    "writer_instance_id",
+    "lease_epoch",
+    "fencing_token",
+    "stage",
+    "result",
+    "created_at",
+    "deadline_at"
+  ],
+  "properties": {
+    "schema_version": { "$ref": "common.json#/$defs/SchemaVersion" },
+    "attempt_id": { "$ref": "common.json#/$defs/Uuid" },
+    "intent_id": { "$ref": "common.json#/$defs/Uuid" },
+    "plan_id": { "$ref": "common.json#/$defs/Uuid" },
+    "plan_hash": { "$ref": "common.json#/$defs/Hash256" },
+    "attempt_no": { "type": "integer", "minimum": 1 },
+    "leg": { "$ref": "common.json#/$defs/Leg" },
+    "leg_index": { "type": "integer", "minimum": 0, "description": "同类腿的序号,如第 2 个止盈腿" },
+    "account": { "$ref": "common.json#/$defs/AccountRef" },
+    "channel": { "$ref": "common.json#/$defs/Channel" },
+    "client_order_id": {
+      "$ref": "common.json#/$defs/ClientOrderId",
+      "description": "tg-<intent_id 前 12 hex>-<leg 码 e|s|t|c|x|f>-<attempt_no>;transfer 类放 transfer 的 client tran id"
+    },
+    "order_fingerprint": {
+      "type": "string",
+      "maxLength": 1024,
+      "description": "canonical_json(实际发送给交易所的参数,脱敏)——对账时与交易所回显逐字比对"
+    },
+    "writer_instance_id": { "type": "string", "maxLength": 128 },
+    "lease_epoch": { "type": "integer", "minimum": 0 },
+    "fencing_token": { "type": "string", "maxLength": 128 },
+    "stage": { "$ref": "common.json#/$defs/AttemptStage" },
+    "result": { "$ref": "common.json#/$defs/AttemptResult" },
+    "created_at": { "$ref": "common.json#/$defs/TimestampMs" },
+    "submitted_at": { "$ref": "common.json#/$defs/TimestampMs" },
+    "deadline_at": {
+      "$ref": "common.json#/$defs/TimestampMs",
+      "description": "调用截止;超过仍无结果 → result=unknown"
+    },
+    "result_at": { "$ref": "common.json#/$defs/TimestampMs" },
+    "exchange_order_id": { "type": "string", "maxLength": 64 },
+    "exchange_ref": {
+      "type": "string",
+      "maxLength": 128,
+      "description": "非订单类效果的交易所引用,如 transfer 的 tranId"
+    },
+    "error": { "$ref": "common.json#/$defs/ErrorInfo" },
+    "tool_name": {
+      "type": "string",
+      "maxLength": 128,
+      "description": "MCP 通道:实际调用的工具名(来自钉版快照)"
+    },
+    "tools_hash": {
+      "$ref": "common.json#/$defs/Hash256",
+      "description": "MCP 通道:调用时的 tools/list 快照哈希(漂移守卫)"
+    }
+  }
+}

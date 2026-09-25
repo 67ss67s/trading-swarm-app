@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trading-swarm.dev/schema/events.json",
+  "title": "ExecEvent",
+  "description": "execd 发出的事件(UDS 通知 exec.event,同时落 exec.sqlite events 表,seq 单调,支持 since_seq 回放)。gateway 把它桥接到自己的事件总线与 events 表——'事件即审计'口径(设计 §4)。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "seq", "event", "at", "payload"],
+  "properties": {
+    "schema_version": { "$ref": "common.json#/$defs/SchemaVersion" },
+    "seq": { "type": "integer", "minimum": 1 },
+    "event": { "$ref": "#/$defs/EventName" },
+    "at": { "$ref": "common.json#/$defs/TimestampMs" },
+    "account": { "$ref": "common.json#/$defs/AccountRef" },
+    "intent_id": { "$ref": "common.json#/$defs/Uuid" },
+    "plan_id": { "$ref": "common.json#/$defs/Uuid" },
+    "attempt_id": { "$ref": "common.json#/$defs/Uuid" },
+    "symbol": { "$ref": "common.json#/$defs/Symbol" },
+    "payload": {
+      "type": "object",
+      "description": "事件专属载荷(通常是对应记录本身或其差分)"
+    }
+  },
+  "$defs": {
+    "EventName": {
+      "type": "string",
+      "enum": [
+        "intent.created",
+        "intent.rejected",
+        "intent.awaiting_approval",
+        "intent.authorized",
+        "intent.recorded",
+        "intent.dispatching",
+        "intent.executing",
+        "intent.execution_unknown",
+        "intent.completed",
+        "intent.canceled",
+        "intent.expired",
+        "plan.materialized",
+        "authorization.granted",
+        "authorization.consumed",
+        "authorization.invalidated",
+        "authorization.expired",
+        "authorization.revoked",
+        "attempt.submitting",
+        "attempt.submitted",
+        "attempt.resolved",
+        "order.observed",
+        "fill.observed",
+        "effect.evaluated",
+        "protection.confirmed",
+        "protection.missing",
+        "protection.compensated",
+        "account.updated",
+        "account.stale",
+        "account.inconsistent",
+        "foreign_activity.detected",
+        "exchange.auth.expiring",
+        "exchange.auth.expired",
+        "exchange.auth.revoked",
+        "exchange.auth.refreshed",
+        "exchange.tools.drift",
+        "exchange.channel.degraded",
+        "exchange.channel.recovered",
+        "policy.changed",
+        "halt.changed",
+        "writer.fenced",
+        "corruption.detected",
+        "health"
+      ]
+    }
+  }
+}

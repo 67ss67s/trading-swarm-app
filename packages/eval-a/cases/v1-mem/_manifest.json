@@ -1,0 +1,29 @@
+{
+  "generated_with": {
+    "from": "~/Desktop/trading-swarm/packages/eval-a/cases/v1",
+    "seed": "7",
+    "set": "v1-mem",
+    "source_cases": 108
+  },
+  "cases": 168,
+  "tag_counts": {
+    "scan": 48,
+    "base": 12,
+    "mem:base": 42,
+    "mem:helpful": 42,
+    "mem:irrelevant": 42,
+    "mem:poison": 42,
+    "mem:cmd:short": 25,
+    "review": 120,
+    "pending_entry": 20,
+    "short": 96,
+    "entry:limit": 24,
+    "mem:cmd:long": 17,
+    "in_position": 100,
+    "entry:market": 96,
+    "long": 24,
+    "tp-crossed": 8,
+    "far-from-entry": 8,
+    "stop-crossed": 8
+  }
+}

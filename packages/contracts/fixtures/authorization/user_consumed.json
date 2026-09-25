@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "authorization_id": "16fd2706-8baf-433b-82eb-8c7fada847da",
+  "intent_id": "0f8fad5b-d9cb-469f-a165-70867728950e",
+  "plan_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+  "plan_hash": "474838171b83561288f58fc3ebdaf96c236f5ff4983b1556cac37ee8cc22433c",
+  "by": "user",
+  "principal": "user",
+  "surface": "rpc",
+  "actor_ref": "ws-conn:7f3a",
+  "status": "consumed",
+  "confirm_echo": {
+    "plan_hash": "474838171b83561288f58fc3ebdaf96c236f5ff4983b1556cac37ee8cc22433c",
+    "symbol": "BTCUSDT",
+    "side": "buy",
+    "qty": "0.002",
+    "order_type": "limit",
+    "price": "60000.5",
+    "leverage": "2",
+    "reduce_only": "false"
+  },
+  "granted_at": 1788350100000,
+  "expires_at": 1788350220000,
+  "consumed_at": 1788350105000,
+  "consumed_by_attempt_id": "9b2c3d4e-5f60-4718-8a9b-0c1d2e3f4a5b"
+}

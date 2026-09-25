@@ -1,0 +1,175 @@
+/* 霓虹实验室:共享皮肤变量对齐 floor-scene-command / ca24d22。
+   旧 deck 挂点的外观回退也只在本场景生效,不移动桌位、覆盖角色色或状态色。
+   无新增 DOM / 接线;常驻动画仅两侧灯管各一个,共用 16s opacity 呼吸。
+   招牌、地砖、操作台均静态;屏幕内保留现有真实步骤和事件动效。 */
+.of-scene-meme {
+  --of-floor-bg: var(--of-bg);
+  --of-floor-texture:
+    radial-gradient(ellipse at 0% 25%, color-mix(in srgb, var(--of-accent) 7%, transparent), transparent 48%),
+    radial-gradient(ellipse at 100% 38%, color-mix(in srgb, var(--of-danger) 8%, transparent), transparent 48%),
+    repeating-linear-gradient(0deg, transparent 0 47px, color-mix(in srgb, var(--of-line) 36%, transparent) 47px 48px),
+    repeating-linear-gradient(90deg, transparent 0 63px, color-mix(in srgb, var(--of-line) 36%, transparent) 63px 64px);
+  --of-wall-bg: linear-gradient(180deg, var(--of-panel-2), var(--of-panel));
+  --of-wall-trim: color-mix(in srgb, var(--of-accent) 28%, var(--of-line));
+  --of-desk-skin: linear-gradient(165deg, color-mix(in srgb, var(--of-info) 12%, var(--of-bg)), var(--of-bg) 48%, var(--of-panel) 49%, var(--of-bg));
+  --of-desk-edge: color-mix(in srgb, var(--of-accent) 62%, var(--of-line));
+  --of-desk-front: var(--of-panel);
+  --of-desk-leg: color-mix(in srgb, var(--of-info) 20%, var(--of-bg));
+  --of-lamp: var(--of-accent);
+  --of-screen-glow: var(--of-accent);
+  --of-screen-bg: var(--of-bg);
+  --of-room-light: var(--of-info);
+  --of-core-glow: var(--of-accent);
+}
+
+/* 单一低对比地板,不再用宽走廊把工位分成卡片。 */
+.of-scene-meme .of-deck {
+  background: var(--of-floor-texture), var(--of-floor-bg);
+  border: 1px solid var(--of-wall-trim);
+  box-shadow:
+    inset 0 3px 0 var(--of-panel-2),
+    inset 0 0 0 8px color-mix(in srgb, var(--of-panel) 65%, transparent),
+    inset 0 0 48px color-mix(in srgb, var(--of-room-light) 5%, transparent);
+}
+
+/* 两根实体灯管,都在 z=0 的墙边;没有跨桌常驻线,不截获任何交互。 */
+.of-scene-meme .of-deck::before,
+.of-scene-meme .of-deck::after {
+  content: "";
+  position: absolute;
+  inset: 48px auto 36px 12px;
+  width: 3px;
+  border: 0;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--of-accent) 75%, var(--of-ink));
+  box-shadow:
+    0 0 6px var(--of-accent),
+    0 0 18px color-mix(in srgb, var(--of-accent) 55%, transparent),
+    5px 0 38px color-mix(in srgb, var(--of-accent) 24%, transparent);
+  opacity: .7;
+  animation: of-meme-tube-breathe 16s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+.of-scene-meme .of-deck::after {
+  left: auto;
+  right: 12px;
+  background: color-mix(in srgb, var(--of-danger) 75%, var(--of-ink));
+  box-shadow:
+    0 0 6px var(--of-danger),
+    0 0 18px color-mix(in srgb, var(--of-danger) 55%, transparent),
+    -5px 0 38px color-mix(in srgb, var(--of-danger) 24%, transparent);
+  animation-delay: -8s;
+}
+@keyframes of-meme-tube-breathe {
+  0%, 100% { opacity: .55; }
+  50% { opacity: .85; }
+}
+
+/* 只装饰 scenes.ts 的现有分区文案,不伪造在线状态或行情数字。 */
+.of-scene-meme .of-zone {
+  color: var(--of-accent);
+  font-weight: 700;
+  letter-spacing: .22em;
+  text-shadow: 0 0 6px color-mix(in srgb, var(--of-accent) 65%, transparent);
+  z-index: 1;
+}
+.of-scene-meme .of-zone-l { left: 23px; }
+.of-scene-meme .of-zone-r {
+  right: 23px;
+  color: var(--of-danger);
+  text-shadow: 0 0 6px color-mix(in srgb, var(--of-danger) 65%, transparent);
+}
+.of-scene-meme .of-zone-t {
+  top: 12px;
+  padding: 4px 20px 5px;
+  border: 1px solid color-mix(in srgb, var(--of-danger) 45%, var(--of-line));
+  border-radius: 3px;
+  background: var(--of-wall-bg);
+  color: var(--of-danger);
+  font-size: 18px;
+  font-style: italic;
+  letter-spacing: .28em;
+  line-height: 1.2;
+  box-shadow: 0 0 16px color-mix(in srgb, var(--of-danger) 10%, transparent), inset 0 0 10px color-mix(in srgb, var(--of-danger) 6%, transparent);
+  text-shadow: 0 0 3px color-mix(in srgb, var(--of-danger) 85%, var(--of-ink)), 0 0 12px color-mix(in srgb, var(--of-danger) 60%, transparent);
+}
+.of-scene-meme .of-zone-b {
+  padding: 2px 10px;
+  border-bottom: 1px solid var(--of-wall-trim);
+  background: var(--of-floor-bg);
+}
+
+/* 黑色亮面、青色桌沿与短桌腿。仅换皮肤,保留可点击桌面和角色名称。 */
+.of-scene-meme .of-desk-table {
+  background: var(--of-desk-skin);
+  border-color: var(--of-desk-edge);
+  border-radius: 6px 6px 10px 10px;
+  box-shadow:
+    0 5px 0 var(--of-desk-front),
+    0 6px 0 color-mix(in srgb, var(--of-desk-edge) 48%, var(--of-bg)),
+    0 9px 16px color-mix(in srgb, var(--of-bg) 70%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--of-accent) 22%, transparent),
+    0 0 12px color-mix(in srgb, var(--of-accent) 8%, transparent);
+}
+.of-scene-meme .of-desk-table::before {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--of-accent) 25%, transparent), transparent 65%);
+  pointer-events: none;
+}
+.of-scene-meme .of-desk-table::after {
+  content: "";
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 12%;
+  right: 12%;
+  height: 10px;
+  background:
+    linear-gradient(var(--of-desk-leg), var(--of-floor-bg)) left / 7px 100% no-repeat,
+    linear-gradient(var(--of-desk-leg), var(--of-floor-bg)) right / 7px 100% no-repeat;
+  pointer-events: none;
+}
+.of-scene-meme .of-desk-screen {
+  background: var(--of-screen-bg);
+  border-color: color-mix(in srgb, var(--of-screen-glow) 35%, var(--of-line));
+  box-shadow: inset 0 0 12px color-mix(in srgb, var(--of-screen-glow) 10%, transparent), 0 0 10px color-mix(in srgb, var(--of-screen-glow) 14%, transparent);
+}
+.of-scene-meme .of-desk-screen i:nth-child(2) { background: var(--of-accent); }
+.of-scene-meme .of-desk-screen i:nth-child(3) { background: var(--of-danger); }
+.of-scene-meme .of-desk-name {
+  text-shadow: 0 1px 2px var(--of-floor-bg);
+}
+.of-scene-meme .of-desk:hover .of-desk-table,
+.of-scene-meme .of-desk:focus-visible .of-desk-table {
+  border-color: var(--of-accent);
+}
+.of-scene-meme .of-desk:focus-visible {
+  outline: 1px solid var(--of-info);
+  outline-offset: 5px;
+}
+
+/* HELM 弧形操作台:一层径向弧线贴在桌面内,不暗示桌间权限/交接。 */
+.of-scene-meme .of-big .of-desk-table {
+  border-radius: 46% 46% 38% 38% / 38% 38% 58% 58%;
+  background:
+    radial-gradient(ellipse at 50% 0%, transparent 59%, color-mix(in srgb, var(--of-core-glow) 45%, transparent) 60% 61%, transparent 62%),
+    var(--of-desk-skin);
+  border-bottom: 2px solid var(--of-core-glow);
+  box-shadow:
+    0 6px 0 var(--of-desk-front),
+    0 8px 0 color-mix(in srgb, var(--of-info) 40%, var(--of-bg)),
+    0 13px 22px color-mix(in srgb, var(--of-core-glow) 12%, transparent);
+}
+.of-scene-meme .of-big .of-desk-table::before {
+  left: 20%;
+  right: 20%;
+}
+
+/* 新骨架的挂点也消费相同变量;灯、键盘与核心不另加动画。 */
+.of-scene-meme .of-market-wall { background: var(--of-wall-bg); border-color: var(--of-wall-trim); }
+.of-scene-meme .of-desk-front { background: var(--of-desk-front); border-color: var(--of-desk-edge); }
+.of-scene-meme .of-keyboard { border-color: var(--of-desk-edge); }
+
+@media (prefers-reduced-motion: reduce) {
+  .of-scene-meme .of-deck::before,
+  .of-scene-meme .of-deck::after { animation: none; opacity: .7; }
+}

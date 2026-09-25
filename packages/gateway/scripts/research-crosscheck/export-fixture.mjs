@@ -1,0 +1,10 @@
+import {mkdirSync,writeFileSync} from 'node:fs';
+import {runReplay} from '../../dist/demo/research/engine.js';
+import {structure} from '../../dist/demo/research/primitives/structure.js';
+const out=process.argv[2]??'/tmp/research-r3-crosscheck';mkdirSync(out,{recursive:true});
+const start=Date.UTC(2025,0,1),step=3600000;let price=100;
+const bars=Array.from({length:2400},(_,i)=>{const open=price;price=Math.max(30,price+(i%17===0?-8:i%8===0?4:.4));return {open_time:start+i*step,close_time:start+(i+1)*step-1,available_at:start+(i+1)*step-1,open:open.toFixed(8),high:(Math.max(open,price)+.2).toFixed(8),low:(Math.min(open,price)-.2).toFixed(8),close:price.toFixed(8),volume:i%8===0?'200':'100'};});
+const dataset={venue:'synthetic',market:'spot',symbol:'CHECKUSDT',timeframe_ms:step,source:'deterministic cross-engine fixture',retrieved_at:bars.at(-1).close_time,bars};
+const request={idempotency_key:'crosscheck',dataset_id:'fixture',policy:{label:'crosscheck',description:'Donchian close + volume',interpretation:'donchian_close_long_v1',lookback:5,atr_period:5,stop_atr:2,take_profit_r:2,volume_multiple:1,holding_bars:500},execution:{initial_cash:'10000',risk_fraction:'0.01',max_allocation:'0.25',fee_rate:'0.001',slippage_bps:'0',qty_step:'1',min_notional:'1',max_opens_per_day:100},from_ms:bars[30].close_time,to_ms:bars.at(-1).close_time,arms:['a_rules'],repeats:1,max_model_calls:0,timeout_ms:60000,purpose:'development',study_id:'fixture',acknowledge_adaptive_search:false};
+const result=await runReplay(dataset,request,async()=>{throw Error('no model');},{diagnostics:true});
+writeFileSync(`${out}/fixture.json`,JSON.stringify({dataset,request}));writeFileSync(`${out}/gateway.json`,JSON.stringify(result));writeFileSync(`${out}/structure-ts.json`,JSON.stringify(structure(bars,3,'close','wick')));console.log(JSON.stringify({out,status:result.status,trades:result.arms[0].trades.length}));

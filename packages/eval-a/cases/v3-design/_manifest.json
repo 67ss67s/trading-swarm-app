@@ -1,0 +1,59 @@
+{
+  "generated_with": {
+    "symbols": [
+      "BTCUSDT",
+      "ETHUSDT"
+    ],
+    "tf": "15m",
+    "from": 1785542400000,
+    "to": 1788134400000,
+    "n": 14,
+    "seed": "7",
+    "set": "design",
+    "chain_step_bars": 4,
+    "horizon_bars": 48,
+    "sample": "triggers",
+    "daily_bars": 220,
+    "min_spacing_bars": 8
+  },
+  "generation_batches": [
+    {
+      "symbols": [
+        "BTCUSDT",
+        "ETHUSDT"
+      ],
+      "tf": "15m",
+      "from": 1785542400000,
+      "to": 1788134400000,
+      "n": 14,
+      "seed": "7",
+      "set": "design",
+      "chain_step_bars": 4,
+      "horizon_bars": 48,
+      "sample": "triggers",
+      "daily_bars": 220,
+      "min_spacing_bars": 8
+    }
+  ],
+  "cases": 124,
+  "tag_counts": {
+    "scan": 56,
+    "base": 14,
+    "trig:retest": 12,
+    "halted": 14,
+    "mirror": 48,
+    "review": 68,
+    "in_position": 62,
+    "long": 34,
+    "entry:market": 56,
+    "short": 34,
+    "stale": 14,
+    "trig:ema_cross": 4,
+    "trig:vol_spike": 32,
+    "trig:breakout": 24,
+    "stop-crossed": 18,
+    "tp-crossed": 2,
+    "pending_entry": 6,
+    "entry:limit": 12
+  }
+}

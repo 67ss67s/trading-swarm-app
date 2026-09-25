@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "intent_id": "4d5e6f70-8192-4a3b-b4c5-d6e7f8a9b0c1",
+  "account": "sub",
+  "principal": "scheduler",
+  "surface": "internal",
+  "origin": "exit-dsl:thread-42",
+  "params": {
+    "kind": "protect",
+    "product": "usdm_perp",
+    "symbol": "ETHUSDT",
+    "position_side": "both",
+    "stop": {
+      "price": "2900.10",
+      "trigger": "mark_price"
+    },
+    "replace": true,
+    "reason": "追踪止损上移"
+  },
+  "status": "executing",
+  "gate_rejections": [],
+  "current_plan_id": "9eaf7081-92a3-4b4c-8d5e-6f708192a3b5",
+  "authorization_id": "38af4928-adc1-455d-a40d-ae9fbec069fc",
+  "ttl_seconds": 60,
+  "created_at": 1788350000000,
+  "updated_at": 1788350000300
+}

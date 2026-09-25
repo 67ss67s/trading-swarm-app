@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "seq": 4190,
+  "event": "protection.missing",
+  "at": 1788350022000,
+  "account": "sub",
+  "intent_id": "5e6f7081-92a3-4b4c-8d5e-6f708192a3b4",
+  "symbol": "SOLUSDT",
+  "payload": {
+    "naked_seconds": 21,
+    "max_naked_seconds": 20,
+    "action": "compensation_close"
+  }
+}

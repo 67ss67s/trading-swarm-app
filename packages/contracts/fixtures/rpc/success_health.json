@@ -1,0 +1,27 @@
+{
+  "jsonrpc": "2.0",
+  "id": 7,
+  "result": {
+    "ok": true,
+    "version": "0.1.0",
+    "writer_instance_id": "execd-mba-2026",
+    "lease_epoch": 7,
+    "started_at": 1788346400000,
+    "now": 1788350000000,
+    "db_ok": true,
+    "mode": "run",
+    "halted": false,
+    "open_intents": 1,
+    "unknown_attempts": 0,
+    "channels": {
+      "main": {
+        "state": "ok",
+        "last_ok_at": 1788349999500
+      },
+      "sub": {
+        "state": "degraded",
+        "detail": "oauth expiring in 8m"
+      }
+    }
+  }
+}

@@ -1,0 +1,165 @@
+{
+  "version": 1,
+  "description": "由 scripts/canonical_ref.py 生成;TS 与 Rust 的 canonical_json/plan_hash/account_version 必须逐条等于这里的值。",
+  "vectors": [
+    {
+      "name": "order_limit_with_protection",
+      "input": {
+        "kind": "order",
+        "product": "usdm_perp",
+        "symbol": "BTCUSDT",
+        "side": "buy",
+        "position_side": "both",
+        "position_mode": "one_way",
+        "order_type": "limit",
+        "qty": "0.002",
+        "price": "60000.5",
+        "time_in_force": "gtc",
+        "reduce_only": false,
+        "close_position": false,
+        "leverage": 2,
+        "margin_type": "isolated",
+        "protection": {
+          "stop": {
+            "order_type": "stop_market",
+            "trigger_price": "59000",
+            "working_type": "mark_price",
+            "close_position": true
+          },
+          "take_profits": [
+            {
+              "order_type": "take_profit_market",
+              "trigger_price": "62000",
+              "qty": "0.001",
+              "working_type": "mark_price",
+              "close_position": false
+            }
+          ]
+        },
+        "max_naked_seconds": 20
+      },
+      "canonical": "{\"close_position\":false,\"kind\":\"order\",\"leverage\":2,\"margin_type\":\"isolated\",\"max_naked_seconds\":20,\"order_type\":\"limit\",\"position_mode\":\"one_way\",\"position_side\":\"both\",\"price\":\"60000.5\",\"product\":\"usdm_perp\",\"protection\":{\"stop\":{\"close_position\":true,\"order_type\":\"stop_market\",\"trigger_price\":\"59000\",\"working_type\":\"mark_price\"},\"take_profits\":[{\"close_position\":false,\"order_type\":\"take_profit_market\",\"qty\":\"0.001\",\"trigger_price\":\"62000\",\"working_type\":\"mark_price\"}]},\"qty\":\"0.002\",\"reduce_only\":false,\"side\":\"buy\",\"symbol\":\"BTCUSDT\",\"time_in_force\":\"gtc\"}",
+      "sha256": "474838171b83561288f58fc3ebdaf96c236f5ff4983b1556cac37ee8cc22433c"
+    },
+    {
+      "name": "order_same_but_null_optionals",
+      "input": {
+        "kind": "order",
+        "product": "usdm_perp",
+        "symbol": "BTCUSDT",
+        "side": "buy",
+        "position_side": "both",
+        "position_mode": "one_way",
+        "order_type": "limit",
+        "qty": "0.002",
+        "price": "60000.5",
+        "time_in_force": "gtc",
+        "reduce_only": false,
+        "close_position": false,
+        "leverage": 2,
+        "margin_type": "isolated",
+        "protection": {
+          "stop": {
+            "order_type": "stop_market",
+            "trigger_price": "59000",
+            "working_type": "mark_price",
+            "close_position": true
+          },
+          "take_profits": [
+            {
+              "order_type": "take_profit_market",
+              "trigger_price": "62000",
+              "qty": "0.001",
+              "working_type": "mark_price",
+              "close_position": false
+            }
+          ]
+        },
+        "max_naked_seconds": 20,
+        "trigger_price": null,
+        "working_type": null
+      },
+      "canonical": "{\"close_position\":false,\"kind\":\"order\",\"leverage\":2,\"margin_type\":\"isolated\",\"max_naked_seconds\":20,\"order_type\":\"limit\",\"position_mode\":\"one_way\",\"position_side\":\"both\",\"price\":\"60000.5\",\"product\":\"usdm_perp\",\"protection\":{\"stop\":{\"close_position\":true,\"order_type\":\"stop_market\",\"trigger_price\":\"59000\",\"working_type\":\"mark_price\"},\"take_profits\":[{\"close_position\":false,\"order_type\":\"take_profit_market\",\"qty\":\"0.001\",\"trigger_price\":\"62000\",\"working_type\":\"mark_price\"}]},\"qty\":\"0.002\",\"reduce_only\":false,\"side\":\"buy\",\"symbol\":\"BTCUSDT\",\"time_in_force\":\"gtc\"}",
+      "sha256": "474838171b83561288f58fc3ebdaf96c236f5ff4983b1556cac37ee8cc22433c"
+    },
+    {
+      "name": "transfer_main_to_sub",
+      "input": {
+        "kind": "transfer",
+        "asset": "USDT",
+        "amount": "25",
+        "from_account": "main",
+        "from_wallet": "spot",
+        "to_account": "sub",
+        "to_wallet": "usdm_futures"
+      },
+      "canonical": "{\"amount\":\"25\",\"asset\":\"USDT\",\"from_account\":\"main\",\"from_wallet\":\"spot\",\"kind\":\"transfer\",\"to_account\":\"sub\",\"to_wallet\":\"usdm_futures\"}",
+      "sha256": "f900d9a89b081abc1badbcafb9752819603acff182199742dc53c254c2fe77d6"
+    },
+    {
+      "name": "cancel_by_client_order_id",
+      "input": {
+        "kind": "cancel",
+        "product": "usdm_perp",
+        "symbol": "ETHUSDT",
+        "client_order_id": "tg-0f8fad5bd9cb-e0-1"
+      },
+      "canonical": "{\"client_order_id\":\"tg-0f8fad5bd9cb-e0-1\",\"kind\":\"cancel\",\"product\":\"usdm_perp\",\"symbol\":\"ETHUSDT\"}",
+      "sha256": "a03271021964ba82e3490544f31b0650387c23596d7719dc36cb78182ff31911"
+    },
+    {
+      "name": "protect_replace",
+      "input": {
+        "kind": "protect",
+        "product": "usdm_perp",
+        "symbol": "ETHUSDT",
+        "position_side": "both",
+        "legs": [
+          {
+            "order_type": "stop_market",
+            "trigger_price": "2900.10",
+            "working_type": "mark_price",
+            "close_position": true
+          }
+        ],
+        "replace_order_ids": [
+          "123456789",
+          "123456790"
+        ]
+      },
+      "canonical": "{\"kind\":\"protect\",\"legs\":[{\"close_position\":true,\"order_type\":\"stop_market\",\"trigger_price\":\"2900.10\",\"working_type\":\"mark_price\"}],\"position_side\":\"both\",\"product\":\"usdm_perp\",\"replace_order_ids\":[\"123456789\",\"123456790\"],\"symbol\":\"ETHUSDT\"}",
+      "sha256": "db7cfc62225ccfbc94fa5654e8a01b20c64337169712840688ebf79328bb48ac"
+    },
+    {
+      "name": "unicode_passthrough",
+      "input": {
+        "kind": "cancel",
+        "product": "spot",
+        "symbol": "BTCUSDT",
+        "exchange_order_id": "注释-☃-1"
+      },
+      "canonical": "{\"exchange_order_id\":\"注释-☃-1\",\"kind\":\"cancel\",\"product\":\"spot\",\"symbol\":\"BTCUSDT\"}",
+      "sha256": "663b7dd8c42cc200ac144c2b6c955baec98f06b20782da50e0efd6273b97bd2c"
+    },
+    {
+      "name": "account_version_components",
+      "input": {
+        "balances": [
+          {
+            "asset": "USDT",
+            "wallet": "usdm_futures",
+            "wallet_balance": "1000.5",
+            "available": "900"
+          }
+        ],
+        "positions": [],
+        "open_orders": [],
+        "position_mode": {
+          "mode": "one_way"
+        }
+      },
+      "canonical": "{\"balances\":[{\"asset\":\"USDT\",\"available\":\"900\",\"wallet\":\"usdm_futures\",\"wallet_balance\":\"1000.5\"}],\"open_orders\":[],\"position_mode\":{\"mode\":\"one_way\"},\"positions\":[]}",
+      "sha256": "a18c8380c8cef8e3ed2ef66ee6d39cfcf4bd56c0271e3f7fe810478e065ac7ab"
+    }
+  ]
+}

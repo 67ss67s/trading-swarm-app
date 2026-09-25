@@ -1,0 +1,787 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trading-swarm.local/schema/research-orders.json",
+  "title": "ResearchOrders",
+  "anyOf": [
+    {
+      "$ref": "#/$defs/BacktestReplay"
+    },
+    {
+      "$ref": "#/$defs/BacktestPlan"
+    }
+  ],
+  "$defs": {
+    "OrderSide": {
+      "enum": [
+        "long",
+        "short"
+      ]
+    },
+    "OrderMarket": {
+      "enum": [
+        "spot",
+        "perp"
+      ]
+    },
+    "OrderEntryType": {
+      "enum": [
+        "market",
+        "limit"
+      ]
+    },
+    "OrderPlanStatus": {
+      "enum": [
+        "pending",
+        "filled",
+        "no_fill",
+        "replaced",
+        "cancelled",
+        "blocked"
+      ],
+      "description": "pending=挂单中(数据末仍在时效内);filled=已成交(看 exit);no_fill=时效内未触价;replaced=成交前被同向新计划整体替换(8794 v8);cancelled=成交前被反向计划撤销或跳空使止损/止盈失效;blocked=放置前盈亏比低于 min_rr 或无有效止损,没下单(只进统计与回放,不影响净值)"
+    },
+    "OrderExitReason": {
+      "enum": [
+        "tp",
+        "sl",
+        "trail",
+        "signal_exit",
+        "time",
+        "rolled",
+        "flipped",
+        "liquidation",
+        "breakeven",
+        "end_of_data",
+        "open"
+      ]
+    },
+    "OrderLevelSource": {
+      "enum": [
+        "structure_support",
+        "structure_resistance",
+        "atr",
+        "rr",
+        "indicator",
+        "fixed_pct",
+        "user",
+        "trail"
+      ]
+    },
+    "BacktestPlanLevel": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "price": {
+          "type": "number"
+        },
+        "size_pct": {
+          "type": "number",
+          "description": "该档占计划仓位的比例,小数(0.5=50%);止损档恒为 1"
+        },
+        "source": {
+          "$ref": "#/$defs/OrderLevelSource"
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "filled_at": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "fill_price": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "price",
+        "size_pct",
+        "source",
+        "note",
+        "filled_at",
+        "fill_price"
+      ]
+    },
+    "BacktestPlanEventKind": {
+      "enum": [
+        "placed",
+        "filled",
+        "no_fill",
+        "replaced",
+        "stop_moved",
+        "tp_moved",
+        "tp_hit",
+        "sl_hit",
+        "rolled_in",
+        "rolled_out",
+        "added",
+        "flipped",
+        "liquidated",
+        "funding",
+        "closed",
+        "cancelled",
+        "blocked"
+      ]
+    },
+    "BacktestPlanEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "kind": {
+          "$ref": "#/$defs/BacktestPlanEventKind"
+        },
+        "price": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 4000
+        }
+      },
+      "required": [
+        "at",
+        "kind",
+        "price",
+        "note"
+      ]
+    },
+    "BacktestPlanLeg": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "price": {
+          "type": "number"
+        },
+        "qty_frac": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "at",
+        "price",
+        "qty_frac"
+      ]
+    },
+    "BacktestPlanExit": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "price": {
+          "type": "number"
+        },
+        "reason": {
+          "$ref": "#/$defs/OrderExitReason"
+        }
+      },
+      "required": [
+        "at",
+        "price",
+        "reason"
+      ]
+    },
+    "BacktestPricePoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "price": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "at",
+        "price"
+      ]
+    },
+    "BacktestPlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "symbol": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "side": {
+          "$ref": "#/$defs/OrderSide"
+        },
+        "market": {
+          "$ref": "#/$defs/OrderMarket"
+        },
+        "leverage": {
+          "type": "number"
+        },
+        "placed_at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "entry_type": {
+          "$ref": "#/$defs/OrderEntryType"
+        },
+        "entry_price": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "限价单的挂单价;市价单为 null"
+        },
+        "reference_price": {
+          "type": "number",
+          "description": "信号那根的收盘价"
+        },
+        "expires_at": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "status": {
+          "$ref": "#/$defs/OrderPlanStatus"
+        },
+        "filled_at": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "fill_price": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "首腿成交价(含滑点);rolled_in 计划为结转价(下一根 open)"
+        },
+        "fill_gap": {
+          "type": "boolean"
+        },
+        "legs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BacktestPlanLeg"
+          },
+          "maxItems": 50,
+          "description": "入场腿;qty_frac 为相对首腿的数量比例(等权加仓=1)"
+        },
+        "stop": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BacktestPlanLevel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "初始止损(放置时);移动见 stop_path"
+        },
+        "take_profits": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BacktestPlanLevel"
+          },
+          "maxItems": 10
+        },
+        "stop_path": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BacktestPricePoint"
+          },
+          "maxItems": 5000
+        },
+        "planned_rr": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "放置时:按档位加权的止盈距离 / 止损距离,以限价(市价单用信号收盘价)为锚"
+        },
+        "min_rr": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "本计划适用的最小盈亏比(用户硬约束优先,否则规范默认);planned_rr 低于它 → status=blocked"
+        },
+        "exit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BacktestPlanExit"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pnl_pct": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "净收益 / 计划占用保证金,小数(0.0143=1.43%);含杠杆、手续费、已知资金费。现货杠杆 1 时即名义收益"
+        },
+        "r_multiple": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "8794 口径:(加权出场价-均价)×方向 / |均价-初始止损|,毛价格 R,不含费用与杠杆;无止损为 null"
+        },
+        "mfe_pct": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "8794 v11 口径:成交根到出场根(含)逐根恰好计一次,锚定最终均价,不含杠杆,小数,恒 ≥0"
+        },
+        "mae_pct": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "同 mfe_pct,恒 ≤0"
+        },
+        "funding_pct": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "资金费对本计划的净影响 / 保证金,小数,正=收到、负=支付;现货或资金费序列缺失时为 null(不当 0)"
+        },
+        "fees_pct": {
+          "type": "number",
+          "description": "手续费合计 / 保证金,小数,恒 ≥0;rolled 结转不重复收费"
+        },
+        "bars_held": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "成交根到出场根的根数差"
+        },
+        "rolled_from": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4000
+        },
+        "rolled_to": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4000
+        },
+        "replaced_by": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4000
+        },
+        "segment": {
+          "$ref": "research-backtest.json#/$defs/BacktestSegmentName"
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BacktestPlanEvent"
+          },
+          "maxItems": 500
+        },
+        "price_move_pct": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "不含杠杆与费用的价格变动:(加权出场价-均价)×方向/均价,小数;与 8794 的 pnl_pct(÷100)同口径"
+        },
+        "gross_pct": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "毛收益 / 保证金(含杠杆,不含费用与资金费),小数"
+        },
+        "funding_status": {
+          "enum": [
+            "complete",
+            "partial",
+            "missing",
+            "not_applicable"
+          ],
+          "description": "本计划持仓区间的资金费覆盖:complete=序列覆盖整段;partial=只覆盖一部分(已知期已计入);missing=没有序列(funding_pct=null);not_applicable=现货"
+        },
+        "funding_periods": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "已计入的资金费期数"
+        },
+        "liquidation_price": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "逐仓强平价(按均价、杠杆与维持保证金率);现货为 null"
+        },
+        "qty": {
+          "type": "number",
+          "description": "合计成交数量(base)"
+        },
+        "margin": {
+          "type": "number",
+          "description": "计划占用保证金(报价币),pnl_pct 的分母"
+        },
+        "entry_source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OrderLevelSource"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "限价来源;市价单为 null"
+        },
+        "blocked_reason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4000,
+          "description": "status=blocked/cancelled 的原因代码(min_rr/no_target/no_stop/stop_side/stop_too_close/target_side/gap_invalidated/opposite_signal);stop_too_close=止损离入场不到 min_stop_atr×ATR(14)(结构口径)"
+        }
+      },
+      "required": [
+        "id",
+        "symbol",
+        "side",
+        "market",
+        "leverage",
+        "placed_at",
+        "reason",
+        "entry_type",
+        "entry_price",
+        "reference_price",
+        "expires_at",
+        "status",
+        "filled_at",
+        "fill_price",
+        "fill_gap",
+        "legs",
+        "stop",
+        "take_profits",
+        "stop_path",
+        "planned_rr",
+        "min_rr",
+        "exit",
+        "pnl_pct",
+        "r_multiple",
+        "mfe_pct",
+        "mae_pct",
+        "funding_pct",
+        "fees_pct",
+        "bars_held",
+        "rolled_from",
+        "rolled_to",
+        "replaced_by",
+        "segment",
+        "events"
+      ]
+    },
+    "BacktestCandle": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "t": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "o": {
+          "type": "number"
+        },
+        "h": {
+          "type": "number"
+        },
+        "l": {
+          "type": "number"
+        },
+        "c": {
+          "type": "number"
+        },
+        "v": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "t",
+        "o",
+        "h",
+        "l",
+        "c",
+        "v"
+      ]
+    },
+    "BacktestReplay": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "report_id": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "asset_key": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "symbol": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "timeframe": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "from_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "to_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "candles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BacktestCandle"
+          },
+          "maxItems": 20000
+        },
+        "plans": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BacktestPlan"
+          },
+          "maxItems": 20000
+        }
+      },
+      "required": [
+        "report_id",
+        "asset_key",
+        "symbol",
+        "timeframe",
+        "from_ms",
+        "to_ms",
+        "truncated",
+        "candles",
+        "plans"
+      ]
+    },
+    "BacktestPlanStats": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "placed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "真正挂出的计划数(不含 blocked)"
+        },
+        "filled": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "no_fill": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "replaced": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "rolled": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "added": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "成交的加仓腿数"
+        },
+        "flipped": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "liquidated": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "fill_rate": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "filled / (filled + no_fill):只算走完时效的计划;replaced/cancelled/blocked/pending 不进分母"
+        },
+        "avg_planned_rr": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "avg_realized_r": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "tp_hit_rate": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "已结算计划中至少命中一档止盈的比例"
+        },
+        "sl_hit_rate": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "已结算计划中以止损(含 trail/breakeven 之外的初始或移动止损)离场的比例"
+        },
+        "blocked": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "放置前被 min_rr / 无止损拦下的计划数"
+        },
+        "blocked_by": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "description": "被拦计划按原因计数(research-orders-v2 起;含超出行数上限只计数的部分)"
+        },
+        "ignored": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "已成交时同向新信号按 ignore(或加仓已满)丢弃的次数"
+        },
+        "cancelled": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "成交前被撤销(反向信号/跳空失效)"
+        },
+        "pending": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "数据末仍挂着的计划数"
+        },
+        "breakeven": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "保本离场数"
+        },
+        "funding_missing": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "永续计划里资金费缺失或部分缺失的计划数"
+        },
+        "funding_pnl": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "永续计划资金费现金合计(报价币),正=收到、负=支付;现货或资金费全缺时为 null"
+        },
+        "funding_periods": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "永续计划计入的资金费期数合计"
+        },
+        "liquidation_loss": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "强平计划的净亏损合计(报价币,≤0);没有强平为 null"
+        }
+      },
+      "required": [
+        "placed",
+        "filled",
+        "no_fill",
+        "replaced",
+        "rolled",
+        "added",
+        "flipped",
+        "liquidated",
+        "fill_rate",
+        "avg_planned_rr",
+        "avg_realized_r",
+        "tp_hit_rate",
+        "sl_hit_rate"
+      ]
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "description": "本机 clientOrderId 方案。调用前持久化;按前缀分本机/外部(设计 §8.4 外部订单检测,借 8794 detect_order_origins 口径)。",
+  "prefix": "tg-",
+  "format": "tg-{intent12}-{leg_code}{leg_index}-{attempt_no}",
+  "intent12": "intent_id 去掉连字符后的前 12 个小写 hex",
+  "leg_codes": {
+    "entry": "e",
+    "stop": "s",
+    "take_profit": "t",
+    "cancel": "c",
+    "close": "x",
+    "transfer": "f"
+  },
+  "max_len": 36,
+  "charset": "^[\\.A-Z:/a-z0-9_-]{1,36}$",
+  "foreign_prefixes": ["ts_"],
+  "examples": [
+    { "intent_id": "0f8fad5b-d9cb-469f-a165-70867728950e", "leg": "entry", "leg_index": 0, "attempt_no": 1, "client_order_id": "tg-0f8fad5bd9cb-e0-1" },
+    { "intent_id": "0f8fad5b-d9cb-469f-a165-70867728950e", "leg": "take_profit", "leg_index": 1, "attempt_no": 2, "client_order_id": "tg-0f8fad5bd9cb-t1-2" }
+  ]
+}

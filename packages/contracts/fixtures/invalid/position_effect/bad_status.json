@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "effect_id": "c3d4e5f6-a7b8-4c9d-ae0f-2a3b4c5d6e7f",
+  "intent_id": "0f8fad5b-d9cb-469f-a165-70867728950e",
+  "plan_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+  "kind": "open",
+  "account": "sub",
+  "symbol": "BTCUSDT",
+  "status": "done",
+  "target_qty": "0.002",
+  "filled_qty": "0.001",
+  "remaining_qty": "0.001",
+  "remaining_canceled": false,
+  "avg_fill_price": "60000.5",
+  "first_fill_at": 1788350106000,
+  "protection_required": true,
+  "protection_confirmed": true,
+  "protection_confirmed_at": 1788350108000,
+  "protection_order_ids": [
+    "8389765123456790"
+  ],
+  "naked_seconds": 2,
+  "position_qty_after": "0.001",
+  "evaluated_at": 1788350110000
+}

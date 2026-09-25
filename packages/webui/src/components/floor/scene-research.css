@@ -1,0 +1,227 @@
+/* 研究楼层 / Cozy Intelligence Office。
+   对齐 floor-scene-command ca24d22 的共享皮肤变量;旧 deck 也可独立使用。
+   布景全由不接收点击的伪元素绘制,不需要 deck.tsx 接线。
+   仅中央 HELM 下有一块地毯;窗景/书架静态,新增常驻动画仅一处灯光呼吸。 */
+.of-scene-research {
+  --of-research-shadow: color-mix(in srgb, var(--of-bg) 88%, transparent);
+  --of-research-grain: color-mix(in srgb, var(--of-desk-line) 18%, transparent);
+  --of-research-night-blue: #152945;
+  --of-research-night: color-mix(in srgb, var(--of-research-night-blue) 75%, var(--of-bg));
+  --of-research-glass: color-mix(in srgb, var(--of-info) 16%, var(--of-research-night));
+  --of-research-joint: color-mix(in srgb, var(--of-desk-2) 70%, var(--of-bg));
+  --of-research-book-blue: color-mix(in srgb, var(--of-info) 45%, var(--of-desk-2));
+  --of-research-book-red: color-mix(in srgb, var(--of-danger) 34%, var(--of-desk-2));
+  --of-research-book-gold: color-mix(in srgb, var(--of-accent) 45%, var(--of-desk-2));
+  --of-research-rug: color-mix(in srgb, var(--of-danger) 15%, var(--of-desk-2));
+  --of-floor-bg: color-mix(in srgb, var(--of-desk-2) 78%, var(--of-bg));
+  --of-floor-texture:
+    repeating-linear-gradient(0deg, transparent 0 3px, var(--of-research-grain) 3px 4px, transparent 4px 9px),
+    repeating-linear-gradient(90deg, transparent 0 116px, var(--of-research-joint) 116px 118px, transparent 118px 235px),
+    repeating-linear-gradient(0deg, transparent 0 39px, var(--of-research-joint) 39px 41px);
+  --of-wall-bg: var(--of-research-night);
+  --of-wall-trim: var(--of-desk-line);
+  --of-desk-skin:
+    repeating-linear-gradient(0deg, transparent 0 6px, var(--of-research-grain) 6px 7px),
+    linear-gradient(165deg, color-mix(in srgb, var(--of-accent) 20%, var(--of-desk)), var(--of-desk) 48%, var(--of-desk-2));
+  --of-desk-edge: var(--of-desk-line);
+  --of-desk-front: var(--of-desk-2);
+  --of-desk-leg: color-mix(in srgb, var(--of-desk-2) 70%, var(--of-bg));
+  --of-lamp: var(--of-warn);
+  --of-screen-glow: color-mix(in srgb, var(--of-accent) 65%, var(--of-info));
+  --of-screen-bg: color-mix(in srgb, var(--of-info) 8%, var(--of-bg));
+  --of-room-light: var(--of-accent);
+  --of-core-glow: var(--of-lamp);
+}
+
+/* 连续木地板,保留桌位和交接坐标,不沿原来的格子分区。 */
+.of-scene-research .of-deck {
+  background:
+    radial-gradient(ellipse at 50% 34%, color-mix(in srgb, var(--of-room-light) 12%, transparent), transparent 57%),
+    var(--of-floor-texture),
+    var(--of-floor-bg);
+  box-shadow: inset 0 0 60px var(--of-research-shadow), inset 0 -5px 0 var(--of-desk-front);
+}
+
+/* 深色玻璃窗带,建筑剪影和木质窗框。所有颜色由当前配色派生。 */
+.of-scene-research .of-deck::before {
+  content: "";
+  position: absolute;
+  inset: 0 9px auto;
+  height: 92px;
+  z-index: 0;
+  pointer-events: none;
+  border: 5px solid var(--of-wall-trim);
+  border-top-width: 3px;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 calc(25% - 4px), var(--of-desk-front) calc(25% - 4px) 25%),
+    linear-gradient(var(--of-bg) 0 0) 3% 100% / 7% 37% no-repeat,
+    linear-gradient(var(--of-panel) 0 0) 13% 100% / 6% 63% no-repeat,
+    linear-gradient(var(--of-bg) 0 0) 24% 100% / 9% 47% no-repeat,
+    linear-gradient(var(--of-panel) 0 0) 37% 100% / 5% 76% no-repeat,
+    linear-gradient(var(--of-bg) 0 0) 49% 100% / 10% 40% no-repeat,
+    linear-gradient(var(--of-panel) 0 0) 65% 100% / 7% 63% no-repeat,
+    linear-gradient(var(--of-bg) 0 0) 79% 100% / 9% 48% no-repeat,
+    linear-gradient(var(--of-panel) 0 0) 96% 100% / 6% 72% no-repeat,
+    linear-gradient(180deg, var(--of-research-night), var(--of-research-glass));
+  box-shadow: 0 5px 0 var(--of-desk-front), 0 12px 22px var(--of-research-shadow), inset 0 0 20px var(--of-bg);
+}
+
+/* 两侧书架:横向层板盖在彩色书脊上,中间完整留空。 */
+.of-scene-research .of-deck::after {
+  content: "";
+  position: absolute;
+  inset: 112px 10px 102px;
+  z-index: 0;
+  pointer-events: none;
+  --of-research-shelves: repeating-linear-gradient(180deg,
+    var(--of-desk-line) 0 3px, var(--of-desk-2) 3px 9px,
+    transparent 9px 44px, var(--of-desk-line) 44px 47px,
+    var(--of-research-shadow) 47px 61px);
+  --of-research-spines: repeating-linear-gradient(90deg,
+    var(--of-desk-2) 0 4px, var(--of-research-book-blue) 4px 10px,
+    var(--of-desk-2) 10px 12px, var(--of-research-book-gold) 12px 17px,
+    var(--of-desk-2) 17px 20px, var(--of-research-book-red) 20px 28px,
+    var(--of-desk-2) 28px 31px, var(--of-ink-dim) 31px 35px,
+    var(--of-desk-2) 35px 39px, var(--of-research-book-gold) 39px 44px);
+  background:
+    var(--of-research-shelves) left top / 44px 100% no-repeat,
+    var(--of-research-shelves) right top / 44px 100% no-repeat,
+    var(--of-research-spines) left top / 44px 100% no-repeat,
+    var(--of-research-spines) right top / 44px 100% no-repeat;
+  opacity: .8;
+}
+
+/* 分区木牌保持原文,不生成假数据。窗灯只是静态的像素散点。 */
+.of-scene-research .of-zone {
+  z-index: 1;
+  padding: 6px 8px;
+  color: var(--of-ink);
+  background: var(--of-desk-skin);
+  border: 1px solid var(--of-desk-edge);
+  box-shadow: 0 3px 0 var(--of-desk-front), 0 5px 10px var(--of-research-shadow);
+  font-size: 9px;
+  letter-spacing: .2em;
+  text-shadow: 0 1px var(--of-bg);
+}
+.of-scene-research .of-zone-l { left: 17px; }
+.of-scene-research .of-zone-r { right: 17px; }
+.of-scene-research .of-zone-t { top: 12px; }
+.of-scene-research .of-zone-b { bottom: 12px; }
+.of-scene-research .of-zone-t::before {
+  content: "";
+  position: absolute;
+  top: 37px;
+  left: 50%;
+  width: 3px;
+  height: 4px;
+  background: var(--of-lamp);
+  opacity: .6;
+  pointer-events: none;
+  box-shadow:
+    -240px 2px var(--of-lamp), -228px 14px var(--of-lamp),
+    -180px 9px var(--of-lamp), -168px 21px var(--of-lamp),
+    -114px -8px var(--of-lamp), -114px 8px var(--of-lamp),
+    -102px 8px var(--of-lamp), -54px 19px var(--of-lamp),
+    58px 16px var(--of-lamp), 110px -3px var(--of-lamp),
+    122px 9px var(--of-lamp), 173px 17px var(--of-lamp),
+    231px -4px var(--of-lamp), 243px 8px var(--of-lamp);
+}
+
+.of-scene-research .of-desk-table {
+  background: var(--of-desk-skin);
+  border-color: var(--of-desk-edge);
+  border-radius: 5px 5px 3px 3px;
+  box-shadow: 0 5px 0 var(--of-desk-front), 0 7px 0 var(--of-desk-leg), 0 12px 15px var(--of-research-shadow);
+}
+.of-scene-research .of-desk-table::before {
+  background: color-mix(in srgb, var(--of-lamp) 20%, transparent);
+}
+.of-scene-research .of-desk-screen {
+  background: var(--of-screen-bg);
+  border-color: var(--of-desk-edge);
+  box-shadow: inset 0 0 12px color-mix(in srgb, var(--of-screen-glow) 16%, transparent), 0 0 16px color-mix(in srgb, var(--of-screen-glow) 12%, transparent);
+}
+.of-scene-research .of-desk-screen i { background: var(--of-screen-glow); }
+.of-scene-research .of-desk-name {
+  top: calc(100% + 12px);
+  letter-spacing: .08em;
+  color: var(--of-ink);
+  text-shadow: 0 1px 3px var(--of-bg), 0 0 7px var(--of-bg);
+}
+
+/* 旧 deck 没有台灯节点时的静态台灯;主线新节点存在便自动退让。 */
+.of-scene-research .of-desk:not(:has(.of-desk-lamp)) .of-desk-table::after {
+  content: "";
+  position: absolute;
+  right: 14px;
+  top: -22px;
+  width: 24px;
+  height: 28px;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--of-lamp) 0 0) center 2px / 20px 11px no-repeat,
+    linear-gradient(var(--of-desk-edge) 0 0) center 13px / 3px 12px no-repeat,
+    linear-gradient(var(--of-desk-edge) 0 0) center bottom / 17px 3px no-repeat;
+  clip-path: polygon(22% 0, 78% 0, 100% 48%, 59% 48%, 59% 88%, 88% 88%, 88% 100%, 12% 100%, 12% 88%, 41% 88%, 41% 48%, 0 48%);
+}
+
+/* HELM 的会议桌及唯一地毯都锚定在同一桌位,不影响点击/交接拓扑。 */
+.of-scene-research .of-desk.of-big .of-desk-table {
+  height: 74px;
+  border-radius: 50%;
+  border-width: 2px;
+  box-shadow: 0 6px 0 var(--of-desk-front), 0 8px 0 var(--of-desk-edge), 0 17px 18px var(--of-research-shadow);
+}
+.of-scene-research .of-big .of-desk-table::before {
+  inset: 8px 13px;
+  height: auto;
+  border: 1px solid color-mix(in srgb, var(--of-lamp) 16%, transparent);
+  border-radius: 50%;
+  background: transparent;
+}
+.of-scene-research .of-big .of-desk-screen { left: 30px; top: -10px; }
+.of-scene-research .of-big::before {
+  content: "";
+  position: absolute;
+  inset: -30px -28px -42px;
+  z-index: -1;
+  pointer-events: none;
+  border: 5px double color-mix(in srgb, var(--of-accent) 38%, var(--of-research-rug));
+  border-radius: 46%;
+  background:
+    repeating-linear-gradient(45deg, transparent 0 12px, var(--of-research-grain) 12px 14px, transparent 14px 26px),
+    repeating-linear-gradient(-45deg, transparent 0 12px, var(--of-research-grain) 12px 14px, transparent 14px 26px),
+    var(--of-research-rug);
+  box-shadow: inset 0 0 0 5px var(--of-research-rug), inset 0 0 0 7px var(--of-research-grain), 0 7px 15px var(--of-research-shadow);
+}
+/* 台灯光晕挂在 .of-council-core 上(::after 是共享的选中/交接高亮框,不能占) */
+.of-scene-research .of-big .of-council-core {
+  left: auto;
+  transform: none;
+  border: 0;
+  border-radius: 50%;
+  right: -48px;
+  top: -77px;
+  width: 172px;
+  height: 156px;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(ellipse, color-mix(in srgb, var(--of-lamp) 23%, transparent), transparent 68%);
+  animation: of-research-lamplight 12s ease-in-out infinite;
+}
+@keyframes of-research-lamplight {
+  0%, 100% { opacity: .65; }
+  50% { opacity: 1; }
+}
+
+/* 新共享布景沿用木色接口;研究场景只留上面一处环境灯动效。 */
+.of-scene-research .of-ambient { display: none; }
+.of-scene-research .of-desk-lamp { color: var(--of-lamp); }
+
+@media (max-width: 1350px) {
+  .of-scene-research .of-deck::after { opacity: .4; }
+  .of-scene-research .of-big::before { inset: -14px 12px -26px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .of-scene-research .of-big .of-council-core { animation: none; opacity: .8; }
+}

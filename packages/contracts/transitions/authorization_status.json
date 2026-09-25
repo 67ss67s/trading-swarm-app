@@ -1,0 +1,17 @@
+{
+  "machine": "authorization_status",
+  "version": 1,
+  "description": "授权生命周期。授权只能被消费/过期/作废/撤销,不能被修改;经济字段变化 = 作废 + 新 plan + 新授权。",
+  "initial": "active",
+  "states": ["active", "consumed", "expired", "invalidated", "revoked"],
+  "terminal": ["consumed", "expired", "invalidated", "revoked"],
+  "transitions": [
+    { "from": "active", "to": "consumed", "event": "dispatched" },
+    { "from": "active", "to": "expired", "event": "ttl_elapsed" },
+    { "from": "active", "to": "invalidated", "event": "plan_changed" },
+    { "from": "active", "to": "invalidated", "event": "regate_rejected" },
+    { "from": "active", "to": "invalidated", "event": "account_version_changed" },
+    { "from": "active", "to": "revoked", "event": "user_revoked" },
+    { "from": "active", "to": "revoked", "event": "emergency_stop" }
+  ]
+}

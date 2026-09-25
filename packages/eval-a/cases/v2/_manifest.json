@@ -1,0 +1,39 @@
+{
+  "generated_with": {
+    "symbols": [
+      "BTCUSDT",
+      "ETHUSDT"
+    ],
+    "tf": "15m",
+    "from": 1785542400000,
+    "to": 1788220800000,
+    "n": 14,
+    "seed": "7",
+    "set": "v2",
+    "chain_step_bars": 4,
+    "horizon_bars": 48,
+    "sample": "triggers",
+    "min_spacing_bars": 8
+  },
+  "cases": 118,
+  "tag_counts": {
+    "scan": 56,
+    "base": 14,
+    "trig:breakout": 32,
+    "stale": 14,
+    "halted": 14,
+    "mirror": 45,
+    "review": 62,
+    "in_position": 48,
+    "short": 31,
+    "entry:market": 44,
+    "long": 31,
+    "trig:ema_cross": 8,
+    "stop-crossed": 4,
+    "trig:vol_spike": 32,
+    "tp-crossed": 10,
+    "pending_entry": 14,
+    "entry:limit": 18,
+    "trig:retest": 8
+  }
+}

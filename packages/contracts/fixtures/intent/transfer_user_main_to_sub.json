@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "intent_id": "2b3c4d5e-6f70-4182-93a4-b5c6d7e8f9a0",
+  "account": "main",
+  "principal": "user",
+  "surface": "rpc",
+  "origin": "ui:funding-page",
+  "params": {
+    "kind": "transfer",
+    "asset": "USDT",
+    "amount": "25",
+    "from_account": "main",
+    "from_wallet": "spot",
+    "to_account": "sub",
+    "to_wallet": "usdm_futures",
+    "reason": "注资金丝雀"
+  },
+  "status": "proposed",
+  "gate_rejections": [],
+  "ttl_seconds": 300,
+  "created_at": 1788350000000,
+  "updated_at": 1788350000000
+}

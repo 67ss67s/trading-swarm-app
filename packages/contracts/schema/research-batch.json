@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trading-swarm.local/schema/research-batch.json",
+  "title": "ResearchBatchPortfolioPrimitive",
+  "description": "批量策略研究(docs/research/batch-study-2026-09-23.md)用的组合级原语:横截面动量调仓(portfolio_xsmom)、永续资金费套利两腿(portfolio_carry)。它们作用在资产池上,不是单资产 StrategyIR 的一段,所以不进 research.json 的原语表;实现见 packages/gateway/src/demo/research/primitives/portfolio-*.ts。",
+  "anyOf": [
+    {
+      "$ref": "#/$defs/PortfolioXsmomNode"
+    },
+    {
+      "$ref": "#/$defs/PortfolioCarryNode"
+    }
+  ],
+  "$defs": {
+    "PortfolioXsmomNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "primitive": {
+          "const": "portfolio_xsmom"
+        },
+        "params": {
+          "$ref": "#/$defs/PortfolioXsmomParams"
+        }
+      },
+      "required": [
+        "primitive",
+        "params"
+      ]
+    },
+    "PortfolioCarryNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "primitive": {
+          "const": "portfolio_carry"
+        },
+        "params": {
+          "$ref": "#/$defs/PortfolioCarryParams"
+        }
+      },
+      "required": [
+        "primitive",
+        "params"
+      ]
+    },
+    "PortfolioXsmomParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "横截面动量:每个调仓时刻按过去 lookback_days 天收益给资产池排名,等权持有前 top_k(long_short 时另做空后 top_k,多空各占一半权益);调仓时刻收盘排名、下一根开盘成交,成本按换手额 ×(手续费 + 滑点)。只用调仓时刻及以前已收盘的 K 线。",
+      "properties": {
+        "lookback_days": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 365,
+          "description": "排名用的回看天数(按日历时间,取正好 lookback_days 天前那根收盘)"
+        },
+        "top_k": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 30,
+          "description": "持有名数;可排名资产不足时按实际数"
+        },
+        "rebalance": {
+          "enum": [
+            "weekly",
+            "daily"
+          ],
+          "description": "weekly = 每周一 00:00 UTC 开盘调仓(周日最后一根收盘排名);daily = 每个 UTC 日开盘调仓"
+        },
+        "abs_filter": {
+          "type": "boolean",
+          "description": "绝对动量过滤:回看收益 ≤ 0 的名额留现金(做空一侧对称:回看收益 ≥ 0 的不做空)。缺省 false"
+        },
+        "side": {
+          "enum": [
+            "long_only",
+            "long_short"
+          ],
+          "description": "long_only(现货)/ long_short(永续:多前 top_k、空后 top_k,计资金费)。缺省 long_only"
+        },
+        "select": {
+          "enum": [
+            "momentum",
+            "random"
+          ],
+          "description": "random = 随机入场基线:同调仓时刻、同名数,随机挑资产(固定种子)。缺省 momentum"
+        },
+        "seed": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "select=random 时的种子"
+        }
+      },
+      "required": [
+        "lookback_days",
+        "top_k",
+        "rebalance"
+      ]
+    },
+    "PortfolioCarryParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "永续资金费套利(最小可用版):每个资产现货多 + 永续空等名义,资金 50/50 分给现货与永续保证金(1 倍);每个资金费结算时刻看最近 window 期(按 8h 等效折算)平均费率,高于 min_rate 就持有、否则空仓;进出场各付两腿吃单费 + 滑点;持仓中两腿名义偏离权益一半超过 rebalance_band 就调回;收益 = 收到的资金费 + 基差变化 − 成本。",
+      "properties": {
+        "window": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500,
+          "description": "平均的资金费期数(含当期刚结算的一期)"
+        },
+        "min_rate": {
+          "type": "number",
+          "minimum": -0.01,
+          "maximum": 0.01,
+          "description": "8h 等效费率门槛(小数,0.0001 = 1bp/8h ≈ 年化 11%);严格大于才持有"
+        },
+        "spot_fee_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 0.01,
+          "description": "现货吃单费率,缺省 0.001"
+        },
+        "perp_fee_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 0.01,
+          "description": "永续吃单费率,缺省 0.0005"
+        },
+        "slippage_bps": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "每腿每次成交的不利滑点,缺省 5"
+        },
+        "rebalance_band": {
+          "type": "number",
+          "minimum": 0.01,
+          "maximum": 1,
+          "description": "持仓期间两腿名义偏离「权益的一半」超过这个比例就调回(按吃单费 + 滑点计成本),缺省 0.2;等价于把现货浮盈划给永续保证金,1 倍空头不会被强平"
+        }
+      },
+      "required": [
+        "window",
+        "min_rate"
+      ]
+    }
+  }
+}

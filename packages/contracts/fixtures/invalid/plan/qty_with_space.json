@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "plan_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+  "intent_id": "0f8fad5b-d9cb-469f-a165-70867728950e",
+  "version": 1,
+  "plan_hash": "474838171b83561288f58fc3ebdaf96c236f5ff4983b1556cac37ee8cc22433c",
+  "account": "sub",
+  "channel": "mcp",
+  "economic": {
+    "kind": "order",
+    "product": "usdm_perp",
+    "symbol": "BTCUSDT",
+    "side": "buy",
+    "position_side": "both",
+    "position_mode": "one_way",
+    "order_type": "limit",
+    "qty": "0.002 ",
+    "price": "60000.5",
+    "time_in_force": "gtc",
+    "reduce_only": false,
+    "close_position": false,
+    "leverage": 2,
+    "margin_type": "isolated",
+    "protection": {
+      "stop": {
+        "order_type": "stop_market",
+        "trigger_price": "59000",
+        "working_type": "mark_price",
+        "close_position": true
+      },
+      "take_profits": [
+        {
+          "order_type": "take_profit_market",
+          "trigger_price": "62000",
+          "qty": "0.001",
+          "working_type": "mark_price",
+          "close_position": false
+        }
+      ]
+    },
+    "max_naked_seconds": 20
+  },
+  "basis": {
+    "filters": {
+      "tick_size": "0.1",
+      "step_size": "0.001",
+      "min_qty": "0.001",
+      "max_qty": "1000",
+      "min_notional": "100",
+      "price_precision": 1,
+      "qty_precision": 3,
+      "observed_at": 1788349990000
+    },
+    "sizing": {
+      "method": "risk_pct_by_stop_distance",
+      "equity": "1000",
+      "risk_pct": "0.25",
+      "stop_distance": "1000.5",
+      "reference_price": "60000.5",
+      "raw_qty": "0.0024987",
+      "rounding": "down"
+    },
+    "account_version": "a18c8380c8cef8e3ed2ef66ee6d39cfcf4bd56c0271e3f7fe810478e065ac7ab",
+    "market_ref": {
+      "mark_price": "60010.2",
+      "last_price": "60008.9",
+      "observed_at": 1788349999000
+    },
+    "position_mode_observed": "one_way",
+    "policy_version": 3,
+    "notes": [
+      "risk 0.25% × 1000 = 2.5 USDT",
+      "raw_qty 0.0024987 → step 0.001 向下 → 0.002"
+    ]
+  },
+  "authorization_ttl_seconds": 120,
+  "created_at": 1788350001000,
+  "expires_at": 1788350601000
+}

@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "plan_id": "9eaf7081-92a3-4b4c-8d5e-6f708192a3b5",
+  "intent_id": "4d5e6f70-8192-4a3b-b4c5-d6e7f8a9b0c1",
+  "version": 2,
+  "plan_hash": "db7cfc62225ccfbc94fa5654e8a01b20c64337169712840688ebf79328bb48ac",
+  "account": "sub",
+  "channel": "mcp",
+  "economic": {
+    "kind": "protect",
+    "product": "usdm_perp",
+    "symbol": "ETHUSDT",
+    "position_side": "both",
+    "legs": [
+      {
+        "order_type": "stop_market",
+        "trigger_price": "2900.10",
+        "working_type": "mark_price",
+        "close_position": true
+      }
+    ],
+    "replace_order_ids": [
+      "123456789",
+      "123456790"
+    ]
+  },
+  "basis": {
+    "position_mode_observed": "one_way",
+    "notes": [
+      "替换旧止损 123456789/123456790"
+    ]
+  },
+  "authorization_ttl_seconds": 30,
+  "created_at": 1788350000050,
+  "expires_at": 1788350060050
+}

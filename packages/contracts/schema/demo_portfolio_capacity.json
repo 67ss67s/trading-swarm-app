@@ -1,0 +1,383 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trading-swarm.dev/schema/demo_portfolio_capacity.json",
+  "title": "DemoPortfolioCapacity",
+  "description": "Portfolio Manager 典型止损容量估算；不是执行授权。金额为十进制字符串，不能计算的字段显式 null。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "snapshot_id",
+    "computed_at",
+    "basis",
+    "snapshot_quality",
+    "equity",
+    "available",
+    "risk_pct",
+    "leverage",
+    "default_stop_distance_pct",
+    "slots_total",
+    "slots_used",
+    "slots_free",
+    "margin_budget",
+    "binding_constraint",
+    "by_symbol"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "snapshot_id": {
+      "type": "string"
+    },
+    "computed_at": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "basis": {
+      "const": "typical_stop_estimate"
+    },
+    "snapshot_quality": {
+      "enum": [
+        "ok",
+        "stale",
+        "inconsistent",
+        "incomplete"
+      ]
+    },
+    "equity": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "available": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "risk_pct": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+    },
+    "leverage": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "default_stop_distance_pct": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+    },
+    "slots_total": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "slots_used": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "slots_free": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "margin_budget": {
+      "$ref": "#/$defs/DemoCapacityMargin"
+    },
+    "binding_constraint": {
+      "$ref": "#/$defs/DemoCapacityConstraint"
+    },
+    "by_symbol": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/DemoSymbolCapacity"
+      }
+    }
+  },
+  "$defs": {
+    "DemoCapacityConstraint": {
+      "enum": [
+        "thread_slots",
+        "margin_budget",
+        "available_margin",
+        "min_size_risk",
+        "rules_unknown",
+        "market_unavailable",
+        "watchlist",
+        "snapshot_unavailable"
+      ]
+    },
+    "DemoCapacityMargin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_margin_ratio",
+        "limit_usdt",
+        "committed_usdt",
+        "reserved_usdt",
+        "free_usdt",
+        "required_for_free_slots_usdt",
+        "slots_supported",
+        "witness_symbols"
+      ],
+      "properties": {
+        "max_margin_ratio": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        },
+        "limit_usdt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "committed_usdt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reserved_usdt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "free_usdt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "required_for_free_slots_usdt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "slots_supported": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "witness_symbols": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "DemoSymbolCapacity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "symbol",
+        "verdict",
+        "watch_only",
+        "occupied",
+        "price",
+        "rules_source",
+        "rules_observed_at",
+        "stop_distance_pct",
+        "stop_source",
+        "min_qty",
+        "min_viable_notional",
+        "min_size_risk",
+        "required_equity",
+        "equity_shortfall",
+        "margin_per_thread",
+        "risk_budget",
+        "budget_margin_per_thread"
+      ],
+      "properties": {
+        "symbol": {
+          "type": "string"
+        },
+        "verdict": {
+          "enum": [
+            "ok",
+            "needs_equity",
+            "rules_unknown",
+            "unavailable"
+          ]
+        },
+        "watch_only": {
+          "type": "boolean"
+        },
+        "occupied": {
+          "type": "boolean"
+        },
+        "price": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rules_source": {
+          "enum": [
+            "exchange",
+            "paper",
+            null
+          ]
+        },
+        "rules_observed_at": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "stop_distance_pct": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "stop_source": {
+          "enum": [
+            "atr",
+            "default",
+            null
+          ]
+        },
+        "min_qty": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "min_viable_notional": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "min_size_risk": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "required_equity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "equity_shortfall": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "margin_per_thread": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "risk_budget": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "budget_margin_per_thread": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

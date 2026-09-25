@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "version": 4,
+  "updated_at": 1788340000000,
+  "mode": "halt_all",
+  "authority": "observe",
+  "emergency_stop": true,
+  "live_capped_enabled": false,
+  "symbol_allowlist": [
+    "BTCUSDT",
+    "ETHUSDT"
+  ],
+  "product_allowlist": [
+    "usdm_perp"
+  ],
+  "caps": {
+    "max_leverage": 2,
+    "risk_pct_per_trade": "0.25",
+    "max_order_notional": "200",
+    "max_position_notional": "400",
+    "max_daily_opens": 2,
+    "daily_loss_stop_pct": "1",
+    "symbol_cooldown_seconds": 3600,
+    "max_naked_seconds": 20,
+    "account_truth_max_age_ms": 15000,
+    "market_max_age_ms": 5000,
+    "authorization_ttl_market_seconds": 30,
+    "authorization_ttl_limit_seconds": 120,
+    "max_price_deviation_bps": 55,
+    "ntp_drift_block_ms": 2000,
+    "ntp_drift_halt_ms": 10000
+  },
+  "main_account": {
+    "manual_trading_enabled": true,
+    "transfers_enabled": false,
+    "withdraw_enabled": false
+  },
+  "canary": {
+    "enabled": true,
+    "max_loss_quote": "30",
+    "max_notional_quote": "150",
+    "max_leverage": 2,
+    "funded_balance_quote": "100"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "name": "@trading-swarm/gateway",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "TS 网关进程:控制面、工具注册表、agent runtime、调度器;经 ExecClient(UDS JSON-RPC)调 execd。A0 只放 ExecClient 骨架与 state.sqlite 迁移。",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b && node -e \"require('fs').cpSync('src/migrations','dist/migrations',{recursive:true})\"",
+    "test": "vitest run",
+    "demo": "npm run build && node dist/demo/main.js",
+    "demo:paper": "npm run build && TG_DEMO_BACKEND=paper TG_DEMO_RUN_ON_START=1 node dist/demo/main.js",
+    "graph:md": "node scripts/graph-md.mjs",
+    "funnel": "npm run build && node scripts/funnel.mjs"
+  },
+  "dependencies": {
+    "@binance/binance-cli": "^1.3.0",
+    "@okx_ai/okx-trade-cli": "1.4.7",
+    "@okx_ai/okx-trade-mcp": "1.4.7",
+    "@trading-swarm/contracts": "*",
+    "ccxt": "^4.5.0"
+  }
+}

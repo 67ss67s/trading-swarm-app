@@ -1,0 +1,19 @@
+{
+  "name": "@trading-swarm/eval-a",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "判断链 eval harness(实现 A):case 生成(镜像/过期/紧急停止变体 + review 链)、离线 runner(stub/pi/claude + 响应缓存)、分项指标报告与两次 run 对比。只经 `import { demo } from '@trading-swarm/gateway'` 复用线上 context builder / validator / gates / reducer。",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "eval": "node dist/cli.js",
+    "eval:gates": "npm run build --silent && node dist/cli.js gates",
+    "eval:gen-gates": "npm run build --silent && node dist/cli.js gen-gates",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@trading-swarm/gateway": "*"
+  }
+}

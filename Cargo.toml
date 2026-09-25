@@ -1,0 +1,48 @@
+[workspace]
+members = [
+  "crates/contracts-rs",
+  "crates/exec-core",
+  "crates/exchange-mcp",
+  "crates/execd",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.96"
+license = "UNLICENSED"
+
+[workspace.dependencies]
+anyhow = "1.0"
+axum = "0.8"
+base64 = "0.22"
+chrono = { version = "0.4", features = ["clock", "serde"] }
+clap = { version = "4.5", features = ["derive", "env"] }
+futures-util = "0.3"
+hex = "0.4"
+hmac = "0.12"
+http = "1"
+# 行情/用户数据 WS 的代理发现复用 hyper-util Matcher(与 reqwest system-proxy 同源;8794 实测口径)
+hyper-util = { version = "0.1", features = ["client-proxy", "client-proxy-system"] }
+jsonschema = "0.52"
+rand = "0.8"
+# system-proxy:GUI/launchd 启动不继承终端 env;socks:ALL_PROXY=socks5:// 也可用。回环必须 no_proxy(Clash fake-IP)。
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "system-proxy", "socks", "stream"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha2 = "0.10"
+tempfile = "3"
+thiserror = "2.0"
+tokio = { version = "1.41", features = ["macros", "rt-multi-thread", "net", "io-util", "time", "sync", "signal", "fs", "process"] }
+tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+url = "2.5"
+uuid = { version = "1.11", features = ["v4", "serde"] }
+contracts-rs = { path = "crates/contracts-rs" }
+exec-core = { path = "crates/exec-core" }
+exchange-mcp = { path = "crates/exchange-mcp" }
+
+[profile.release]
+debug = 1

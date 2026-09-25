@@ -1,0 +1,237 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trading-swarm.dev/schema/common.json",
+  "title": "Common",
+  "description": "所有契约共享的基础类型。金额/价格/数量一律十进制字符串,时间戳一律 unix 毫秒整数,枚举一律小写 snake_case。",
+  "$defs": {
+    "Uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "description": "小写 UUID(v4 为主)"
+    },
+    "Decimal": {
+      "type": "string",
+      "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$",
+      "description": "十进制字符串;不用 float,便于两种语言得到相同的 canonical JSON 与哈希"
+    },
+    "UnsignedDecimal": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+    },
+    "TimestampMs": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991,
+      "description": "unix 毫秒;上限为 JS 安全整数"
+    },
+    "Hash256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "sha256 小写 hex"
+    },
+    "Symbol": {
+      "type": "string",
+      "pattern": "^[A-Z0-9]{2,20}$",
+      "description": "交易所符号,如 BTCUSDT"
+    },
+    "Asset": {
+      "type": "string",
+      "pattern": "^[A-Z0-9]{1,12}$"
+    },
+    "ClientOrderId": {
+      "type": "string",
+      "pattern": "^[\\.A-Z:/a-z0-9_-]{1,36}$",
+      "description": "Binance 允许的 clientOrderId 字符集与长度;本仓库生成的以 tg- 开头"
+    },
+    "AccountRef": {
+      "type": "string",
+      "enum": ["main", "sub"],
+      "description": "main=主账户(用户,REST);sub=Agentic 子账户(agent,MCP)"
+    },
+    "Channel": {
+      "type": "string",
+      "enum": ["rest", "mcp"]
+    },
+    "ObservationSource": {
+      "type": "string",
+      "enum": ["rest", "ws", "mcp", "cache"]
+    },
+    "Product": {
+      "type": "string",
+      "enum": ["usdm_perp", "spot"],
+      "description": "v1:USDⓈ-M 永续可交易;spot 只读"
+    },
+    "Side": {
+      "type": "string",
+      "enum": ["buy", "sell"]
+    },
+    "PositionSide": {
+      "type": "string",
+      "enum": ["both", "long", "short"]
+    },
+    "PositionMode": {
+      "type": "string",
+      "enum": ["one_way", "hedge"]
+    },
+    "MarginType": {
+      "type": "string",
+      "enum": ["isolated", "cross"]
+    },
+    "OrderType": {
+      "type": "string",
+      "enum": [
+        "market",
+        "limit",
+        "stop_market",
+        "stop_limit",
+        "take_profit_market",
+        "take_profit_limit",
+        "trailing_stop_market"
+      ]
+    },
+    "TimeInForce": {
+      "type": "string",
+      "enum": ["gtc", "ioc", "fok", "gtx"]
+    },
+    "WorkingType": {
+      "type": "string",
+      "enum": ["mark_price", "contract_price"],
+      "description": "条件单触发价来源:mark=标记价,contract=最新成交价"
+    },
+    "Wallet": {
+      "type": "string",
+      "enum": ["spot", "usdm_futures"]
+    },
+    "Principal": {
+      "type": "string",
+      "enum": ["user", "model", "cron", "scheduler", "mcp_client"],
+      "description": "ActorContext.principal(设计 §6.1)"
+    },
+    "Surface": {
+      "type": "string",
+      "enum": ["rpc", "model", "mcp", "internal"]
+    },
+    "IntentKind": {
+      "type": "string",
+      "enum": ["open", "close", "cancel_order", "protect", "transfer"]
+    },
+    "IntentStatus": {
+      "type": "string",
+      "enum": [
+        "proposed",
+        "rejected",
+        "awaiting_approval",
+        "authorized",
+        "recorded",
+        "dispatching",
+        "execution_unknown",
+        "executing",
+        "completed",
+        "canceled",
+        "expired"
+      ],
+      "description": "设计 §5.1 状态图;终态 rejected/recorded/completed/canceled/expired;execution_unknown 非终态"
+    },
+    "AuthorizationStatus": {
+      "type": "string",
+      "enum": ["active", "consumed", "expired", "invalidated", "revoked"]
+    },
+    "AttemptStage": {
+      "type": "string",
+      "enum": ["before_submit", "submitted", "result_persisted"],
+      "description": "崩溃边界:clientOrderId 在 before_submit 时已持久化;submitted 后不知结果即 unknown"
+    },
+    "AttemptResult": {
+      "type": "string",
+      "enum": ["pending", "acked", "rejected", "unknown", "not_received"]
+    },
+    "ExchangeOrderStatus": {
+      "type": "string",
+      "enum": ["new", "partially_filled", "filled", "canceled", "expired", "rejected"]
+    },
+    "EffectStatus": {
+      "type": "string",
+      "enum": ["pending", "satisfied", "failed"]
+    },
+    "Leg": {
+      "type": "string",
+      "enum": ["entry", "stop", "take_profit", "cancel", "close", "transfer"],
+      "description": "一个 intent 可能产生多条腿;每条腿各自有 ExecutionAttempt"
+    },
+    "OrderOrigin": {
+      "type": "string",
+      "enum": ["local", "foreign", "unknown"],
+      "description": "按 clientOrderId 前缀判定:tg- 为本机;其他(含 8794 的 ts_)为外部"
+    },
+    "Completeness": {
+      "type": "string",
+      "enum": ["complete", "partial", "missing"]
+    },
+    "Consistency": {
+      "type": "string",
+      "enum": ["consistent", "inconsistent", "unavailable"]
+    },
+    "PolicyMode": {
+      "type": "string",
+      "enum": ["run", "stop_opening", "flatten_only", "halt_all"]
+    },
+    "Authority": {
+      "type": "string",
+      "enum": ["observe", "draft", "paper", "live_capped"]
+    },
+    "ErrorKind": {
+      "type": "string",
+      "enum": [
+        "invalid_params",
+        "not_found",
+        "forbidden",
+        "halted",
+        "stale",
+        "unavailable",
+        "conflict",
+        "expired",
+        "invalid_transition",
+        "gate_rejected",
+        "exchange_rejected",
+        "unauthorized",
+        "rate_limited",
+        "transport_ambiguous",
+        "internal"
+      ]
+    },
+    "ErrorInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "message", "retryable"],
+      "properties": {
+        "kind": { "$ref": "#/$defs/ErrorKind" },
+        "message": { "type": "string", "maxLength": 2000 },
+        "retryable": { "type": "boolean" },
+        "exchange_code": {
+          "type": "integer",
+          "description": "交易所错误码(如 Binance -2021),有则带"
+        },
+        "http_status": { "type": "integer", "minimum": 100, "maximum": 599 }
+      }
+    },
+    "GateRejection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gate", "message"],
+      "properties": {
+        "gate": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_.]{1,63}$",
+          "description": "闸名,如 policy.mode / freshness.account / risk.max_leverage"
+        },
+        "value": { "type": "string", "maxLength": 200, "description": "被拒时的实际值(字符串化)" },
+        "limit": { "type": "string", "maxLength": 200, "description": "阈值(字符串化)" },
+        "message": { "type": "string", "maxLength": 1000 }
+      }
+    },
+    "SchemaVersion": {
+      "type": "integer",
+      "const": 1
+    }
+  }
+}
