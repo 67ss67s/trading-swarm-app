@@ -100,7 +100,7 @@ export interface MemoryRow {
 export interface SamplingSummary {
   /** Samples per case (1 = legacy single-sample run). */
   samples_per_case: number;
-  /** 1 − noise_floor (Codex: the complement of pairwise disagreement, not the mean modal agreement). null on N=1. */
+  /** 1 − noise_floor (review: the complement of pairwise disagreement, not the mean modal agreement). null on N=1. */
   self_consistency: number | null;
   /** Q = mean over cases (without brain errors) of P(two samples drawn without replacement disagree on action). null on N=1. */
   noise_floor: number | null;
@@ -158,7 +158,7 @@ export function boundaryPairs(episodes: EpisodeRecord[], modeOf: (e: EpisodeReco
     .sort((a, b) => b.cases - a.cases || a.pair.localeCompare(b.pair));
 }
 
-/** Codex review 2026-09-04: stable = unique mode AND votes ≥ ceil(0.8·N) (N=5 → 4/5; N=3 → 3/3). N=1 → not applicable. */
+/** external review 2026-09-04: stable = unique mode AND votes ≥ ceil(0.8·N) (N=5 → 4/5; N=3 → 3/3). N=1 → not applicable. */
 export const STABLE_FRACTION = 0.8;
 export function isStable(ep: EpisodeRecord): boolean | null {
   const N = ep.samples?.length ?? 1;

@@ -151,7 +151,7 @@ export function UniverseScreenPanel({ onNewExperiment }: { onNewExperiment: (uni
             ))}
           </select>
         ) : (
-          <span className="text-muted-foreground">{backendMissing ? t('后端还没有资产池接口(第二轮 astra 交付中)') : universesQ.isLoading ? t('读取中…') : t('还没有资产池,先冻结一个。')}</span>
+          <span className="text-muted-foreground">{backendMissing ? t('后端还没有资产池接口(后端交付中)') : universesQ.isLoading ? t('读取中…') : t('还没有资产池,先冻结一个。')}</span>
         )}
         {universe ? (
           <>

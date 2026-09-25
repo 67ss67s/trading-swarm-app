@@ -9,6 +9,7 @@ import type { EvoDay, EvoRoleRow, EvoStatus, Role } from './types';
 import { R, P, text, mix, rgba, glow, type Ctx } from './sprites';
 
 export const BOARD_N = 14;
+const EMPTY_DAY: EvoDay = { date: '', status: 'none', score: null, headline: null };
 const CELL = 3;
 const STEP = 4;
 const TITLE_W = 11;
@@ -66,14 +67,16 @@ export function drawBoard(ctx: Ctx, r: RoomGeo, row: EvoRoleRow | undefined, th:
   R(ctx, g.x, g.y, g.w, g.h, th.evo.plate);
   R(ctx, g.x, g.y, g.w, 1, mix(th.evo.plate, '#ffffff', 0.12));
   text(ctx, 'EVO', g.titleX, g.y + 1, expanded ? '#ffe36b' : mix(th.evo.good, '#ffffff', 0.3));
-  if (!row) return;
-  const days = row.days.slice(-BOARD_N);
+  // 没数据也要把 14 格画出来(灰格);有数据按日期右对齐,今天在最右
+  const src = row?.days ?? [];
+  const days = src.slice(-BOARD_N);
   const off = BOARD_N - days.length;
+  for (let k = 0; k < off; k++) drawCell(ctx, g.cellsX + k * STEP, g.cellY, CELL, EMPTY_DAY, th, false, t, reduced, 0);
   days.forEach((d, i) => {
     const x = g.cellsX + (i + off) * STEP;
     const today = i === days.length - 1;
     drawCell(ctx, x, g.cellY, CELL, d, th, today, t, reduced, today ? flash : 0);
-    if (hover === row.days.length - days.length + i) {
+    if (hover === src.length - days.length + i) {
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(x - 1, g.cellY - 1, CELL + 2, 1);
       ctx.fillRect(x - 1, g.cellY + CELL, CELL + 2, 1);
@@ -91,15 +94,16 @@ export function drawPanel(ctx: Ctx, r: RoomGeo, row: EvoRoleRow | undefined, th:
   // 图例
   const lg: EvoStatus[] = ['good', 'ok', 'bad', 'none'];
   lg.forEach((s, i) => R(ctx, p.x + p.w - 4 - (4 - i) * 5, p.y + 3, 3, 3, th.evo[s]));
-  if (!row) return;
-  const days = row.days.slice(-p.cols * p.rows);
+  const src = row?.days ?? [];
+  const days = src.slice(-p.cols * p.rows);
   const off = p.cols * p.rows - days.length;
+  for (let k = 0; k < off; k++) drawCell(ctx, p.x + p.ox + (k % p.cols) * p.step, p.y + p.oy + Math.floor(k / p.cols) * p.step, p.cell, EMPTY_DAY, th, false, t, reduced, 0);
   days.forEach((d, i) => {
     const k = i + off;
     const x = p.x + p.ox + (k % p.cols) * p.step;
     const y = p.y + p.oy + Math.floor(k / p.cols) * p.step;
     drawCell(ctx, x, y, p.cell, d, th, i === days.length - 1, t, reduced, 0);
-    if (hover === row.days.length - days.length + i) {
+    if (hover === src.length - days.length + i) {
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(x - 1, y - 1, p.cell + 2, 1);
       ctx.fillRect(x - 1, y + p.cell, p.cell + 2, 1);

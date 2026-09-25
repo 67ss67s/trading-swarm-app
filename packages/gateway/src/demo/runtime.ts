@@ -1,5 +1,6 @@
 import { AgentStrategyService } from './agent-strategy.js';
 import { matrixStudyService, type MatrixStudyHooks } from './routes-matrix-study.js';
+import { recorderMicrostructure } from './micro-source.js';
 import { AtomicCallBudget, JudgeDecisionStore, fromDecisionClient, type JudgeRuntime } from './research/judge/index.js';
 import { hash } from './research/primitives.js';
 import type { StrategyIR } from '@trading-swarm/contracts';
@@ -446,6 +447,8 @@ export class DemoRuntime extends EventEmitter {
         if (ref !== f.profile.ref) return `这条策略钉住的判断模型(${ref ?? '无'})与当前绑定(${f.profile.ref})不一致;换回原连接,或重新研究后再运行`;
         return null;
       },
+      // 盘口 / 清算特征:与矩阵研究回测同一个录制源(只取 as_of 前已落盘的帧)
+      microstructure: recorderMicrostructure(),
       judge: (run, ir) => this.judgeRuntime(ir, `strategy_run:${run.id}:${utcDayStart(Date.now())}`, 2000, '0.5', {
         ir_hash: run.ir_hash, timeframe: run.timeframe, market: run.market, execution: run.execution, risk_pct: run.risk_pct, max_open: run.max_open, leverage: run.leverage,
       }),
@@ -669,6 +672,7 @@ export class DemoRuntime extends EventEmitter {
   readonly matrixStudyHooks: MatrixStudyHooks = {
     judgeProvider: () => { const f = this.modelConnections().frozenDecision(); return f ? fromDecisionClient(f.client, f.profile) : null; },
     modelProfile: () => this.modelConnections().frozenDecision()?.profile ?? null,
+    microstructure: () => recorderMicrostructure(),
     onConclusion: (row, c) => {
       const spec = row.manifest.spec as { origin?: { chat_session_id?: string | null }; symbols: string[] };
       const head = c.kind === 'passed' ? `矩阵研究完成:找到 ${c.finalist_ids.length} 条通过留出段检验的候选` : '矩阵研究完成:这次没有找到能用的策略';
@@ -1276,12 +1280,23 @@ export class DemoRuntime extends EventEmitter {
     return view;
   }
 
-  /** null = a backend switch is allowed right now; otherwise the reason it is refused. */
+  /**
+   * null = a backend switch is allowed right now; otherwise the reason it is refused.
+   * 2026-09-25 Jacky:换账户不再受限(原来有进行中的线程 / 状态不明的订单就拒绝切换)。
+   * 线程与订单仍绑在原后端(thread.backend),切回去照常管理;切换时用 switchWarnings() 提醒留在旧账户的东西。
+   */
   switchBlocker(): string | null {
-    const open = this.openThreads();
-    if (open.length) return `还有 ${open.length} 个进行中的线程(${open.map((t) => t.symbol).join('、')}),先平掉/撤单再换执行后端`;
-    if (this.store.intents(50).some((i) => i.status === 'unknown')) return '有一笔订单状态不明,先核对清楚再换执行后端';
     return null;
+  }
+
+  /** 切换时提醒:哪些线程 / 状态不明的订单留在旧后端(不阻止切换)。 */
+  switchWarnings(): string[] {
+    const out: string[] = [];
+    const open = this.openThreads();
+    if (open.length) out.push(`${open.length} 个进行中的线程留在原账户(${open.map((t) => t.symbol).join('、')}),切回原账户后照常管理`);
+    const unknown = this.store.intents(50).filter((i) => i.status === 'unknown').length;
+    if (unknown) out.push(`${unknown} 笔状态不明的订单留在原账户,切回后再核对`);
+    return out;
   }
 
   /**
@@ -1295,6 +1310,8 @@ export class DemoRuntime extends EventEmitter {
     if (!factory) return `执行后端 ${kind} 在这个进程里没注册(缺二进制或缺配置)`;
     const blocker = this.switchBlocker();
     if (blocker) return blocker;
+    const left = this.switchWarnings();
+    if (left.length) this.activity('execution_changed', { level: 'warn', title: '切换账户:原账户上还有未了结的东西', detail: left.join(';'), data: { from: this.backend.kind, to: kind } });
     this.switching = this.switchBackendInner(kind, factory);
     try {
       return await this.switching;
@@ -1339,6 +1356,8 @@ export class DemoRuntime extends EventEmitter {
   async applyWorkflow(patch: Record<string, unknown>): Promise<{ workflow: Workflow; errors: string[] }> {
     const errors: string[] = [];
     let rest = patch;
+    // 用户手动选了执行后端 → 放弃启动失败后的自动切回
+    if ('execution' in patch && this.backendRecoveryTimer) { clearInterval(this.backendRecoveryTimer); this.backendRecoveryTimer = null; }
     if ('execution' in patch && patch['execution'] !== this.backend.kind) {
       const want = patch['execution'];
       if (typeof want !== 'string' || !BACKENDS.includes(want as Backend)) errors.push(`execution 只能是 ${BACKENDS.join('/')}`);
@@ -1438,6 +1457,31 @@ export class DemoRuntime extends EventEmitter {
   }
 
   // ------------------------------------------------------------ lifecycle
+  /**
+   * 启动时真交易所通道起不来(OKX 超时/抖动)会退回纸面;以前从此一直停在纸面,重启后还读到落库的 paper
+   * (2026-09-25:18811 被悄悄切成纸面)。现在每分钟试一次切回原通道,成功即停;期间用户手动切换则放弃。
+   */
+  private backendRecoveryTimer: ReturnType<typeof setInterval> | null = null;
+  private scheduleBackendRecovery(target: Backend): void {
+    if (this.backendRecoveryTimer) clearInterval(this.backendRecoveryTimer);
+    let tries = 0;
+    this.backendRecoveryTimer = setInterval(() => {
+      tries++;
+      if (this.stopped || this.backend.kind !== 'paper' || tries > 120) {
+        if (this.backendRecoveryTimer) clearInterval(this.backendRecoveryTimer);
+        this.backendRecoveryTimer = null;
+        return;
+      }
+      void this.switchBackend(target).then((err) => {
+        if (err) return;
+        if (this.backendRecoveryTimer) clearInterval(this.backendRecoveryTimer);
+        this.backendRecoveryTimer = null;
+        this.activity('execution_changed', { level: 'success', title: `${BACKEND_LABELS[target]} 已恢复,自动切回`, detail: `启动时退回纸面后第 ${tries} 次重试成功`, data: { from: 'paper', to: target } });
+      });
+    }, 60_000);
+    this.backendRecoveryTimer.unref?.();
+  }
+
 
   async start(opts: { runOnStart?: boolean } = {}): Promise<void> {
     this.stopped = false;
@@ -1456,7 +1500,8 @@ export class DemoRuntime extends EventEmitter {
       this.backend = this.executorControl.wrap(paper());
       await this.backend.start();
       this.setWorkflow({ execution: 'paper' });
-      this.activity('execution_changed', { level: 'danger', title: `${BACKEND_LABELS[failed]} 启动失败,已退回纸面模拟`, detail: msg, data: { from: failed, to: 'paper', error: msg } });
+      this.activity('execution_changed', { level: 'danger', title: `${BACKEND_LABELS[failed]} 启动失败,已退回纸面模拟`, detail: `${msg}(每分钟自动重试切回)`, data: { from: failed, to: 'paper', error: msg } });
+      this.scheduleBackendRecovery(failed);
     }
     this.log('info', 'runtime', `启动:观察 ${this.workflow.watchlist.join('/')} ${this.workflow.timeframe},执行后端 ${BACKEND_LABELS[this.backend.kind]},大脑 ${this.brainForRole('judge').name}`);
     await this.pollMarkets();
@@ -1500,6 +1545,7 @@ export class DemoRuntime extends EventEmitter {
   }
 
   async stop(): Promise<void> {
+    if (this.backendRecoveryTimer) { clearInterval(this.backendRecoveryTimer); this.backendRecoveryTimer = null; }
     this.stopped = true;
     this.shadowStopping = true;
     for (const p of this.pollers) clearInterval(p);
@@ -1514,6 +1560,8 @@ export class DemoRuntime extends EventEmitter {
     this.strategyRunner = null;
     await this.marketAgentInst?.inbox.stop();
     await this.marketAgentInst?.publisher.stop();
+    await this.marketAgentInst?.services.stop();
+    await this.marketAgentInst?.providerTasks.stop();
     this.klineTimer = this.infoTimer = this.eventsTimer = null;
     this.radar.stop();
     this.reviewer.stop();
@@ -3050,7 +3098,7 @@ export class DemoRuntime extends EventEmitter {
     if (this.openThreads().some((t) => t.symbol === symbol)) return false;
     if (this.capReached(`${symbol} 扫描`)) return false;
     // cap 只在入队前查过一次是不够的:60 币批量入队时预算还没花完,等排到自己时可能早已超额
-    // (串行队列只去重、不预占预算)。出队真正要花钱之前再查一次,超了就丢弃(Codex §B6)。
+    // (串行队列只去重、不预占预算)。出队真正要花钱之前再查一次,超了就丢弃(评审 §B6)。
     // §9.36:同一时刻还要复查 effective 策略与议会政策(排队期间票池可能已经被换掉/清空)。
     // 入队时冻结的是**版本 + 内容 hash**,不是一串 id(出队时同 ID 新版本 = 另一套规则,不算同一个池)。
     const enqueuedPool = poolKeys(this.store.strategies.resolve(effectivePoolIds(this.livePoolIds(), null), { allow_below_paper: false, backend: this.backend.kind }).specs);
@@ -3279,7 +3327,7 @@ export class DemoRuntime extends EventEmitter {
     // v3.5 strategy library: only strategies at paper or above may drive a live judgment, and only the ones
     // this episode's triggers actually wake get rendered (an empty set falls back to playbook_text alone).
     // 09-12:Radar 候选**只作优先/提示**(排在最前,决定扫描周期),不再替换票池——以前候选一出现,
-    // 议会就只剩这一条策略在投票,「多条策略一致才交易」直接失效(Codex §B4/D)。
+    // 议会就只剩这一条策略在投票,「多条策略一致才交易」直接失效(评审 §B4/D)。
     // §9.36(P1-06 第 2 条):**正式票池的唯一口径是 effectivePoolIds** —— Radar 候选只能把已经在
     // active 里的那条排到最前(优先),**不能**把一条被人从 active 停掉的策略再塞回票池。
     // 「停用 = 摘出票池」对 Radar 一样有硬效力。
@@ -3530,7 +3578,8 @@ export class DemoRuntime extends EventEmitter {
     const opensToday = this.store.threadOpensSince(utcDayStart(ep.at));
     const blockers = openingBlockers(this.openThreads(), this.workflow, symbol, opensToday, this.dailyLossHit(), j.proposal?.market ?? 'perp');
     const staleRefs = new Set(built.evidence.filter((e) => e.stale).map((e) => e.ref));
-    const unknownOpen = this.store.intents(50).some((i) => i.status === 'unknown');
+    // 只看当前执行后端的状态不明订单:换账户后,旧账户遗留的未知回执不挡新账户开仓(2026-09-25 Jacky)。
+    const unknownOpen = this.store.intents(50).some((i) => i.status === 'unknown' && (i.backend ?? this.backend.kind) === this.backend.kind);
     // 09-12 §2 分层闸上下文:本层的在手线程数与今日开仓数(不是全局的)。
     // 配额全 0 时 `tierGates` 每一行都 passed,行为与分层上线之前逐字相同。
     const proposedTier = tierOf(this.selectedSpecOf(ep, j.strategy_id) ?? { timeframe: this.workflow.timeframe });
@@ -4501,7 +4550,7 @@ export class DemoRuntime extends EventEmitter {
       }
     }
     if (!proven) {
-      // 结果未知 ≠ 失败:意图留在 unknown,线程保持开着,巡检按新鲜仓位收敛(codex-review #7)。
+      // 结果未知 ≠ 失败:意图留在 unknown,线程保持开着,巡检按新鲜仓位收敛(review #7)。
       const unknown = r.ambiguous === true;
       this.updateIntent(ep, intent, { status: unknown ? 'unknown' : 'failed', error: r.error ?? '平仓未被证实' });
       this.saveThread({ ...t, attention: 'CLOSE_FAILED', version: t.version + 1, updated_at: Date.now() });

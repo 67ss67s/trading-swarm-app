@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import type { ActivityItem, BotHandoff, BotsResponse, DemoIntent, HistoryResponse, Kline, Overview, PortfolioSnapshotResponse } from '../src/api/types';
 import type { EvoDailyResponse } from '../src/api/evolution';
 import type { ResearchStrategy } from '@trading-swarm/contracts';
-import { btcVol1h, buildDeco, buildFloorModel, deriveMeetings, pickStrategy, pnlToday, presenceToStatus, riskToWeather, toSnapshotA } from '../src/components/floor-v4/snapshot';
+import { btcVol1h, buildDeco, buildEvoRows, buildFloorModel, deriveMeetings, evoRoleOf, pickStrategy, pnlToday, presenceToStatus, riskToWeather, toSnapshotA } from '../src/components/floor-v4/snapshot';
 import { coinTask, normSym, parseCommand, realTasks, type TaskContext } from '../src/components/floor-v4/tasks';
 
 const NOW = Date.UTC(2026, 8, 25, 6, 0, 0);
@@ -164,12 +164,38 @@ describe('buildFloorModel', () => {
     expect(local.inbox.count).toBe(0);
     expect(local.halted).toBe(false);
   });
-  it('evolution rows keep only known roles and the last 30 days', () => {
-    const days = Array.from({ length: 40 }, (_, i) => ({ date: `2026-08-${String((i % 28) + 1).padStart(2, '0')}`, status: 'good' as const, score: 1, headline: null }));
-    const evo = { version: '1', from: '', to: '', today: null, roles: [{ role: 'radar', label: '', metric_label: '', days, summary: { good: 0, ok: 0, bad: 0, none: 0, baseline_days: 0 } }, { role: 'mystery', label: '', metric_label: '', days, summary: { good: 0, ok: 0, bad: 0, none: 0, baseline_days: 0 } }] } as EvoDailyResponse;
+  it('evolution rows: all 9 roles × 30 UTC days ending today, real days aligned by date, unknown roles dropped', () => {
+    const d = (off: number) => new Date(DAY0 - off * 86_400_000).toISOString().slice(0, 10);
+    const summary = { good: 0, ok: 0, bad: 0, none: 0, baseline_days: 0 };
+    const evo = {
+      version: '1', from: '', to: '', today: null,
+      roles: [
+        // 90 天里只有最近几天有状态(现网就是这样)
+        { role: 'radar', label: '', metric_label: '', summary, days: Array.from({ length: 90 }, (_, i) => ({ date: d(89 - i), status: (i >= 85 ? 'ok' : 'none') as 'ok' | 'none', score: null, headline: null })) },
+        { role: 'executor', label: '', metric_label: '', summary, days: [{ date: d(0), status: 'bad' as const, score: null, headline: 'x', events: 2 }, { date: d(3), status: 'good' as const, score: 1, headline: null }] },
+        { role: 'mystery', label: '', metric_label: '', summary, days: [{ date: d(0), status: 'good' as const, score: 1, headline: null }] },
+      ],
+    } as EvoDailyResponse;
     const x = buildFloorModel({ now: NOW, bots, evolution: evo });
-    expect(x.evolution?.map((r) => r.role)).toEqual(['radar']);
-    expect(x.evolution?.[0]?.days).toHaveLength(30);
+    expect(x.evolution).toHaveLength(9);
+    for (const r of x.evolution ?? []) {
+      expect(r.days).toHaveLength(30);
+      expect(r.days.at(-1)?.date).toBe(d(0));
+      expect(r.days[0]?.date).toBe(d(29));
+    }
+    const radar = x.evolution!.find((r) => r.role === 'radar')!;
+    expect(radar.days.slice(-6).map((z) => z.status)).toEqual(['none', 'ok', 'ok', 'ok', 'ok', 'ok']);
+    const exec = x.evolution!.find((r) => r.role === 'executor')!;
+    expect(exec.days.at(-1)).toMatchObject({ status: 'bad', events: 2 });
+    expect(exec.days.at(-4)?.status).toBe('good');
+    expect(exec.days.at(-2)?.status).toBe('none'); // 接口缺的日子补灰格
+    expect(x.evolution!.find((r) => r.role === 'reviewer')!.days.every((z) => z.status === 'none')).toBe(true);
+  });
+  it('evolution rows: no data at all still gives 9 grey rows; role aliases map to floor roles', () => {
+    expect(buildEvoRows(null, NOW).map((r) => r.days.length)).toEqual(Array(9).fill(30));
+    expect(evoRoleOf('judge')).toBe('thread_manager');
+    expect(evoRoleOf('RADAR')).toBe('radar');
+    expect(evoRoleOf('nope')).toBeNull();
   });
 });
 

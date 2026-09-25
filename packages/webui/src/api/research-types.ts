@@ -360,7 +360,7 @@ export interface ResearchChatTurn {
 
 // ---------------------------------------------------------------------------
 // 第二轮(research round 2):资产池与 screen、策略 IR、诊断与归因。
-// 后端由 astra 按同一份契约实现;这里所有新字段都按「可能还没有」处理(可选)。
+// 后端按同一份契约实现;这里所有新字段都按「可能还没有」处理(可选)。
 
 export interface ResearchFactorMetrics {
   total_return: number;
@@ -551,7 +551,7 @@ export interface ResearchAttributionResponse {
 
 // ---------------------------------------------------------------------------
 // 第三轮(research round 3):研究沙箱与 artifacts、任务树、策略体检、
-// unit_notional 收益口径、order-gate。后端由 astra 按同一份契约实现;字段都按可能还没有处理。
+// unit_notional 收益口径、order-gate。后端按同一份契约实现;字段都按可能还没有处理。
 
 export type ResearchArtifactKind = 'chart' | 'markdown' | 'table' | 'file';
 
@@ -682,7 +682,7 @@ export interface ResearchFit {
 // Inquiry ≠ 回测 run(ResearchRunSummary)≠ 策略版本:validate 类提问在某一步创建普通回测 run,
 // step 里只引用它的 id,回测结果仍走 §9.41 的接口。
 //
-// 后端由 astra 按同一份契约实现;这里所有字段都按「可能还没有」处理(可选 + 空态)。
+// 后端按同一份契约实现;这里所有字段都按「可能还没有」处理(可选 + 空态)。
 
 export type ResearchTaskKind = 'market' | 'compare' | 'validate' | 'diagnose';
 

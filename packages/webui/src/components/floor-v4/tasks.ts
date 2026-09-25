@@ -116,11 +116,13 @@ export function parseCommand(input: string, ctx: TaskContext): { role: Role; tas
     const st = ctx.model?.strategyObj;
     return st ? { role: 'strategy_lab', task: backtestTask(st.name, sym || undefined) } : null;
   }
-  if (has('盯', 'watch', '观察') && sym) return { role: 'radar', task: watchTask(sym) };
+  if (has('盯', 'watch', '观察') && sym) return { role: 'radar', task: watchTask(sym) }; // i18n-ignore(命令词表)
+  // i18n-ignore(下一行是命令词表)
   if (has('梳理', '扫', 'scan', 'info')) return { role: 'radar', task: { id: 'info_run', label: t('马上梳理一轮市场'), kind: 'info_run', real: 'POST /api/info/run-now' } };
   if (has('判断', 'judge')) return { role: 'thread_manager', task: judgeTask(sym || undefined) };
   for (const role of ['risk_sentinel', 'portfolio_manager', 'executor', 'reviewer', 'asp_agent', 'gate_captain'] as Role[]) {
     const hit = realTasks(role, ctx)[0];
+    // i18n-ignore(下一行是命令词表)
     const kw: Record<string, string[]> = { risk_sentinel: ['风险', '风控', 'risk'], portfolio_manager: ['敞口', '组合', 'exposure'], executor: ['持仓', 'position'], reviewer: ['复盘', 'retro'], asp_agent: ['信号', 'signal'], gate_captain: ['简报', 'brief'] };
     if (hit && has(...(kw[role] ?? []))) return { role, task: hit };
   }

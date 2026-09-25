@@ -1,6 +1,7 @@
 /**
  * 角色展示元数据(从 src/components/floor/roles.ts + prefs.ts 抄出,保持同源;原型不 import src,方便整块搬走)。
  */
+import { t } from '@/lib/i18n';
 import type { RoleId } from './types';
 
 export type ShapeId = 'blob' | 'tall' | 'wide' | 'boxy';
@@ -27,7 +28,17 @@ export interface RoleMeta {
   pageLabel: string;
 }
 
-export const ROLES: Record<RoleId, RoleMeta> = {
+/** desk / roomName / pageLabel 是展示文案:读属性时才翻译(语言可在运行时切换,别在模块加载时冻死) */
+const I18N_FIELDS = new Set(['desk', 'roomName', 'pageLabel']);
+const tr = (m: RoleMeta): RoleMeta =>
+  new Proxy(m, {
+    get(target, prop, receiver) {
+      const v = Reflect.get(target, prop, receiver);
+      return typeof prop === 'string' && I18N_FIELDS.has(prop) && typeof v === 'string' ? t(v) : v;
+    },
+  });
+
+const RAW_ROLES: Record<RoleId, RoleMeta> = {
   gate_captain: { role: 'gate_captain', callsign: 'HELM', title: 'Gate Captain', desk: '指挥台', color: '#ff7a5c', shape: 'blob', room: 'helm', roomName: '作战桌', page: 'agent', pageLabel: 'Agent 对话' },
   radar: { role: 'radar', callsign: 'RADAR', title: 'Radar', desk: '雷达台', color: '#9be15d', shape: 'tall', room: 'radar', roomName: '天文台', page: 'intel', pageLabel: '信息员' },
   strategy_lab: { role: 'strategy_lab', callsign: 'LAB', title: 'Strategy Lab', desk: '策略实验台', color: '#c98bff', shape: 'boxy', room: 'lab', roomName: '实验室', page: 'my-strategies', pageLabel: '我的策略' },
@@ -39,13 +50,15 @@ export const ROLES: Record<RoleId, RoleMeta> = {
   asp_agent: { role: 'asp_agent', callsign: 'MARKET', title: 'ASP Agent', desk: '市场台', color: '#7fd1ff', shape: 'wide', room: 'market', roomName: '小铺子', page: 'market', pageLabel: '信号市场' },
 };
 
+export const ROLES = Object.fromEntries(Object.entries(RAW_ROLES).map(([k, v]) => [k, tr(v)])) as Record<RoleId, RoleMeta>;
+
 export const ROLE_ORDER: RoleId[] = ['gate_captain', 'radar', 'thread_manager', 'strategy_lab', 'portfolio_manager', 'risk_sentinel', 'executor', 'reviewer', 'asp_agent'];
 
 export function roleMeta(role: string): RoleMeta {
-  return (ROLES as Record<string, RoleMeta>)[role] ?? { ...ROLES.gate_captain, role: role as RoleId, callsign: role.toUpperCase().slice(0, 8), title: role, color: '#b8c4ff' };
+  return (ROLES as Record<string, RoleMeta>)[role] ?? tr({ ...RAW_ROLES.gate_captain, role: role as RoleId, callsign: role.toUpperCase().slice(0, 8), title: role, color: '#b8c4ff' });
 }
 
-/** 接住交接时的默认短话(交接没带 reply 时用) */
+/** 接住交接时的默认短话(交接没带 reply 时用);存中文 key,用处 t() 翻译 */
 export const CATCH_LINES: Record<string, string[]> = {
   gate_captain: ['收到,我来排', '好,记下了', '这就派活'],
   radar: ['收到,继续盯', '好,加进观察', '明白'],

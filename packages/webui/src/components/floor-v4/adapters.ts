@@ -10,7 +10,7 @@ import { THEMES as THEMES_A } from './engine-a/themes';
 import type { ThemeId as ThemeA } from './engine-a/types';
 import { mount as mountEngineB } from './engine-b/engine';
 import { ROLES } from './engine-b/roles';
-import type { EvoDayDetail as EvoDetailB, TaskDef, ThemeId as ThemeB } from './engine-b/types';
+import type { EvoDayDetail as EvoDetailB, SfxKind, TaskDef, ThemeId as ThemeB } from './engine-b/types';
 import { setDeco } from './deco';
 import { toSnapshotA, type FloorModel, type Role } from './snapshot';
 import type { RealTask } from './tasks';
@@ -39,6 +39,8 @@ export interface EngineCallbacks {
   getEvoDetail(role: Role, date: string): Promise<EvoDetail | null>;
   onOpenEvolution(role: Role, date: string): void;
   onSelect?(role: Role | null): void;
+  /** 8-bit 音效触发(响不响由外壳的声音开关决定) */
+  onSfx?(k: SfxKind): void;
 }
 
 export interface FloorEngine {
@@ -79,6 +81,7 @@ export function mountB(canvas: HTMLCanvasElement, theme: UiTheme, cb: EngineCall
       return d ? { role, date, metrics: d.metrics, records: d.records.map((r) => ({ title: r.title, detail: new Date(r.at).toISOString().slice(11, 16) + ' UTC' })) } : null;
     },
     onOpenEvolution: (role, date) => cb.onOpenEvolution(role, date),
+    onSfx: (k) => cb.onSfx?.(k),
   });
   return {
     setData: (m) => {
@@ -165,7 +168,7 @@ export function mountA(canvas: HTMLCanvasElement, theme: UiTheme, cb: EngineCall
       if (!a) return;
       const host = canvas.parentElement ?? overlayHost;
       const r0 = focused;
-      room = roomCard(host, { role: a.role, line: a.line, status: a.status, metrics: a.stats ?? [] }, () => h.focus(null), () => h.focus(r0, { evo: true }));
+      room = roomCard(host, { role: a.role, line: a.line, status: a.status, metrics: a.stats ?? [], brain: a.brain ?? null, desk: a.desk ?? null }, () => h.focus(null), () => h.focus(r0, { evo: true }));
     },
     onHoverEvo: (hit) => {
       if (!hit) return tip.hide();
@@ -178,6 +181,7 @@ export function mountA(canvas: HTMLCanvasElement, theme: UiTheme, cb: EngineCall
     onOpenEvoGrid: (role) => h.focus(role, { evo: true }),
     onHoverWindow: (text, at) => (text && at ? tip.show(text, at.x, at.y) : tip.hide()),
     onClickMailbox: () => cb.onMailbox(),
+    onSfx: (k) => cb.onSfx?.(k),
     onEasterEgg: (k) => cb.onToast(k === 'pet' ? t('它翻了个身,打了个哈欠') : t('金币雨!(连点地球 5 次)')),
   });
 
@@ -196,7 +200,7 @@ export function mountA(canvas: HTMLCanvasElement, theme: UiTheme, cb: EngineCall
       h.setData(toSnapshotA(m, now));
       if (focused && room) {
         const a = agentOf(focused);
-        if (a) room.update({ line: a.line, status: a.status, metrics: a.stats ?? [] });
+        if (a) room.update({ line: a.line, status: a.status, metrics: a.stats ?? [], brain: a.brain ?? null, desk: a.desk ?? null });
       }
     },
     setTheme(id) {

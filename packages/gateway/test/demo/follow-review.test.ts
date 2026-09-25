@@ -76,7 +76,7 @@ describe('缺口 12:时区与未来时间', () => {
       signal_id: 'sig_future', symbol: 'BTCUSDT', side: 'long', source: 'telegram',
       entry: { type: 'limit', price: 77000 }, stop_loss: { price: 76000 },
       created_at: new Date(now + 86_400_000).toISOString(),
-      metadata: { trader: '三马', action_type: 'open', ...meta },
+      metadata: { trader: '交易员A', action_type: 'open', ...meta },
     });
     // 唯一的时间来源在未来一天 → 定不出 published_at → 坏行
     const bad = normalizeBridgeSignal(payload({}), { now });
@@ -95,7 +95,7 @@ describe('缺口 12:时区与未来时间', () => {
       entry: { type: 'limit', price: 77000 }, stop_loss: { price: 76000 },
       valid_until: new Date(expired).toISOString(),
       created_at: new Date(now).toISOString(),
-      metadata: { trader: '三马', action_type: 'open' },
+      metadata: { trader: '交易员A', action_type: 'open' },
     }, { now });
     // 第一版把它改成 null → 一条本来「已过期」的信号变成「没有有效期」可以开仓
     expect(r.signal!.valid_until).toBe(expired);
@@ -114,7 +114,7 @@ describe('缺口 12:时区与未来时间', () => {
       entry: { type: 'limit', price: 77000 }, stop_loss: { price: 76000 },
       valid_until: validUntil,
       created_at: new Date(now).toISOString(),
-      metadata: { trader: '三马', action_type: 'open', source_timestamp: (now + publishedOffset) / 1000 },
+      metadata: { trader: '交易员A', action_type: 'open', source_timestamp: (now + publishedOffset) / 1000 },
     }, { now });
     // 解析不出来的期限:第一版 timestampOf → null,等于把约束删掉,信号照样能开
     const garbage = mk('下周之前');
@@ -137,7 +137,7 @@ describe('缺口 12:时区与未来时间', () => {
       signal_id: 'sig_badts', symbol: 'BTCUSDT', side: 'long', source: 'telegram',
       entry: { type: 'limit', price: 77000 }, stop_loss: { price: 76000 },
       created_at: new Date(now).toISOString(),
-      metadata: { trader: '三马', action_type: 'open', source_timestamp: ts },
+      metadata: { trader: '交易员A', action_type: 'open', source_timestamp: ts },
     }, { now });
     // 解析不出来
     expect(mk('昨天下午').signal).toBeNull();
@@ -149,7 +149,7 @@ describe('缺口 12:时区与未来时间', () => {
       signal_id: 'sig_ok', symbol: 'BTCUSDT', side: 'long', source: 'telegram',
       entry: { type: 'limit', price: 77000 }, stop_loss: { price: 76000 },
       created_at: new Date(now).toISOString(),
-      metadata: { trader: '三马', action_type: 'open' },
+      metadata: { trader: '交易员A', action_type: 'open' },
     }, { now });
     expect(fallback.signal!.published_at).toBe(now);
   });
@@ -168,9 +168,9 @@ describe('缺口 16:持久化 round-trip、碰撞 ID、迁移幂等', () => {
       signal_id: 'sig_rt', symbol: 'BTCUSDT', side: 'long', source: 'telegram', market_type: 'futures',
       entry: { type: 'limit', price: 77000 }, stop_loss: { price: 76000 }, take_profit: [{ price: 79000 }],
       created_at: new Date(now).toISOString(),
-      metadata: { trader: '三马', action_type: 'open', target_order_ref: '昨天那单', order_end_state: 'not_ended' },
+      metadata: { trader: '交易员A', action_type: 'open', target_order_ref: '昨天那单', order_end_state: 'not_ended' },
     }, { now, backfill: true });
-    return { ...r.signal!, subscription_job_id: 'job-sanma', ...over };
+    return { ...r.signal!, subscription_job_id: 'job-trader-a', ...over };
   };
 
   it('backfill / ref_order / market_type / transport / order_end_state 读回来还在', () => {
@@ -556,7 +556,7 @@ async function setup(followFetch: FollowFetch): Promise<void> {
   rt = new DemoRuntime({ store, backend: new PaperBackend(100_000), brains: { stub: stubBrain }, marketPollMs: 600_000, accountPollMs: 600_000 });
   fixtureFeed = followFetch;
   rt.okxAspReadQueue = async () => [];
-  rt.okxAspRunCli = async () => ({ code: 0, stdout: JSON.stringify({ ok: true, data: { list: [{ jobId: 'job-sanma', providerAgentName: '三马' }] } }), stderr: '' });
+  rt.okxAspRunCli = async () => ({ code: 0, stdout: JSON.stringify({ ok: true, data: { list: [{ jobId: 'job-trader-a', providerAgentName: '交易员A' }] } }), stderr: '' });
   await rt.start();
   rt.setWorkflow({ brain: 'stub', cheap_brain: 'stub', watchlist: ['BTCUSDT'], timeframe: '15m', active_strategies: [] });
   const server = createServer(rt, store);
@@ -588,7 +588,7 @@ async function api(method: string, path: string, body?: unknown): Promise<{ stat
     const page = JSON.parse(await response.text());
     for (const item of page.items ?? []) {
       const normalized = normalizeBridgeSignal(item.envelope?.payload, { now: Date.now(), record_id: item.record_id, backfill: page.test_backfill === true });
-      if (normalized.signal) store.traderSignals.capture({ ...normalized.signal, subscription_job_id: 'job-sanma', session: (rt as unknown as { followSession: string }).followSession });
+      if (normalized.signal) store.traderSignals.capture({ ...normalized.signal, subscription_job_id: 'job-trader-a', session: (rt as unknown as { followSession: string }).followSession });
     }
   }
   const res = await fetch(`${baseUrl}${path}`, { method, headers: body !== undefined ? { 'content-type': 'application/json' } : {}, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -605,7 +605,7 @@ function item(recordId: number, over: Record<string, unknown> = {}, meta: Record
         signal_id: `sig_${recordId}`, symbol: 'BTCUSDT', side: 'long', source: 'telegram', market_type: 'perpetual',
         entry: { type: 'limit', price: Number(ENTRY) }, stop_loss: { price: Number(STOP) }, take_profit: [{ price: Number(TP) }],
         created_at: new Date().toISOString(),
-        metadata: { trader: '三马', action_type: 'open', rationale: '突破回踩', ...meta },
+        metadata: { trader: '交易员A', action_type: 'open', rationale: '突破回踩', ...meta },
         ...over,
       },
     },
@@ -629,7 +629,7 @@ function bridge(pages: unknown[], me: Record<string, unknown> = { recent_after_i
 }
 
 async function enableFollow(mode: 'book' | 'gated' = 'copy'): Promise<void> {
-  await api('POST', '/api/follow', { enabled: true, subscriptions: { 'job-sanma': { mode, weight: 1, enabled: true } } });
+  await api('POST', '/api/follow', { enabled: true, subscriptions: { 'job-trader-a': { mode, weight: 1, enabled: true } } });
 }
 async function drain(): Promise<void> { await api('POST', '/api/follow/pull'); }
 
@@ -750,7 +750,7 @@ function settings(over: Partial<FollowSettings> = {}, traderOver: Partial<Follow
   return {
     ...DEFAULT_FOLLOW_SETTINGS,
     enabled: true,
-    subscriptions: { 'job-sanma': { mode: 'gated', weight: 1, enabled: true, ...traderOver } },
+    subscriptions: { 'job-trader-a': { mode: 'gated', weight: 1, enabled: true, ...traderOver } },
     ...over,
   };
 }
@@ -760,9 +760,9 @@ function sig(over: Partial<TraderSignal> = {}): TraderSignal {
     signal_id: 'sig_h', symbol: 'BTCUSDT', side: 'long', source: 'telegram',
     entry: { type: 'limit', price: Number(ENTRY) }, stop_loss: { price: Number(STOP) }, take_profit: [{ price: Number(TP) }],
     created_at: new Date(NOW).toISOString(),
-    metadata: { trader: '三马', action_type: 'open', rationale: '突破回踩' },
+    metadata: { trader: '交易员A', action_type: 'open', rationale: '突破回踩' },
   }, { now: NOW });
-  return { ...r.signal!, subscription_job_id: 'job-sanma', ...over };
+  return { ...r.signal!, subscription_job_id: 'job-trader-a', ...over };
 }
 
 function threadOf(over: Partial<StrategyThread> = {}): StrategyThread {
@@ -773,7 +773,7 @@ function threadOf(over: Partial<StrategyThread> = {}): StrategyThread {
       entry: { type: 'limit', price: ENTRY, zone: null }, stop_price: STOP, take_profits: [TP],
       qty: '0.01', margin_usdt: '200', leverage: 3, margin_mode: 'cross', now: NOW,
     }),
-    origin: 'trader:job-sanma',
+    origin: 'trader:job-trader-a',
     trader_signal_id: 'sig_h',
     ...over,
   };
@@ -879,17 +879,17 @@ describe('R2-01/02/03/06:串行、恢复、会话边界、撤单确认', () => {
 describe('二审:P1-04 完整闸 / P1-05 入场腿过期 / P1-13 权重天花板 / P1-14 凭证残留', () => {
   it('P1-13:统计失败不许放大风险 —— manual=0.4 且上次有效权重 0.2 时,降级后仍是 0.2', () => {
     const good: TraderStatsSnapshot = {
-      rows: parseTraderStats({ by_source: { 三马: { resolved: 40, win_rate: 60, max_drawdown_pct: 40 } } }, NOW),
+      rows: parseTraderStats({ by_source: { 交易员A: { resolved: 40, win_rate: 60, max_drawdown_pct: 40 } } }, NOW),
       fetched_at: NOW,
       error: null,
     };
     // 正常:0.4 × mult_bad 0.5 = 0.2
-    const normal = weightFor('三马', 0.4, good, DEFAULT_WEIGHT_THRESHOLDS, NOW);
+    const normal = weightFor('交易员A', 0.4, good, DEFAULT_WEIGHT_THRESHOLDS, NOW);
     expect(normal.weight).toBe(0.2);
     // 统计失败:只有 min(manual, 0.5) 的话是 0.4 —— **翻倍**。带上「最近一次有效权重」天花板才是 0.2。
     const failed: TraderStatsSnapshot = { ...good, error: 'HTTP 500' };
-    expect(weightFor('三马', 0.4, failed, DEFAULT_WEIGHT_THRESHOLDS, NOW).weight).toBe(0.4);
-    expect(weightFor('三马', 0.4, failed, DEFAULT_WEIGHT_THRESHOLDS, NOW, normal.weight).weight).toBe(0.2);
+    expect(weightFor('交易员A', 0.4, failed, DEFAULT_WEIGHT_THRESHOLDS, NOW).weight).toBe(0.4);
+    expect(weightFor('交易员A', 0.4, failed, DEFAULT_WEIGHT_THRESHOLDS, NOW, normal.weight).weight).toBe(0.2);
     expect(staleWeightOf(0.4, 0.2)).toBe(0.2);
     expect(staleWeightOf(1, null)).toBe(0.5);
   });
@@ -1035,7 +1035,7 @@ describe('管理动作与历史信号:follow 链路零交易所写调用', () =>
       const writes = countWrites((rt as unknown as { backend: Record<string, unknown> }).backend);
       await enableFollow(mode === 'evidence' ? 'copy' : mode);
       if (mode === 'evidence') {
-        await api('POST', '/api/follow', { enabled: true, subscriptions: { 'job-sanma': { mode: 'evidence', weight: 1, enabled: true } } });
+        await api('POST', '/api/follow', { enabled: true, subscriptions: { 'job-trader-a': { mode: 'evidence', weight: 1, enabled: true } } });
       }
       // 补拉 → 实时 → 再投(重号)→ 空页
       await drain();
@@ -1734,7 +1734,7 @@ describe('R7-01/02/03', () => {
       const persisted = store.thread(row.thread_id!);
       expect(persisted).not.toBeNull();
       expect(persisted!.id).toBe(row.thread_id);
-      expect(persisted!.origin).toBe('trader:job-sanma');
+      expect(persisted!.origin).toBe('trader:job-trader-a');
     } finally {
       rt.off('thread.changed', boom);
     }

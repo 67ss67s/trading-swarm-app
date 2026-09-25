@@ -6,18 +6,18 @@
 
 | 交易员 | 原文/逐字不同 | 结构化 | open | add | reduce | close |
 | --- | --- | --- | --- | --- | --- | --- |
-| 舒琴 | 484/474 | 318 | 265 | 7 | 15 | 27 |
-| 三马 | 1022/803 | 534 | 175 | 15 | 68 | 118 |
-| 赵哥 | 1592/1275 | 253 | 20 | 104 | 72 | 55 |
+| 交易员B | 484/474 | 318 | 265 | 7 | 15 | 27 |
+| 交易员A | 1022/803 | 534 | 175 | 15 | 68 | 118 |
+| 交易员C | 1592/1275 | 253 | 20 | 104 | 72 | 55 |
 
 
 结构化共 1105 条，open/add 586 条；全部回连 source_message_id。最终可归因 464 条。原始文本、解析输出、人工修正表都保留；没有调用新模型解析或看图。关键词统计覆盖全部 3098 条，包含转发重复，因此不是独立事件频数。
 
 | 交易员 | 支撑 | 阻力 | 前低 | 前高 | 整数 | 均线 | 资金费 | 保本 | 异动 | 市价 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 舒琴 | 176 | 171 | 34 | 50 | 96 | 0 | 6 | 3 | 0 | 1 |
-| 三马 | 81 | 11 | 1 | 9 | 4 | 0 | 0 | 233 | 0 | 294 |
-| 赵哥 | 7 | 1 | 0 | 0 | 2 | 1 | 0 | 0 | 26 | 0 |
+| 交易员B | 176 | 171 | 34 | 50 | 96 | 0 | 6 | 3 | 0 | 1 |
+| 交易员A | 81 | 11 | 1 | 9 | 4 | 0 | 0 | 233 | 0 | 294 |
+| 交易员C | 7 | 1 | 0 | 0 | 2 | 1 | 0 | 0 | 26 | 0 |
 
 | 排除原因 | 条数 |
 | --- | --- |
@@ -58,7 +58,7 @@ registration hash: `1a2f9213538c2e0c53bad2f78f7322b0dc41a39a746b19253e3ae480b9f2
 
 下文的“实际行为”仅指频道里能观察到的发布、修改、加减仓通知，不等于交易所成交证明。语料没有完整订单、成交量、账户权益、杠杆清算流水；不能验证宣传的连胜和收益率。逐字相同消息先计数，人工阅读覆盖喊单、复盘、理由、纠错及仓位讨论；关键词只是可复核索引，不是自动语义标签。引用的 id 均为 raw_messages.json 的 id。
 
-### 舒琴：结构点位与耐心，短线止损和低倍长线是两套逻辑
+### 交易员B：结构点位与耐心，短线止损和低倍长线是两套逻辑
 
 入场哲学是等价格到前高/前低、前盘整区或叙事形成的支撑阻力，以限价换价格优势，接受挂不上。raw 590 写“比特币前低附近支撑不错”，raw 584 写“6.5万是前盘整区阻力”，raw 554 明确要求挂在支撑上方一点，并把止损放低来容忍假跌破。raw 1282 先在 ETH 1830 空至 1720，再反手多；翻方向主要随价格到另一端结构位，而非永久看多或看空。
 
@@ -70,7 +70,7 @@ registration hash: `1a2f9213538c2e0c53bad2f78f7322b0dc41a39a746b19253e3ae480b9f2
 
 可观察证据主要支持前高前低、区间边缘、整数位错开和事件叙事；语料中“均线”出现 0 次。没有足够证据断言她用 20/50/200 均线、精确 VWAP、成交量分布或固定大 K 边缘来计算点位。后面的距离测量是在检验相关性，不是替她补写算法。
 
-### 三马：方向叙事下的短线梯子，首档兑现与保本优先
+### 交易员A：方向叙事下的短线梯子，首档兑现与保本优先
 
 raw 241 写“2001市价直接空”、再挂 2078、首档 1968 止盈 70% 后移动保本，止损 2200；典型不是纯限价策略，而是一腿立即参与、一腿在更极端处加仓。raw 236 的 BTC 72388/73688 则是两腿挂单。2%/3% 保证金和 100 倍的表达经常出现，但不是可复核的账户风险权重，因此研究用等初始风险腿，不用“100倍利润”推收益。
 
@@ -82,7 +82,7 @@ raw 241 写“2001市价直接空”、再挂 2078、首档 1968 止盈 70% 后�
 
 重复与复盘较多。原文 1022 条、逐字不同 803 条并不等于 803 个交易。raw 234 是旧空单接近目标的复盘；raw 9724 说“第一目标也到了”；raw 15001 开头已是现价止盈通知。这些都不应因为后面引用完整计划而产生新的开仓机会。关于未提前触达目标的失效条件，本次明确排除未建模的条件计划。
 
-### 赵哥：库存与价差管理，不能硬套“每条一句话一笔完整交易”
+### 交易员C：库存与价差管理，不能硬套“每条一句话一笔完整交易”
 
 raw 9876 给出完整的“三三法则”：一个仓位分三个板块，一个票分三个有价差的批次，异动后卖一半换到急跌票；总仓位常为 7–9 成，动态调动 2–3 成。raw 6148 更具体：“再涨6%出一半”“跌3.95附近…吸一个批次”“横盘了就不操作”。因此他的决策对象更接近已有库存的一部分，而不是从零开仓到完整清仓的独立单。
 
@@ -106,25 +106,25 @@ raw 9876 给出完整的“三三法则”：一个仓位分三个板块，一�
 
 | 交易员 | 机会/24h完整/R有效 | 方向随机时点净24h bps / CI | 发布净24h bps / CI | 时机净4h bps / CI | 时机净24h bps / CI |
 | --- | --- | --- | --- | --- | --- |
-| 舒琴 | 243/240/92 | -8.3633 / [-42.7842, 23.7557] (n=128) | 5.0762 / [-27.6147, 37.8153] (n=128) | 17.9858 / [6.8078, 29.7386] (n=128) | 13.4395 / [-3.5843, 27.1355] (n=128) |
-| 三马 | 100/100/70 | -15.6018 / [-95.4870, 61.8865] (n=79) | 7.5370 / [-59.3825, 71.0067] (n=79) | 23.9518 / [-5.0685, 66.5269] (n=79) | 23.1388 / [-3.7026, 59.7130] (n=79) |
-| 赵哥 | 121/104/0 | -103.7421 / [-247.2666, 37.0203] (n=63) | -34.1952 / [-187.3646, 123.1523] (n=63) | 70.0530 / [43.3294, 96.0789] (n=63) | 69.5469 / [32.2747, 110.9367] (n=63) |
+| 交易员B | 243/240/92 | -8.3633 / [-42.7842, 23.7557] (n=128) | 5.0762 / [-27.6147, 37.8153] (n=128) | 17.9858 / [6.8078, 29.7386] (n=128) | 13.4395 / [-3.5843, 27.1355] (n=128) |
+| 交易员A | 100/100/70 | -15.6018 / [-95.4870, 61.8865] (n=79) | 7.5370 / [-59.3825, 71.0067] (n=79) | 23.9518 / [-5.0685, 66.5269] (n=79) | 23.1388 / [-3.7026, 59.7130] (n=79) |
+| 交易员C | 121/104/0 | -103.7421 / [-247.2666, 37.0203] (n=63) | -34.1952 / [-187.3646, 123.1523] (n=63) | 70.0530 / [43.3294, 96.0789] (n=63) | 69.5469 / [32.2747, 110.9367] (n=63) |
 
 
 | 交易员 | 限价改善 ATR / CI | 点位 Δnet R / CI | 触及/市场进入比例 / CI | 初始SL/TP净R / CI |
 | --- | --- | --- | --- | --- |
-| 舒琴 | 4.7927 / [3.9620, 5.6430] (n=118) | 0.0011 / [-0.1318, 0.1187] (n=49) | 0.3681 / [0.2973, 0.4352] (n=128) | -0.0501 / [-0.1569, 0.0584] (n=75) |
-| 三马 | 3.3781 / [2.2923, 4.7403] (n=40) | 0.0092 / [-0.0314, 0.0461] (n=57) | 0.7089 / [0.6392, 0.7848] (n=79) | -0.0685 / [-0.1458, -0.0060] (n=63) |
-| 赵哥 | 2.6300 / insufficient (n=4) | — / insufficient (n=0) | 0.9788 / [0.9471, 1.0000] (n=63) | — / insufficient (n=0) |
+| 交易员B | 4.7927 / [3.9620, 5.6430] (n=118) | 0.0011 / [-0.1318, 0.1187] (n=49) | 0.3681 / [0.2973, 0.4352] (n=128) | -0.0501 / [-0.1569, 0.0584] (n=75) |
+| 交易员A | 3.3781 / [2.2923, 4.7403] (n=40) | 0.0092 / [-0.0314, 0.0461] (n=57) | 0.7089 / [0.6392, 0.7848] (n=79) | -0.0685 / [-0.1458, -0.0060] (n=63) |
+| 交易员C | 2.6300 / insufficient (n=4) | — / insufficient (n=0) | 0.9788 / [0.9471, 1.0000] (n=63) | — / insufficient (n=0) |
 
 
 触及比例为计划首腿的统一机会统计，市场跟随腿只要完整后验即为进入，不能解释为 maker 成交概率。纯限价腿的穿价概率、拒单与实际成交在 features 的 per_level/outcome 中保留。限价改善不计市价首腿；阶梯第二腿需看 per_level，不能把第一腿均值当整个梯子的均价。
 
 | 交易员 | 前高 | 前低 | 整数 | 前日高 | 前日低 | VWAP | SMA20 | SMA50 | SMA200 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 舒琴 | 2.59 | 2.42 | 0.08 | 7.79 | 6.85 | 5.63 | 6.22 | 6.97 | 9.17 |
-| 三马 | 1.57 | 1.96 | 0.10 | 4.35 | 4.43 | 2.37 | 2.81 | 3.62 | 6.51 |
-| 赵哥 | 1.90 | 0.50 | 0.08 | 6.39 | 2.05 | 1.92 | 2.66 | 3.54 | 5.27 |
+| 交易员B | 2.59 | 2.42 | 0.08 | 7.79 | 6.85 | 5.63 | 6.22 | 6.97 | 9.17 |
+| 交易员A | 1.57 | 1.96 | 0.10 | 4.35 | 4.43 | 2.37 | 2.81 | 3.62 | 6.51 |
+| 交易员C | 1.90 | 0.50 | 0.08 | 6.39 | 2.05 | 1.92 | 2.66 | 3.54 | 5.27 |
 
 
 上表为入场到各参照的绝对 ATR 距离均值，未按结果剔除远价单；它不证明点位由相应指标生成。全量“人×币×多空×UTC四小时时段”分层表见文末，全部分层 CI 和点位距离在 results.json，不能只挑正收益的子组。
@@ -133,9 +133,9 @@ raw 9876 给出完整的“三三法则”：一个仓位分三个板块，一�
 
 | 交易员 | MFE ATR / MAE ATR | MFE R / MAE R | 纯限价腿/穿价腿 | 限价穿价率 | 均值RSI 4h/1d | 资金费特征覆盖 |
 | --- | --- | --- | --- | --- | --- | --- |
-| 舒琴 | 2.6634 / 2.4380 | 1.0581 / 1.1856 | 261/66 | 25.3% | 51.9 / 55.0 | 241/243 |
-| 三马 | 3.8380 / 2.9756 | 0.3894 / 0.5788 | 105/30 | 28.6% | 52.8 / 57.9 | 100/100 |
-| 赵哥 | 2.7213 / 2.9873 | — / — | 4/2 | 50.0% | 40.1 / 43.7 | 105/121 |
+| 交易员B | 2.6634 / 2.4380 | 1.0581 / 1.1856 | 261/66 | 25.3% | 51.9 / 55.0 | 241/243 |
+| 交易员A | 3.8380 / 2.9756 | 0.3894 / 0.5788 | 105/30 | 28.6% | 52.8 / 57.9 | 100/100 |
+| 交易员C | 2.7213 / 2.9873 | — / — | 4/2 | 50.0% | 40.1 / 43.7 | 105/121 |
 
 这张穿价率表只统计纯limit腿，首根市场化的拒单保留在分母且不算穿价成交，仍不证明队列真实成交。MFE/MAE先作描述，不用最大有利路径替代净SL/TP回放。
 
@@ -143,21 +143,21 @@ raw 9876 给出完整的“三三法则”：一个仓位分三个板块，一�
 
 | 交易员 | 可评分机会 | gross | fee | slip | funding | net |
 | --- | --- | --- | --- | --- | --- | --- |
-| 舒琴 | 92 | 0.0078 | 0.0158 | 0.0016 | 0.0022 | -0.0119 |
-| 三马 | 70 | -0.0608 | 0.0147 | 0.0015 | -0.0004 | -0.0766 |
-| 赵哥 | 0 | — | — | — | — | — |
+| 交易员B | 92 | 0.0078 | 0.0158 | 0.0016 | 0.0022 | -0.0119 |
+| 交易员A | 70 | -0.0608 | 0.0147 | 0.0015 | -0.0004 | -0.0766 |
+| 交易员C | 0 | — | — | — | — | — |
 
 ## 3. 可机械化假设与冻结参数域
 
 | family | 确定性规则 | 参数域/其他固定口径 | 依据与边界 |
 | --- | --- | --- | --- |
 | trader_sr_reversal | 4h 最近20根（不含当前根）高低边缘；当前收盘仍在区内且距最近边缘≤0.5ATR；边缘向区内挂限价 | offset_atr=0.1/0.2/0.3；SL为区外0.5ATR；TP=1/2/3R各1/3；24h期限；每币24h冷却 | 支撑阻力反转；没有复刻“同点只做两次”或事件判断 |
-| trader_intraday_sweep | 1h 对前24根极值扫穿，收盘回区间；双侧同时扫穿拒绝 | sweep_atr=0.1/0.3/0.5；next-open一腿+被动0.3ATR一腿，各1/2初始风险；首腿SL=1.5ATR；TP=1/2/3R；首档后下一根保本；24h期限/冷却 | 极端位反转与阶梯执行代理；不能证明三马真实使用此算法 |
+| trader_intraday_sweep | 1h 对前24根极值扫穿，收盘回区间；双侧同时扫穿拒绝 | sweep_atr=0.1/0.3/0.5；next-open一腿+被动0.3ATR一腿，各1/2初始风险；首腿SL=1.5ATR；TP=1/2/3R；首档后下一根保本；24h期限/冷却 | 极端位反转与阶梯执行代理；不能证明交易员A真实使用此算法 |
 
 
 两族共 6 组，币池固定 BTCUSDT/ETHUSDT；没有结果驱动扩参或扩大币池。SR 反转动机来自 [Osler (2000)](https://www.newyorkfed.org/medialibrary/media/research/epr/00v06n2/0007osle.pdf) 对外汇支撑阻力的经验检验；订单聚集、止损与止盈对价格的不同反馈来自 [Osler (2001/2003)](https://www.newyorkfed.org/research/staff_reports/sr125.html)。把这些机制用于 crypto sweep 是本研究的待证推断，并非文献已证明这两套参数有收益。多重试验使用 [Bailey–López de Prado (2014) DSR](https://www.davidhbailey.com/dhbpapers/deflated-sharpe.pdf) 的共享实现。
 
-赵哥的库存规则暂不伪装成第三套完整仓位策略：缺初始库存、常规仓名义、分批数量以及历史盘口。可以在下一次独立预注册检验“开盘回踩后反弹减半”，前提是先取得这些字段和交易时段映射。
+交易员C的库存规则暂不伪装成第三套完整仓位策略：缺初始库存、常规仓名义、分批数量以及历史盘口。可以在下一次独立预注册检验“开盘回踩后反弹减半”，前提是先取得这些字段和交易时段映射。
 
 ## 4. 同成本回放与人肉基线
 
@@ -167,15 +167,15 @@ raw 9876 给出完整的“三三法则”：一个仓位分三个板块，一�
 
 maker 2bp、taker 5bp；滑点max(当前tick,0.01ATR)，market双侧、limit退出侧；资金费使用历史实际点。缺费率的结算沿用共享函数区间均值估计，并保留known/expected。部分股票与油合约有1h/4h资金周期；expected仍是原harness的8h模型，因此这里的expected覆盖不能当历史周期完整性认证。tick也为当前快照，不是历史tick。
 
-人肉 family 是原文初始计划的离线执行代理，不是完整动态账本：缺SL不给R，区间取中点，阶梯按等初始风险；明确原文首档70%覆盖bridge等份，其他未明确份额按剩余等分；替代目标歧义排除。后续close/reduce/SL更新没有可靠仓位链接，未事后回填。长期油/现货计划的24h结果仅是统一观察窗。赵哥已成交通知用next-open跟随，原买价不回填为我们的成交。人肉语料始于6月，180d前段没有人类观察，也没有可比的完整首60d训练；不能填0冒称有180d人肉样本。
+人肉 family 是原文初始计划的离线执行代理，不是完整动态账本：缺SL不给R，区间取中点，阶梯按等初始风险；明确原文首档70%覆盖bridge等份，其他未明确份额按剩余等分；替代目标歧义排除。后续close/reduce/SL更新没有可靠仓位链接，未事后回填。长期油/现货计划的24h结果仅是统一观察窗。交易员C已成交通知用next-open跟随，原买价不回填为我们的成交。人肉语料始于6月，180d前段没有人类观察，也没有可比的完整首60d训练；不能填0冒称有180d人肉样本。
 
 人肉统计集包含全窗可评分记录，机械统计集只拼接逐折所选OOS记录；它们的统计集机会数不是相同时间暴露，比较以OOS列为准，所有候选全窗数量另列。
 
 | family | 统计集机会 | OOS机会 | OOS簇 | 净OOS R | 95%CI | signed DSR | 并发DD R | trial |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| human_shuqin | 92 | 77 | 63 | -0.0385 | [-0.1754, 0.0964] | -0.0722 | 6.35 | 1 |
-| human_sanma | 70 | 49 | 45 | -0.0781 | [-0.1964, 0.0095] | -0.1941 | 4.71 | 1 |
-| human_zhaoge | 0 | 0 | 0 | — | insufficient | — | 0.00 | 1 |
+| human_trader_b | 92 | 77 | 63 | -0.0385 | [-0.1754, 0.0964] | -0.0722 | 6.35 | 1 |
+| human_trader_a | 70 | 49 | 45 | -0.0781 | [-0.1964, 0.0095] | -0.1941 | 4.71 | 1 |
+| human_trader_c | 0 | 0 | 0 | — | insufficient | — | 0.00 | 1 |
 | trader_sr_reversal | 53 | 53 | 51 | -0.2837 | [-0.5516, 0.0368] | -0.4869 | 16.50 | 9 |
 | trader_intraday_sweep | 97 | 97 | 85 | -0.1395 | [-0.3212, 0.0599] | -0.2954 | 18.11 | 9 |
 
@@ -184,9 +184,9 @@ maker 2bp、taker 5bp；滑点max(当前tick,0.01ATR)，market双侧、limit退�
 
 | family | 统计集机会 | OOS机会 | OOS簇 | 净OOS R | 95%CI | signed DSR | 并发DD R | trial |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| human_shuqin BTC/ETH | 65 | 53 | 47 | -0.0818 | [-0.2193, 0.0520] | -0.1739 | 5.26 | 1 |
-| human_sanma BTC/ETH | 67 | 46 | 42 | -0.1100 | [-0.2676, 0.0057] | -0.3155 | 5.82 | 1 |
-| human_zhaoge BTC/ETH | 0 | 0 | 0 | — | insufficient | — | 0.00 | 1 |
+| human_trader_b BTC/ETH | 65 | 53 | 47 | -0.0818 | [-0.2193, 0.0520] | -0.1739 | 5.26 | 1 |
+| human_trader_a BTC/ETH | 67 | 46 | 42 | -0.1100 | [-0.2676, 0.0057] | -0.3155 | 5.82 | 1 |
+| human_trader_c BTC/ETH | 0 | 0 | 0 | — | insufficient | — | 0.00 | 1 |
 
 
 候选全窗诊断（OOS未参与参数选择，不能从下表事后改选）：
@@ -221,12 +221,12 @@ maker 2bp、taker 5bp；滑点max(当前tick,0.01ATR)，market双侧、limit退�
 
 ## 5. 能证伪什么，哪些还不能回答
 
-- 舒琴：随机时点方向净24h -8.3633bps（[-42.7842, 23.7557]），发布时机增量 13.4395bps（[-3.5843, 27.1355]）。尚无稳定的正时机增量证据。
-- 三马：随机时点方向净24h -15.6018bps（[-95.4870, 61.8865]），发布时机增量 23.1388bps（[-3.7026, 59.7130]）。尚无稳定的正时机增量证据。
-- 赵哥：随机时点方向净24h -103.7421bps（[-247.2666, 37.0203]），发布时机增量 69.5469bps（[32.2747, 110.9367]）。当前匹配时段中时机增量为正，值得在新语料检验；这没有证明总体净收益为正。
+- 交易员B：随机时点方向净24h -8.3633bps（[-42.7842, 23.7557]），发布时机增量 13.4395bps（[-3.5843, 27.1355]）。尚无稳定的正时机增量证据。
+- 交易员A：随机时点方向净24h -15.6018bps（[-95.4870, 61.8865]），发布时机增量 23.1388bps（[-3.7026, 59.7130]）。尚无稳定的正时机增量证据。
+- 交易员C：随机时点方向净24h -103.7421bps（[-247.2666, 37.0203]），发布时机增量 69.5469bps（[32.2747, 110.9367]）。当前匹配时段中时机增量为正，值得在新语料检验；这没有证明总体净收益为正。
 - trader_sr_reversal：OOS 51 簇、净 -0.2837R，区间跨越0，尚不能断言真期望为负，也没有证据证明正净优势。 signed DSR=-0.4869、DD=16.50R。
 - trader_intraday_sweep：OOS 85 簇、净 -0.1395R，区间跨越0，尚不能断言真期望为负，也没有证据证明正净优势。 signed DSR=-0.2954、DD=18.11R。
-- 人肉初始SL/TP基线的结论只适用于可评分子样本。缺SL、无仓位关联、复盘选择与通知延迟限制外推；尤其赵哥不能据R缺失判断“零收益”或“无能力”。
+- 人肉初始SL/TP基线的结论只适用于可评分子样本。缺SL、无仓位关联、复盘选择与通知延迟限制外推；尤其交易员C不能据R缺失判断“零收益”或“无能力”。
 - 正的近时段 timing 差值不等于可部署alpha：控制点共享日期/时段，作者可能先成交后通知，且按币/方向/时段进行了大量描述性分层。分层CI未另做全家族错误率校正，仅用于后续预注册。
 - 当前没有候选获得上线/晋升授权，也没有调用晋升函数。现有门仍要求净CI下界>0、DSR>0、足够OOS成交有效簇、至少两类非负regime及DD≤3R；未成交0不能补成交数。此次回顾性研究即使某项统计越线，也不能据此直接获得前瞻资格。
 - 下一步先建立原消息版本、事件发布时间、position_ref、常规仓量、成交/撤单/分批目标关系；人工逐条确认歧义后冻结新语料外60d，保留当前参数和成本，才能区分方向、点位、通知时机与持仓管理的贡献。
@@ -292,131 +292,131 @@ maker 2bp、taker 5bp；滑点max(当前tick,0.01ATR)，market双侧、limit退�
 
 | 人 / 币 / 多空 / UTC | 机会 | 24h完整 | 净方向24h bps / CI | 净时机24h bps / CI |
 | --- | --- | --- | --- | --- |
-| 三马 / BTCUSDT / long / 00 | 5 | 5 | 31.8619 / insufficient (n=5) | 29.4224 / insufficient (n=5) |
-| 三马 / BTCUSDT / long / 04 | 5 | 5 | 48.1982 / insufficient (n=5) | -11.5812 / insufficient (n=5) |
-| 三马 / BTCUSDT / long / 08 | 5 | 5 | 293.4405 / insufficient (n=4) | -25.3615 / insufficient (n=4) |
-| 三马 / BTCUSDT / long / 12 | 8 | 8 | -20.2719 / insufficient (n=5) | 48.9424 / insufficient (n=5) |
-| 三马 / BTCUSDT / long / 16 | 4 | 4 | 138.7170 / insufficient (n=3) | -20.5748 / insufficient (n=3) |
-| 三马 / BTCUSDT / short / 00 | 6 | 6 | 88.7011 / insufficient (n=6) | -25.0446 / insufficient (n=6) |
-| 三马 / BTCUSDT / short / 04 | 3 | 3 | -189.3156 / insufficient (n=3) | -33.9100 / insufficient (n=3) |
-| 三马 / BTCUSDT / short / 08 | 5 | 5 | -0.3236 / insufficient (n=4) | -27.8697 / insufficient (n=4) |
-| 三马 / BTCUSDT / short / 12 | 15 | 15 | -136.9652 / insufficient (n=13) | -6.5537 / insufficient (n=13) |
-| 三马 / BTCUSDT / short / 16 | 2 | 2 | -40.5126 / insufficient (n=2) | -32.4875 / insufficient (n=2) |
-| 三马 / BTCUSDT / short / 20 | 2 | 2 | -136.4956 / insufficient (n=2) | 63.5097 / insufficient (n=2) |
-| 三马 / ETHUSDT / long / 00 | 1 | 1 | 130.4007 / insufficient (n=1) | -25.2845 / insufficient (n=1) |
-| 三马 / ETHUSDT / long / 04 | 5 | 5 | 78.6124 / insufficient (n=3) | -58.1605 / insufficient (n=3) |
-| 三马 / ETHUSDT / long / 08 | 1 | 1 | 1876.4925 / insufficient (n=1) | -14.7464 / insufficient (n=1) |
-| 三马 / ETHUSDT / long / 12 | 4 | 4 | 114.9529 / insufficient (n=4) | 7.5450 / insufficient (n=4) |
-| 三马 / ETHUSDT / short / 00 | 10 | 10 | 118.7120 / insufficient (n=6) | -22.2886 / insufficient (n=6) |
-| 三马 / ETHUSDT / short / 04 | 5 | 5 | 19.5948 / insufficient (n=4) | -36.4926 / insufficient (n=4) |
-| 三马 / ETHUSDT / short / 08 | 1 | 1 | -491.9605 / insufficient (n=1) | 33.5386 / insufficient (n=1) |
-| 三马 / ETHUSDT / short / 12 | 7 | 7 | 122.0222 / insufficient (n=7) | 117.4449 / insufficient (n=7) |
-| 三马 / ETHUSDT / short / 16 | 2 | 2 | -25.4911 / insufficient (n=1) | 35.5239 / insufficient (n=1) |
-| 三马 / SNDKUSDT / long / 00 | 1 | 1 | 778.3727 / insufficient (n=1) | 445.2266 / insufficient (n=1) |
-| 三马 / SNDKUSDT / long / 04 | 1 | 1 | -1417.5161 / insufficient (n=1) | 39.9660 / insufficient (n=1) |
-| 三马 / SNDKUSDT / short / 12 | 1 | 1 | -328.7678 / insufficient (n=1) | 1341.5522 / insufficient (n=1) |
-| 三马 / SNDKUSDT / short / 20 | 1 | 1 | 13.2676 / insufficient (n=1) | 39.4715 / insufficient (n=1) |
-| 舒琴 / ANTHROPICUSDT / long / 08 | 1 | 1 | -602.8110 / insufficient (n=1) | -54.6885 / insufficient (n=1) |
-| 舒琴 / BTCUSDT / long / 04 | 3 | 3 | -2.6916 / insufficient (n=3) | 21.5759 / insufficient (n=3) |
-| 舒琴 / BTCUSDT / long / 08 | 29 | 29 | -80.1816 / insufficient (n=22) | 2.0726 / insufficient (n=22) |
-| 舒琴 / BTCUSDT / long / 12 | 15 | 15 | 8.9654 / insufficient (n=11) | 50.4801 / insufficient (n=11) |
-| 舒琴 / BTCUSDT / long / 16 | 8 | 8 | -43.9124 / insufficient (n=6) | 2.7466 / insufficient (n=6) |
-| 舒琴 / BTCUSDT / short / 04 | 2 | 2 | -61.3624 / insufficient (n=2) | 22.1310 / insufficient (n=2) |
-| 舒琴 / BTCUSDT / short / 08 | 13 | 13 | 44.9227 / insufficient (n=11) | -1.2110 / insufficient (n=11) |
-| 舒琴 / BTCUSDT / short / 12 | 6 | 6 | 105.5032 / insufficient (n=6) | 52.0440 / insufficient (n=6) |
-| 舒琴 / BTCUSDT / short / 16 | 5 | 5 | -3.6401 / insufficient (n=5) | 5.6349 / insufficient (n=5) |
-| 舒琴 / BZUSDT / short / 08 | 6 | 6 | 113.5854 / insufficient (n=4) | 10.7361 / insufficient (n=4) |
-| 舒琴 / BZUSDT / short / 12 | 3 | 3 | 94.1182 / insufficient (n=3) | 55.5624 / insufficient (n=3) |
-| 舒琴 / CLBZUSDT / short / 12 | 1 | 0 | — / insufficient (n=0) | — / insufficient (n=0) |
-| 舒琴 / CLUSDT / short / 08 | 9 | 9 | 87.0667 / insufficient (n=7) | 55.7967 / insufficient (n=7) |
-| 舒琴 / CLUSDT / short / 12 | 9 | 9 | 42.0561 / insufficient (n=8) | -19.4523 / insufficient (n=8) |
-| 舒琴 / CLUSDT / short / 16 | 2 | 2 | 296.4944 / insufficient (n=2) | 104.2395 / insufficient (n=2) |
-| 舒琴 / ETHUSDT / long / 04 | 2 | 2 | 90.0875 / insufficient (n=2) | 40.1472 / insufficient (n=2) |
-| 舒琴 / ETHUSDT / long / 08 | 18 | 18 | 22.9804 / insufficient (n=15) | 25.1676 / insufficient (n=15) |
-| 舒琴 / ETHUSDT / long / 12 | 7 | 7 | -11.8928 / insufficient (n=6) | 86.1738 / insufficient (n=6) |
-| 舒琴 / ETHUSDT / long / 16 | 3 | 3 | -78.3835 / insufficient (n=3) | 1.7895 / insufficient (n=3) |
-| 舒琴 / ETHUSDT / short / 04 | 1 | 1 | -206.5732 / insufficient (n=1) | 18.1936 / insufficient (n=1) |
-| 舒琴 / ETHUSDT / short / 08 | 10 | 10 | 6.6825 / insufficient (n=7) | 28.7995 / insufficient (n=7) |
-| 舒琴 / ETHUSDT / short / 12 | 2 | 2 | 163.7036 / insufficient (n=2) | 38.4751 / insufficient (n=2) |
-| 舒琴 / ETHUSDT / short / 16 | 4 | 4 | 35.4076 / insufficient (n=4) | 0.2792 / insufficient (n=4) |
-| 舒琴 / ETHUSDT / short / 20 | 2 | 2 | -1.6201 / insufficient (n=2) | -26.6761 / insufficient (n=2) |
-| 舒琴 / GOOGLUSDT / long / 08 | 4 | 4 | 82.0551 / insufficient (n=3) | 15.2290 / insufficient (n=3) |
-| 舒琴 / GOOGLUSDT / long / 12 | 5 | 5 | -121.5861 / insufficient (n=3) | 58.2888 / insufficient (n=3) |
-| 舒琴 / GOOGLUSDT / long / 16 | 1 | 1 | -160.8839 / insufficient (n=1) | 11.6460 / insufficient (n=1) |
-| 舒琴 / IBMUSDT / long / 16 | 1 | 1 | -647.5691 / insufficient (n=1) | -9.6625 / insufficient (n=1) |
-| 舒琴 / MUUSDT / long / 04 | 1 | 1 | 0.9660 / insufficient (n=1) | 199.3845 / insufficient (n=1) |
-| 舒琴 / MUUSDT / long / 08 | 7 | 7 | 177.4206 / insufficient (n=5) | 42.6148 / insufficient (n=5) |
-| 舒琴 / MUUSDT / long / 12 | 3 | 3 | -87.4846 / insufficient (n=3) | -346.6456 / insufficient (n=3) |
-| 舒琴 / MUUSDT / long / 20 | 1 | 1 | -22.8875 / insufficient (n=1) | -80.7713 / insufficient (n=1) |
-| 舒琴 / MUUSDT / short / 08 | 2 | 2 | 202.2668 / insufficient (n=2) | 40.3476 / insufficient (n=2) |
-| 舒琴 / OPENAIUSDT / long / 08 | 1 | 1 | 39.1768 / insufficient (n=1) | -3.3364 / insufficient (n=1) |
-| 舒琴 / PENGUUSDT / long / 08 | 2 | 2 | -175.5541 / insufficient (n=2) | -101.3013 / insufficient (n=2) |
-| 舒琴 / PENGUUSDT / long / 12 | 1 | 1 | -621.0360 / insufficient (n=1) | 32.3065 / insufficient (n=1) |
-| 舒琴 / PREOPAIUSDT / long / 08 | 1 | 0 | — / insufficient (n=0) | — / insufficient (n=0) |
-| 舒琴 / SNDKUSDT / long / 12 | 2 | 2 | 363.2238 / insufficient (n=2) | 303.9191 / insufficient (n=2) |
-| 舒琴 / SNDKUSDT / long / 20 | 3 | 3 | -254.2687 / insufficient (n=1) | -146.9059 / insufficient (n=1) |
-| 舒琴 / SNDKUSDT / short / 08 | 6 | 6 | 68.0271 / insufficient (n=5) | 2.6667 / insufficient (n=5) |
-| 舒琴 / SOLUSDT / long / 08 | 11 | 11 | -18.4391 / insufficient (n=10) | 2.4807 / insufficient (n=10) |
-| 舒琴 / SOLUSDT / long / 12 | 4 | 4 | 91.3229 / insufficient (n=4) | 146.3402 / insufficient (n=4) |
-| 舒琴 / SOLUSDT / short / 08 | 2 | 2 | 121.1136 / insufficient (n=2) | -17.3360 / insufficient (n=2) |
-| 舒琴 / SOLUSDT / short / 12 | 2 | 1 | -65.8670 / insufficient (n=1) | 47.1021 / insufficient (n=1) |
-| 舒琴 / SOLUSDT / short / 16 | 1 | 1 | -381.3188 / insufficient (n=1) | 58.8296 / insufficient (n=1) |
-| 舒琴 / SPCXUSDT / long / 08 | 1 | 1 | 116.1330 / insufficient (n=1) | 27.2912 / insufficient (n=1) |
-| 舒琴 / SPCXUSDT / short / 04 | 1 | 1 | 407.1462 / insufficient (n=1) | 48.7030 / insufficient (n=1) |
-| 舒琴 / SPCXUSDT / short / 08 | 12 | 12 | 14.9069 / insufficient (n=11) | -32.3015 / insufficient (n=11) |
-| 舒琴 / SPCXUSDT / short / 12 | 2 | 2 | 358.8872 / insufficient (n=2) | 156.8301 / insufficient (n=2) |
-| 舒琴 / SPCXUSDT / short / 16 | 2 | 2 | 26.4050 / insufficient (n=1) | -25.5775 / insufficient (n=1) |
-| 舒琴 / XAUUSDT / short / 04 | 1 | 1 | -97.5577 / insufficient (n=1) | -72.6854 / insufficient (n=1) |
-| 舒琴 / XAUUSDT / short / 08 | 1 | 1 | -109.5117 / insufficient (n=1) | -14.5392 / insufficient (n=1) |
-| 舒琴 / XAUUSDT / short / 12 | 1 | 1 | -25.2917 / insufficient (n=1) | 73.5098 / insufficient (n=1) |
-| 赵哥 / AVGOUSDT / long / 00 | 1 | 1 | -690.5541 / insufficient (n=1) | 232.0596 / insufficient (n=1) |
-| 赵哥 / AVGOUSDT / long / 04 | 2 | 2 | -64.9398 / insufficient (n=2) | 20.2539 / insufficient (n=2) |
-| 赵哥 / AVGOUSDT / long / 08 | 1 | 1 | 833.7551 / insufficient (n=1) | 62.8713 / insufficient (n=1) |
-| 赵哥 / AVGOUSDT / long / 12 | 8 | 8 | 34.3717 / insufficient (n=8) | 72.7720 / insufficient (n=8) |
-| 赵哥 / AVGOUSDT / long / 16 | 4 | 4 | -74.2155 / insufficient (n=4) | -0.4305 / insufficient (n=4) |
-| 赵哥 / AVGOUSDT / long / 20 | 1 | 1 | 542.8693 / insufficient (n=1) | 12.4675 / insufficient (n=1) |
-| 赵哥 / CBRSUSDT / long / 12 | 2 | 2 | -367.5680 / insufficient (n=2) | -73.2476 / insufficient (n=2) |
-| 赵哥 / CBRSUSDT / long / 16 | 2 | 2 | 563.6138 / insufficient (n=2) | 71.2260 / insufficient (n=2) |
-| 赵哥 / CIFRUSDT / long / 16 | 1 | 0 | — / insufficient (n=0) | — / insufficient (n=0) |
-| 赵哥 / COINUSDT / long / 12 | 1 | 1 | 157.0153 / insufficient (n=1) | -109.4221 / insufficient (n=1) |
-| 赵哥 / CONLUSDT / long / 12 | 5 | 0 | — / insufficient (n=0) | — / insufficient (n=0) |
-| 赵哥 / CONLUSDT / long / 16 | 3 | 0 | — / insufficient (n=0) | — / insufficient (n=0) |
-| 赵哥 / CONLUSDT / long / 20 | 1 | 0 | — / insufficient (n=0) | — / insufficient (n=0) |
-| 赵哥 / CRWVUSDT / long / 12 | 6 | 5 | -83.6736 / insufficient (n=5) | 231.3686 / insufficient (n=5) |
-| 赵哥 / CRWVUSDT / long / 16 | 1 | 1 | -4.0730 / insufficient (n=1) | -74.8576 / insufficient (n=1) |
-| 赵哥 / CRWVUSDT / long / 20 | 1 | 1 | -531.5759 / insufficient (n=1) | -180.8629 / insufficient (n=1) |
-| 赵哥 / DRAMUSDT / long / 12 | 1 | 1 | -53.3742 / insufficient (n=1) | 2.3056 / insufficient (n=1) |
-| 赵哥 / GOOGLUSDT / long / 08 | 1 | 1 | -102.5581 / insufficient (n=1) | -4.5365 / insufficient (n=1) |
-| 赵哥 / GOOGLUSDT / long / 12 | 9 | 9 | -30.9709 / insufficient (n=9) | 15.9100 / insufficient (n=9) |
-| 赵哥 / GOOGLUSDT / long / 16 | 2 | 2 | -85.6093 / insufficient (n=2) | -33.6992 / insufficient (n=2) |
-| 赵哥 / GOOGLUSDT / long / 20 | 3 | 3 | -348.2179 / insufficient (n=3) | -194.1255 / insufficient (n=3) |
-| 赵哥 / HOODUSDT / long / 00 | 1 | 1 | -302.4096 / insufficient (n=1) | -32.2681 / insufficient (n=1) |
-| 赵哥 / HOODUSDT / long / 16 | 1 | 1 | -137.8909 / insufficient (n=1) | -73.3915 / insufficient (n=1) |
-| 赵哥 / IBMUSDT / long / 16 | 1 | 1 | 509.4265 / insufficient (n=1) | 57.7760 / insufficient (n=1) |
-| 赵哥 / INTCUSDT / long / 12 | 2 | 2 | 348.3969 / insufficient (n=2) | 71.3736 / insufficient (n=2) |
-| 赵哥 / INTCUSDT / long / 16 | 2 | 2 | 548.8438 / insufficient (n=2) | 46.9545 / insufficient (n=2) |
-| 赵哥 / INTCUSDT / long / 20 | 1 | 1 | -70.1434 / insufficient (n=1) | 14.2230 / insufficient (n=1) |
-| 赵哥 / IRENUSDT / long / 12 | 1 | 1 | -73.5951 / insufficient (n=1) | 357.2477 / insufficient (n=1) |
-| 赵哥 / LITEUSDT / long / 12 | 6 | 6 | 133.2284 / insufficient (n=6) | 143.7859 / insufficient (n=6) |
-| 赵哥 / LITEUSDT / long / 16 | 1 | 1 | -670.0166 / insufficient (n=1) | -41.1714 / insufficient (n=1) |
-| 赵哥 / MUUSDT / long / 00 | 1 | 1 | -637.6702 / insufficient (n=1) | 190.2165 / insufficient (n=1) |
-| 赵哥 / MUUSDT / long / 04 | 2 | 2 | -527.9316 / insufficient (n=2) | 223.0722 / insufficient (n=2) |
-| 赵哥 / MUUSDT / long / 08 | 4 | 4 | 174.1652 / insufficient (n=4) | -65.6269 / insufficient (n=4) |
-| 赵哥 / MUUSDT / long / 12 | 16 | 16 | 131.3454 / insufficient (n=12) | 224.7036 / insufficient (n=12) |
-| 赵哥 / MUUSDT / long / 16 | 4 | 4 | 285.4988 / insufficient (n=4) | 215.5073 / insufficient (n=4) |
-| 赵哥 / MUUSDT / long / 20 | 1 | 1 | -857.6007 / insufficient (n=1) | 132.6042 / insufficient (n=1) |
-| 赵哥 / NBISUSDT / long / 00 | 1 | 1 | -414.8859 / insufficient (n=1) | -65.0726 / insufficient (n=1) |
-| 赵哥 / NBISUSDT / long / 12 | 3 | 3 | -144.7165 / insufficient (n=3) | -57.7667 / insufficient (n=3) |
-| 赵哥 / NOKUSDT / long / 12 | 2 | 2 | -541.5447 / insufficient (n=2) | 18.8820 / insufficient (n=2) |
-| 赵哥 / NVDAUSDT / long / 16 | 1 | 1 | -64.2418 / insufficient (n=1) | 91.8921 / insufficient (n=1) |
-| 赵哥 / NVDLUSDT / long / 00 | 1 | 0 | — / insufficient (n=0) | — / insufficient (n=0) |
-| 赵哥 / PLUSDT / long / 12 | 1 | 0 | — / insufficient (n=0) | — / insufficient (n=0) |
-| 赵哥 / QQQUSDT / long / 20 | 1 | 1 | 387.9762 / insufficient (n=1) | 35.9760 / insufficient (n=1) |
-| 赵哥 / SPCXUSDT / long / 12 | 2 | 2 | -101.6471 / insufficient (n=2) | -27.3649 / insufficient (n=2) |
-| 赵哥 / SPCXUSDT / long / 16 | 1 | 1 | -61.8898 / insufficient (n=1) | -237.3863 / insufficient (n=1) |
-| 赵哥 / SPCXUSDT / long / 20 | 1 | 1 | 506.0945 / insufficient (n=1) | 54.0588 / insufficient (n=1) |
-| 赵哥 / TSLAUSDT / long / 12 | 1 | 1 | 562.4482 / insufficient (n=1) | 204.5537 / insufficient (n=1) |
-| 赵哥 / TSLLUSDT / long / 12 | 2 | 0 | — / insufficient (n=0) | — / insufficient (n=0) |
-| 赵哥 / TSLLUSDT / long / 16 | 2 | 0 | — / insufficient (n=0) | — / insufficient (n=0) |
-| 赵哥 / TSMUSDT / long / 12 | 1 | 1 | -4.2017 / insufficient (n=1) | 134.5579 / insufficient (n=1) |
-| 赵哥 / WDCUSDT / long / 16 | 1 | 1 | -19.7057 / insufficient (n=1) | -18.5692 / insufficient (n=1) |
+| 交易员A / BTCUSDT / long / 00 | 5 | 5 | 31.8619 / insufficient (n=5) | 29.4224 / insufficient (n=5) |
+| 交易员A / BTCUSDT / long / 04 | 5 | 5 | 48.1982 / insufficient (n=5) | -11.5812 / insufficient (n=5) |
+| 交易员A / BTCUSDT / long / 08 | 5 | 5 | 293.4405 / insufficient (n=4) | -25.3615 / insufficient (n=4) |
+| 交易员A / BTCUSDT / long / 12 | 8 | 8 | -20.2719 / insufficient (n=5) | 48.9424 / insufficient (n=5) |
+| 交易员A / BTCUSDT / long / 16 | 4 | 4 | 138.7170 / insufficient (n=3) | -20.5748 / insufficient (n=3) |
+| 交易员A / BTCUSDT / short / 00 | 6 | 6 | 88.7011 / insufficient (n=6) | -25.0446 / insufficient (n=6) |
+| 交易员A / BTCUSDT / short / 04 | 3 | 3 | -189.3156 / insufficient (n=3) | -33.9100 / insufficient (n=3) |
+| 交易员A / BTCUSDT / short / 08 | 5 | 5 | -0.3236 / insufficient (n=4) | -27.8697 / insufficient (n=4) |
+| 交易员A / BTCUSDT / short / 12 | 15 | 15 | -136.9652 / insufficient (n=13) | -6.5537 / insufficient (n=13) |
+| 交易员A / BTCUSDT / short / 16 | 2 | 2 | -40.5126 / insufficient (n=2) | -32.4875 / insufficient (n=2) |
+| 交易员A / BTCUSDT / short / 20 | 2 | 2 | -136.4956 / insufficient (n=2) | 63.5097 / insufficient (n=2) |
+| 交易员A / ETHUSDT / long / 00 | 1 | 1 | 130.4007 / insufficient (n=1) | -25.2845 / insufficient (n=1) |
+| 交易员A / ETHUSDT / long / 04 | 5 | 5 | 78.6124 / insufficient (n=3) | -58.1605 / insufficient (n=3) |
+| 交易员A / ETHUSDT / long / 08 | 1 | 1 | 1876.4925 / insufficient (n=1) | -14.7464 / insufficient (n=1) |
+| 交易员A / ETHUSDT / long / 12 | 4 | 4 | 114.9529 / insufficient (n=4) | 7.5450 / insufficient (n=4) |
+| 交易员A / ETHUSDT / short / 00 | 10 | 10 | 118.7120 / insufficient (n=6) | -22.2886 / insufficient (n=6) |
+| 交易员A / ETHUSDT / short / 04 | 5 | 5 | 19.5948 / insufficient (n=4) | -36.4926 / insufficient (n=4) |
+| 交易员A / ETHUSDT / short / 08 | 1 | 1 | -491.9605 / insufficient (n=1) | 33.5386 / insufficient (n=1) |
+| 交易员A / ETHUSDT / short / 12 | 7 | 7 | 122.0222 / insufficient (n=7) | 117.4449 / insufficient (n=7) |
+| 交易员A / ETHUSDT / short / 16 | 2 | 2 | -25.4911 / insufficient (n=1) | 35.5239 / insufficient (n=1) |
+| 交易员A / SNDKUSDT / long / 00 | 1 | 1 | 778.3727 / insufficient (n=1) | 445.2266 / insufficient (n=1) |
+| 交易员A / SNDKUSDT / long / 04 | 1 | 1 | -1417.5161 / insufficient (n=1) | 39.9660 / insufficient (n=1) |
+| 交易员A / SNDKUSDT / short / 12 | 1 | 1 | -328.7678 / insufficient (n=1) | 1341.5522 / insufficient (n=1) |
+| 交易员A / SNDKUSDT / short / 20 | 1 | 1 | 13.2676 / insufficient (n=1) | 39.4715 / insufficient (n=1) |
+| 交易员B / ANTHROPICUSDT / long / 08 | 1 | 1 | -602.8110 / insufficient (n=1) | -54.6885 / insufficient (n=1) |
+| 交易员B / BTCUSDT / long / 04 | 3 | 3 | -2.6916 / insufficient (n=3) | 21.5759 / insufficient (n=3) |
+| 交易员B / BTCUSDT / long / 08 | 29 | 29 | -80.1816 / insufficient (n=22) | 2.0726 / insufficient (n=22) |
+| 交易员B / BTCUSDT / long / 12 | 15 | 15 | 8.9654 / insufficient (n=11) | 50.4801 / insufficient (n=11) |
+| 交易员B / BTCUSDT / long / 16 | 8 | 8 | -43.9124 / insufficient (n=6) | 2.7466 / insufficient (n=6) |
+| 交易员B / BTCUSDT / short / 04 | 2 | 2 | -61.3624 / insufficient (n=2) | 22.1310 / insufficient (n=2) |
+| 交易员B / BTCUSDT / short / 08 | 13 | 13 | 44.9227 / insufficient (n=11) | -1.2110 / insufficient (n=11) |
+| 交易员B / BTCUSDT / short / 12 | 6 | 6 | 105.5032 / insufficient (n=6) | 52.0440 / insufficient (n=6) |
+| 交易员B / BTCUSDT / short / 16 | 5 | 5 | -3.6401 / insufficient (n=5) | 5.6349 / insufficient (n=5) |
+| 交易员B / BZUSDT / short / 08 | 6 | 6 | 113.5854 / insufficient (n=4) | 10.7361 / insufficient (n=4) |
+| 交易员B / BZUSDT / short / 12 | 3 | 3 | 94.1182 / insufficient (n=3) | 55.5624 / insufficient (n=3) |
+| 交易员B / CLBZUSDT / short / 12 | 1 | 0 | — / insufficient (n=0) | — / insufficient (n=0) |
+| 交易员B / CLUSDT / short / 08 | 9 | 9 | 87.0667 / insufficient (n=7) | 55.7967 / insufficient (n=7) |
+| 交易员B / CLUSDT / short / 12 | 9 | 9 | 42.0561 / insufficient (n=8) | -19.4523 / insufficient (n=8) |
+| 交易员B / CLUSDT / short / 16 | 2 | 2 | 296.4944 / insufficient (n=2) | 104.2395 / insufficient (n=2) |
+| 交易员B / ETHUSDT / long / 04 | 2 | 2 | 90.0875 / insufficient (n=2) | 40.1472 / insufficient (n=2) |
+| 交易员B / ETHUSDT / long / 08 | 18 | 18 | 22.9804 / insufficient (n=15) | 25.1676 / insufficient (n=15) |
+| 交易员B / ETHUSDT / long / 12 | 7 | 7 | -11.8928 / insufficient (n=6) | 86.1738 / insufficient (n=6) |
+| 交易员B / ETHUSDT / long / 16 | 3 | 3 | -78.3835 / insufficient (n=3) | 1.7895 / insufficient (n=3) |
+| 交易员B / ETHUSDT / short / 04 | 1 | 1 | -206.5732 / insufficient (n=1) | 18.1936 / insufficient (n=1) |
+| 交易员B / ETHUSDT / short / 08 | 10 | 10 | 6.6825 / insufficient (n=7) | 28.7995 / insufficient (n=7) |
+| 交易员B / ETHUSDT / short / 12 | 2 | 2 | 163.7036 / insufficient (n=2) | 38.4751 / insufficient (n=2) |
+| 交易员B / ETHUSDT / short / 16 | 4 | 4 | 35.4076 / insufficient (n=4) | 0.2792 / insufficient (n=4) |
+| 交易员B / ETHUSDT / short / 20 | 2 | 2 | -1.6201 / insufficient (n=2) | -26.6761 / insufficient (n=2) |
+| 交易员B / GOOGLUSDT / long / 08 | 4 | 4 | 82.0551 / insufficient (n=3) | 15.2290 / insufficient (n=3) |
+| 交易员B / GOOGLUSDT / long / 12 | 5 | 5 | -121.5861 / insufficient (n=3) | 58.2888 / insufficient (n=3) |
+| 交易员B / GOOGLUSDT / long / 16 | 1 | 1 | -160.8839 / insufficient (n=1) | 11.6460 / insufficient (n=1) |
+| 交易员B / IBMUSDT / long / 16 | 1 | 1 | -647.5691 / insufficient (n=1) | -9.6625 / insufficient (n=1) |
+| 交易员B / MUUSDT / long / 04 | 1 | 1 | 0.9660 / insufficient (n=1) | 199.3845 / insufficient (n=1) |
+| 交易员B / MUUSDT / long / 08 | 7 | 7 | 177.4206 / insufficient (n=5) | 42.6148 / insufficient (n=5) |
+| 交易员B / MUUSDT / long / 12 | 3 | 3 | -87.4846 / insufficient (n=3) | -346.6456 / insufficient (n=3) |
+| 交易员B / MUUSDT / long / 20 | 1 | 1 | -22.8875 / insufficient (n=1) | -80.7713 / insufficient (n=1) |
+| 交易员B / MUUSDT / short / 08 | 2 | 2 | 202.2668 / insufficient (n=2) | 40.3476 / insufficient (n=2) |
+| 交易员B / OPENAIUSDT / long / 08 | 1 | 1 | 39.1768 / insufficient (n=1) | -3.3364 / insufficient (n=1) |
+| 交易员B / PENGUUSDT / long / 08 | 2 | 2 | -175.5541 / insufficient (n=2) | -101.3013 / insufficient (n=2) |
+| 交易员B / PENGUUSDT / long / 12 | 1 | 1 | -621.0360 / insufficient (n=1) | 32.3065 / insufficient (n=1) |
+| 交易员B / PREOPAIUSDT / long / 08 | 1 | 0 | — / insufficient (n=0) | — / insufficient (n=0) |
+| 交易员B / SNDKUSDT / long / 12 | 2 | 2 | 363.2238 / insufficient (n=2) | 303.9191 / insufficient (n=2) |
+| 交易员B / SNDKUSDT / long / 20 | 3 | 3 | -254.2687 / insufficient (n=1) | -146.9059 / insufficient (n=1) |
+| 交易员B / SNDKUSDT / short / 08 | 6 | 6 | 68.0271 / insufficient (n=5) | 2.6667 / insufficient (n=5) |
+| 交易员B / SOLUSDT / long / 08 | 11 | 11 | -18.4391 / insufficient (n=10) | 2.4807 / insufficient (n=10) |
+| 交易员B / SOLUSDT / long / 12 | 4 | 4 | 91.3229 / insufficient (n=4) | 146.3402 / insufficient (n=4) |
+| 交易员B / SOLUSDT / short / 08 | 2 | 2 | 121.1136 / insufficient (n=2) | -17.3360 / insufficient (n=2) |
+| 交易员B / SOLUSDT / short / 12 | 2 | 1 | -65.8670 / insufficient (n=1) | 47.1021 / insufficient (n=1) |
+| 交易员B / SOLUSDT / short / 16 | 1 | 1 | -381.3188 / insufficient (n=1) | 58.8296 / insufficient (n=1) |
+| 交易员B / SPCXUSDT / long / 08 | 1 | 1 | 116.1330 / insufficient (n=1) | 27.2912 / insufficient (n=1) |
+| 交易员B / SPCXUSDT / short / 04 | 1 | 1 | 407.1462 / insufficient (n=1) | 48.7030 / insufficient (n=1) |
+| 交易员B / SPCXUSDT / short / 08 | 12 | 12 | 14.9069 / insufficient (n=11) | -32.3015 / insufficient (n=11) |
+| 交易员B / SPCXUSDT / short / 12 | 2 | 2 | 358.8872 / insufficient (n=2) | 156.8301 / insufficient (n=2) |
+| 交易员B / SPCXUSDT / short / 16 | 2 | 2 | 26.4050 / insufficient (n=1) | -25.5775 / insufficient (n=1) |
+| 交易员B / XAUUSDT / short / 04 | 1 | 1 | -97.5577 / insufficient (n=1) | -72.6854 / insufficient (n=1) |
+| 交易员B / XAUUSDT / short / 08 | 1 | 1 | -109.5117 / insufficient (n=1) | -14.5392 / insufficient (n=1) |
+| 交易员B / XAUUSDT / short / 12 | 1 | 1 | -25.2917 / insufficient (n=1) | 73.5098 / insufficient (n=1) |
+| 交易员C / AVGOUSDT / long / 00 | 1 | 1 | -690.5541 / insufficient (n=1) | 232.0596 / insufficient (n=1) |
+| 交易员C / AVGOUSDT / long / 04 | 2 | 2 | -64.9398 / insufficient (n=2) | 20.2539 / insufficient (n=2) |
+| 交易员C / AVGOUSDT / long / 08 | 1 | 1 | 833.7551 / insufficient (n=1) | 62.8713 / insufficient (n=1) |
+| 交易员C / AVGOUSDT / long / 12 | 8 | 8 | 34.3717 / insufficient (n=8) | 72.7720 / insufficient (n=8) |
+| 交易员C / AVGOUSDT / long / 16 | 4 | 4 | -74.2155 / insufficient (n=4) | -0.4305 / insufficient (n=4) |
+| 交易员C / AVGOUSDT / long / 20 | 1 | 1 | 542.8693 / insufficient (n=1) | 12.4675 / insufficient (n=1) |
+| 交易员C / CBRSUSDT / long / 12 | 2 | 2 | -367.5680 / insufficient (n=2) | -73.2476 / insufficient (n=2) |
+| 交易员C / CBRSUSDT / long / 16 | 2 | 2 | 563.6138 / insufficient (n=2) | 71.2260 / insufficient (n=2) |
+| 交易员C / CIFRUSDT / long / 16 | 1 | 0 | — / insufficient (n=0) | — / insufficient (n=0) |
+| 交易员C / COINUSDT / long / 12 | 1 | 1 | 157.0153 / insufficient (n=1) | -109.4221 / insufficient (n=1) |
+| 交易员C / CONLUSDT / long / 12 | 5 | 0 | — / insufficient (n=0) | — / insufficient (n=0) |
+| 交易员C / CONLUSDT / long / 16 | 3 | 0 | — / insufficient (n=0) | — / insufficient (n=0) |
+| 交易员C / CONLUSDT / long / 20 | 1 | 0 | — / insufficient (n=0) | — / insufficient (n=0) |
+| 交易员C / CRWVUSDT / long / 12 | 6 | 5 | -83.6736 / insufficient (n=5) | 231.3686 / insufficient (n=5) |
+| 交易员C / CRWVUSDT / long / 16 | 1 | 1 | -4.0730 / insufficient (n=1) | -74.8576 / insufficient (n=1) |
+| 交易员C / CRWVUSDT / long / 20 | 1 | 1 | -531.5759 / insufficient (n=1) | -180.8629 / insufficient (n=1) |
+| 交易员C / DRAMUSDT / long / 12 | 1 | 1 | -53.3742 / insufficient (n=1) | 2.3056 / insufficient (n=1) |
+| 交易员C / GOOGLUSDT / long / 08 | 1 | 1 | -102.5581 / insufficient (n=1) | -4.5365 / insufficient (n=1) |
+| 交易员C / GOOGLUSDT / long / 12 | 9 | 9 | -30.9709 / insufficient (n=9) | 15.9100 / insufficient (n=9) |
+| 交易员C / GOOGLUSDT / long / 16 | 2 | 2 | -85.6093 / insufficient (n=2) | -33.6992 / insufficient (n=2) |
+| 交易员C / GOOGLUSDT / long / 20 | 3 | 3 | -348.2179 / insufficient (n=3) | -194.1255 / insufficient (n=3) |
+| 交易员C / HOODUSDT / long / 00 | 1 | 1 | -302.4096 / insufficient (n=1) | -32.2681 / insufficient (n=1) |
+| 交易员C / HOODUSDT / long / 16 | 1 | 1 | -137.8909 / insufficient (n=1) | -73.3915 / insufficient (n=1) |
+| 交易员C / IBMUSDT / long / 16 | 1 | 1 | 509.4265 / insufficient (n=1) | 57.7760 / insufficient (n=1) |
+| 交易员C / INTCUSDT / long / 12 | 2 | 2 | 348.3969 / insufficient (n=2) | 71.3736 / insufficient (n=2) |
+| 交易员C / INTCUSDT / long / 16 | 2 | 2 | 548.8438 / insufficient (n=2) | 46.9545 / insufficient (n=2) |
+| 交易员C / INTCUSDT / long / 20 | 1 | 1 | -70.1434 / insufficient (n=1) | 14.2230 / insufficient (n=1) |
+| 交易员C / IRENUSDT / long / 12 | 1 | 1 | -73.5951 / insufficient (n=1) | 357.2477 / insufficient (n=1) |
+| 交易员C / LITEUSDT / long / 12 | 6 | 6 | 133.2284 / insufficient (n=6) | 143.7859 / insufficient (n=6) |
+| 交易员C / LITEUSDT / long / 16 | 1 | 1 | -670.0166 / insufficient (n=1) | -41.1714 / insufficient (n=1) |
+| 交易员C / MUUSDT / long / 00 | 1 | 1 | -637.6702 / insufficient (n=1) | 190.2165 / insufficient (n=1) |
+| 交易员C / MUUSDT / long / 04 | 2 | 2 | -527.9316 / insufficient (n=2) | 223.0722 / insufficient (n=2) |
+| 交易员C / MUUSDT / long / 08 | 4 | 4 | 174.1652 / insufficient (n=4) | -65.6269 / insufficient (n=4) |
+| 交易员C / MUUSDT / long / 12 | 16 | 16 | 131.3454 / insufficient (n=12) | 224.7036 / insufficient (n=12) |
+| 交易员C / MUUSDT / long / 16 | 4 | 4 | 285.4988 / insufficient (n=4) | 215.5073 / insufficient (n=4) |
+| 交易员C / MUUSDT / long / 20 | 1 | 1 | -857.6007 / insufficient (n=1) | 132.6042 / insufficient (n=1) |
+| 交易员C / NBISUSDT / long / 00 | 1 | 1 | -414.8859 / insufficient (n=1) | -65.0726 / insufficient (n=1) |
+| 交易员C / NBISUSDT / long / 12 | 3 | 3 | -144.7165 / insufficient (n=3) | -57.7667 / insufficient (n=3) |
+| 交易员C / NOKUSDT / long / 12 | 2 | 2 | -541.5447 / insufficient (n=2) | 18.8820 / insufficient (n=2) |
+| 交易员C / NVDAUSDT / long / 16 | 1 | 1 | -64.2418 / insufficient (n=1) | 91.8921 / insufficient (n=1) |
+| 交易员C / NVDLUSDT / long / 00 | 1 | 0 | — / insufficient (n=0) | — / insufficient (n=0) |
+| 交易员C / PLUSDT / long / 12 | 1 | 0 | — / insufficient (n=0) | — / insufficient (n=0) |
+| 交易员C / QQQUSDT / long / 20 | 1 | 1 | 387.9762 / insufficient (n=1) | 35.9760 / insufficient (n=1) |
+| 交易员C / SPCXUSDT / long / 12 | 2 | 2 | -101.6471 / insufficient (n=2) | -27.3649 / insufficient (n=2) |
+| 交易员C / SPCXUSDT / long / 16 | 1 | 1 | -61.8898 / insufficient (n=1) | -237.3863 / insufficient (n=1) |
+| 交易员C / SPCXUSDT / long / 20 | 1 | 1 | 506.0945 / insufficient (n=1) | 54.0588 / insufficient (n=1) |
+| 交易员C / TSLAUSDT / long / 12 | 1 | 1 | 562.4482 / insufficient (n=1) | 204.5537 / insufficient (n=1) |
+| 交易员C / TSLLUSDT / long / 12 | 2 | 0 | — / insufficient (n=0) | — / insufficient (n=0) |
+| 交易员C / TSLLUSDT / long / 16 | 2 | 0 | — / insufficient (n=0) | — / insufficient (n=0) |
+| 交易员C / TSMUSDT / long / 12 | 1 | 1 | -4.2017 / insufficient (n=1) | 134.5579 / insufficient (n=1) |
+| 交易员C / WDCUSDT / long / 16 | 1 | 1 | -19.7057 / insufficient (n=1) | -18.5692 / insufficient (n=1) |

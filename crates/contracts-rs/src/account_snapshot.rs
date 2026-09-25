@@ -1,4 +1,4 @@
-//! `account_snapshot.json` —— 分组件的账户真相(Codex review #6)。
+//! `account_snapshot.json` —— 分组件的账户真相(external review #6)。
 
 use serde::{Deserialize, Serialize};
 

@@ -75,7 +75,7 @@ export function orderGateFor(ir:import('@trading-swarm/contracts').StrategyIR|nu
  if(!ir)return base;
  const userRR=ir.order?.min_rr;
  if(isStructureGate(base))return userRR!==undefined&&userRR>0?{...base,min_rr:userRR,require_target:true}:{...base};
- const hasTarget=(ir.exit??[]).some(x=>x.primitive==='structure_target'||x.primitive==='fixed_r_target')||!!ir.order?.take_profits?.length;// 订单块没写 take_profits 时缺省止盈由 orders/ 执行核给,执行核接入全窗口回测前 v4 看不到它,不能当作「有止盈」(Codex 复审 09-23)
+ const hasTarget=(ir.exit??[]).some(x=>x.primitive==='structure_target'||x.primitive==='fixed_r_target')||!!ir.order?.take_profits?.length;// 订单块没写 take_profits 时缺省止盈由 orders/ 执行核给,执行核接入全窗口回测前 v4 看不到它,不能当作「有止盈」(复审 09-23)
  if(hasTarget)return userRR!==undefined?{...base,min_rr:userRR}:base;
  return {...base,require_target:false,min_rr:0,target_fallback_r:0};
 }

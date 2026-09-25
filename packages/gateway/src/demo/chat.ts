@@ -347,7 +347,7 @@ export function resolveReadonlyDb(src: ReadonlyDbSource | undefined): DatabaseSy
 }
 
 export type OptionalModuleLoader = (name: 'evolution' | 'universe-okx') => Promise<Record<string, unknown> | null>;
-/** 另两个子代理在写的模块:存在就用,不存在返回 null(用变量 specifier,编译期不绑死)。 */
+/** 另两个模块:存在就用,不存在返回 null(用变量 specifier,编译期不绑死)。 */
 const defaultModuleLoader: OptionalModuleLoader = async (name) => {
   const spec = `./${name}.js`;
   try {

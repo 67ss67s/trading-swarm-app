@@ -35,9 +35,9 @@
       "ETHUSDT"
     ],
     "human_families": [
-      "human_shuqin",
-      "human_sanma",
-      "human_zhaoge"
+      "human_trader_b",
+      "human_trader_a",
+      "human_trader_c"
     ],
     "horizon_hours": 24,
     "folds": "anchored 60d/20d, full 24h purge, training effective n>=30, train-only choice",
@@ -363,9 +363,9 @@
   "trial_count_snapshot": {
     "trader_sr_reversal": 9,
     "trader_intraday_sweep": 9,
-    "human_shuqin": 1,
-    "human_sanma": 1,
-    "human_zhaoge": 1
+    "human_trader_b": 1,
+    "human_trader_a": 1,
+    "human_trader_c": 1
   },
   "market_catalog": [
     {
@@ -674,7 +674,7 @@
     }
   ],
   "corpus": {
-    "舒琴": {
+    "交易员B": {
       "raw": 484,
       "unique_text": 474,
       "structured": 318,
@@ -704,7 +704,7 @@
         "市价": 1
       }
     },
-    "三马": {
+    "交易员A": {
       "raw": 1022,
       "unique_text": 803,
       "structured": 534,
@@ -735,7 +735,7 @@
         "市价": 294
       }
     },
-    "赵哥": {
+    "交易员C": {
       "raw": 1592,
       "unique_text": 1275,
       "structured": 253,
@@ -2855,7 +2855,7 @@
   ],
   "attribution": {
     "by_trader": {
-      "舒琴": {
+      "交易员B": {
         "n": 243,
         "full_24h": 240,
         "r_valid": 92,
@@ -2992,7 +2992,7 @@
           "sma200": 9.169807265060435
         }
       },
-      "三马": {
+      "交易员A": {
         "n": 100,
         "full_24h": 100,
         "r_valid": 70,
@@ -3129,7 +3129,7 @@
           "sma200": 6.507757231412488
         }
       },
-      "赵哥": {
+      "交易员C": {
         "n": 121,
         "full_24h": 104,
         "r_valid": 0,
@@ -3268,7 +3268,7 @@
       }
     },
     "strata": {
-      "舒琴|BTCUSDT|long|12": {
+      "交易员B|BTCUSDT|long|12": {
         "n": 15,
         "full_24h": 15,
         "r_valid": 7,
@@ -3405,7 +3405,7 @@
           "sma200": 7.9581628856916105
         }
       },
-      "舒琴|CLUSDT|short|12": {
+      "交易员B|CLUSDT|short|12": {
         "n": 9,
         "full_24h": 9,
         "r_valid": 0,
@@ -3542,7 +3542,7 @@
           "sma200": 8.291698197994284
         }
       },
-      "舒琴|GOOGLUSDT|long|12": {
+      "交易员B|GOOGLUSDT|long|12": {
         "n": 5,
         "full_24h": 5,
         "r_valid": 3,
@@ -3679,7 +3679,7 @@
           "sma200": 19.657369554098473
         }
       },
-      "三马|ETHUSDT|short|00": {
+      "交易员A|ETHUSDT|short|00": {
         "n": 10,
         "full_24h": 10,
         "r_valid": 7,
@@ -3816,7 +3816,7 @@
           "sma200": 2.5710937485702265
         }
       },
-      "舒琴|BTCUSDT|long|08": {
+      "交易员B|BTCUSDT|long|08": {
         "n": 29,
         "full_24h": 29,
         "r_valid": 9,
@@ -3953,7 +3953,7 @@
           "sma200": 7.288796936347138
         }
       },
-      "三马|ETHUSDT|short|12": {
+      "交易员A|ETHUSDT|short|12": {
         "n": 7,
         "full_24h": 7,
         "r_valid": 6,
@@ -4090,7 +4090,7 @@
           "sma200": 4.925860862569558
         }
       },
-      "三马|BTCUSDT|short|00": {
+      "交易员A|BTCUSDT|short|00": {
         "n": 6,
         "full_24h": 6,
         "r_valid": 4,
@@ -4227,7 +4227,7 @@
           "sma200": 10.209863900658897
         }
       },
-      "舒琴|CLUSDT|short|08": {
+      "交易员B|CLUSDT|short|08": {
         "n": 9,
         "full_24h": 9,
         "r_valid": 0,
@@ -4364,7 +4364,7 @@
           "sma200": 17.15502510466294
         }
       },
-      "舒琴|GOOGLUSDT|long|08": {
+      "交易员B|GOOGLUSDT|long|08": {
         "n": 4,
         "full_24h": 4,
         "r_valid": 1,
@@ -4501,7 +4501,7 @@
           "sma200": 17.859701999027582
         }
       },
-      "赵哥|TSLLUSDT|long|16": {
+      "交易员C|TSLLUSDT|long|16": {
         "n": 2,
         "full_24h": 0,
         "r_valid": 0,
@@ -4638,7 +4638,7 @@
           "sma200": null
         }
       },
-      "舒琴|BTCUSDT|long|16": {
+      "交易员B|BTCUSDT|long|16": {
         "n": 8,
         "full_24h": 8,
         "r_valid": 5,
@@ -4775,7 +4775,7 @@
           "sma200": 9.104577226868438
         }
       },
-      "三马|BTCUSDT|long|00": {
+      "交易员A|BTCUSDT|long|00": {
         "n": 5,
         "full_24h": 5,
         "r_valid": 2,
@@ -4912,7 +4912,7 @@
           "sma200": 10.487264656117128
         }
       },
-      "赵哥|AVGOUSDT|long|12": {
+      "交易员C|AVGOUSDT|long|12": {
         "n": 8,
         "full_24h": 8,
         "r_valid": 0,
@@ -5049,7 +5049,7 @@
           "sma200": 6.45417704495711
         }
       },
-      "赵哥|NVDLUSDT|long|00": {
+      "交易员C|NVDLUSDT|long|00": {
         "n": 1,
         "full_24h": 0,
         "r_valid": 0,
@@ -5186,7 +5186,7 @@
           "sma200": null
         }
       },
-      "赵哥|AVGOUSDT|long|00": {
+      "交易员C|AVGOUSDT|long|00": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -5323,7 +5323,7 @@
           "sma200": 5.302665937272093
         }
       },
-      "舒琴|ETHUSDT|long|08": {
+      "交易员B|ETHUSDT|long|08": {
         "n": 18,
         "full_24h": 18,
         "r_valid": 6,
@@ -5460,7 +5460,7 @@
           "sma200": 7.270418219440718
         }
       },
-      "舒琴|SOLUSDT|long|08": {
+      "交易员B|SOLUSDT|long|08": {
         "n": 11,
         "full_24h": 11,
         "r_valid": 2,
@@ -5597,7 +5597,7 @@
           "sma200": 7.005570228023967
         }
       },
-      "三马|BTCUSDT|short|08": {
+      "交易员A|BTCUSDT|short|08": {
         "n": 5,
         "full_24h": 5,
         "r_valid": 4,
@@ -5734,7 +5734,7 @@
           "sma200": 8.69022575239197
         }
       },
-      "赵哥|CONLUSDT|long|12": {
+      "交易员C|CONLUSDT|long|12": {
         "n": 5,
         "full_24h": 0,
         "r_valid": 0,
@@ -5871,7 +5871,7 @@
           "sma200": null
         }
       },
-      "赵哥|TSLLUSDT|long|12": {
+      "交易员C|TSLLUSDT|long|12": {
         "n": 2,
         "full_24h": 0,
         "r_valid": 0,
@@ -6008,7 +6008,7 @@
           "sma200": null
         }
       },
-      "赵哥|CRWVUSDT|long|12": {
+      "交易员C|CRWVUSDT|long|12": {
         "n": 6,
         "full_24h": 5,
         "r_valid": 0,
@@ -6145,7 +6145,7 @@
           "sma200": 6.799390679408525
         }
       },
-      "赵哥|HOODUSDT|long|16": {
+      "交易员C|HOODUSDT|long|16": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -6282,7 +6282,7 @@
           "sma200": 4.948965135583831
         }
       },
-      "三马|BTCUSDT|short|04": {
+      "交易员A|BTCUSDT|short|04": {
         "n": 3,
         "full_24h": 3,
         "r_valid": 2,
@@ -6419,7 +6419,7 @@
           "sma200": 4.5413868640513835
         }
       },
-      "三马|BTCUSDT|short|12": {
+      "交易员A|BTCUSDT|short|12": {
         "n": 15,
         "full_24h": 15,
         "r_valid": 12,
@@ -6556,7 +6556,7 @@
           "sma200": 6.840829797688882
         }
       },
-      "舒琴|CLUSDT|short|16": {
+      "交易员B|CLUSDT|short|16": {
         "n": 2,
         "full_24h": 2,
         "r_valid": 0,
@@ -6693,7 +6693,7 @@
           "sma200": 8.7333221084033
         }
       },
-      "三马|BTCUSDT|short|20": {
+      "交易员A|BTCUSDT|short|20": {
         "n": 2,
         "full_24h": 2,
         "r_valid": 1,
@@ -6830,7 +6830,7 @@
           "sma200": 4.482503801092007
         }
       },
-      "舒琴|BTCUSDT|short|12": {
+      "交易员B|BTCUSDT|short|12": {
         "n": 6,
         "full_24h": 6,
         "r_valid": 4,
@@ -6967,7 +6967,7 @@
           "sma200": 9.602163589979668
         }
       },
-      "赵哥|NVDAUSDT|long|16": {
+      "交易员C|NVDAUSDT|long|16": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -7104,7 +7104,7 @@
           "sma200": 9.596187335092415
         }
       },
-      "舒琴|SPCXUSDT|short|08": {
+      "交易员B|SPCXUSDT|short|08": {
         "n": 12,
         "full_24h": 12,
         "r_valid": 2,
@@ -7241,7 +7241,7 @@
           "sma200": 10.846797127578803
         }
       },
-      "赵哥|GOOGLUSDT|long|12": {
+      "交易员C|GOOGLUSDT|long|12": {
         "n": 9,
         "full_24h": 9,
         "r_valid": 0,
@@ -7378,7 +7378,7 @@
           "sma200": 6.8350165917769425
         }
       },
-      "舒琴|SPCXUSDT|short|16": {
+      "交易员B|SPCXUSDT|short|16": {
         "n": 2,
         "full_24h": 2,
         "r_valid": 0,
@@ -7515,7 +7515,7 @@
           "sma200": 0.6636387383900897
         }
       },
-      "舒琴|BTCUSDT|short|16": {
+      "交易员B|BTCUSDT|short|16": {
         "n": 5,
         "full_24h": 5,
         "r_valid": 5,
@@ -7652,7 +7652,7 @@
           "sma200": 4.97084670464649
         }
       },
-      "舒琴|BTCUSDT|short|08": {
+      "交易员B|BTCUSDT|short|08": {
         "n": 13,
         "full_24h": 13,
         "r_valid": 7,
@@ -7789,7 +7789,7 @@
           "sma200": 6.566698040827626
         }
       },
-      "舒琴|SPCXUSDT|short|04": {
+      "交易员B|SPCXUSDT|short|04": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -7926,7 +7926,7 @@
           "sma200": 5.373508713136723
         }
       },
-      "舒琴|ETHUSDT|short|08": {
+      "交易员B|ETHUSDT|short|08": {
         "n": 10,
         "full_24h": 10,
         "r_valid": 4,
@@ -8063,7 +8063,7 @@
           "sma200": 5.127639491828608
         }
       },
-      "舒琴|ETHUSDT|long|12": {
+      "交易员B|ETHUSDT|long|12": {
         "n": 7,
         "full_24h": 7,
         "r_valid": 3,
@@ -8200,7 +8200,7 @@
           "sma200": 5.623219362517245
         }
       },
-      "舒琴|SPCXUSDT|short|12": {
+      "交易员B|SPCXUSDT|short|12": {
         "n": 2,
         "full_24h": 2,
         "r_valid": 1,
@@ -8337,7 +8337,7 @@
           "sma200": 12.628290633132153
         }
       },
-      "舒琴|IBMUSDT|long|16": {
+      "交易员B|IBMUSDT|long|16": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 1,
@@ -8474,7 +8474,7 @@
           "sma200": 4.931002102312619
         }
       },
-      "舒琴|SOLUSDT|long|12": {
+      "交易员B|SOLUSDT|long|12": {
         "n": 4,
         "full_24h": 4,
         "r_valid": 2,
@@ -8611,7 +8611,7 @@
           "sma200": 4.231193365785899
         }
       },
-      "舒琴|SPCXUSDT|long|08": {
+      "交易员B|SPCXUSDT|long|08": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -8748,7 +8748,7 @@
           "sma200": 9.572718689252977
         }
       },
-      "赵哥|LITEUSDT|long|16": {
+      "交易员C|LITEUSDT|long|16": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -8885,7 +8885,7 @@
           "sma200": 3.421503340757284
         }
       },
-      "赵哥|GOOGLUSDT|long|16": {
+      "交易员C|GOOGLUSDT|long|16": {
         "n": 2,
         "full_24h": 2,
         "r_valid": 0,
@@ -9022,7 +9022,7 @@
           "sma200": 5.385164355964312
         }
       },
-      "舒琴|BTCUSDT|long|04": {
+      "交易员B|BTCUSDT|long|04": {
         "n": 3,
         "full_24h": 3,
         "r_valid": 3,
@@ -9159,7 +9159,7 @@
           "sma200": 7.822286442197334
         }
       },
-      "三马|ETHUSDT|short|04": {
+      "交易员A|ETHUSDT|short|04": {
         "n": 5,
         "full_24h": 5,
         "r_valid": 4,
@@ -9296,7 +9296,7 @@
           "sma200": 4.954986970872538
         }
       },
-      "赵哥|IBMUSDT|long|16": {
+      "交易员C|IBMUSDT|long|16": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -9433,7 +9433,7 @@
           "sma200": 0.7327588152327286
         }
       },
-      "赵哥|AVGOUSDT|long|16": {
+      "交易员C|AVGOUSDT|long|16": {
         "n": 4,
         "full_24h": 4,
         "r_valid": 0,
@@ -9570,7 +9570,7 @@
           "sma200": 4.611392492452694
         }
       },
-      "赵哥|CBRSUSDT|long|16": {
+      "交易员C|CBRSUSDT|long|16": {
         "n": 2,
         "full_24h": 2,
         "r_valid": 0,
@@ -9707,7 +9707,7 @@
           "sma200": 9.512925773340175
         }
       },
-      "赵哥|SPCXUSDT|long|16": {
+      "交易员C|SPCXUSDT|long|16": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -9844,7 +9844,7 @@
           "sma200": 6.76794567901234
         }
       },
-      "舒琴|SOLUSDT|short|16": {
+      "交易员B|SOLUSDT|short|16": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 1,
@@ -9981,7 +9981,7 @@
           "sma200": 11.310945273631832
         }
       },
-      "赵哥|CONLUSDT|long|16": {
+      "交易员C|CONLUSDT|long|16": {
         "n": 3,
         "full_24h": 0,
         "r_valid": 0,
@@ -10118,7 +10118,7 @@
           "sma200": null
         }
       },
-      "舒琴|ETHUSDT|short|16": {
+      "交易员B|ETHUSDT|short|16": {
         "n": 4,
         "full_24h": 4,
         "r_valid": 4,
@@ -10255,7 +10255,7 @@
           "sma200": 11.8174520482751
         }
       },
-      "舒琴|MUUSDT|long|08": {
+      "交易员B|MUUSDT|long|08": {
         "n": 7,
         "full_24h": 7,
         "r_valid": 1,
@@ -10392,7 +10392,7 @@
           "sma200": 21.686304249776867
         }
       },
-      "三马|BTCUSDT|short|16": {
+      "交易员A|BTCUSDT|short|16": {
         "n": 2,
         "full_24h": 2,
         "r_valid": 2,
@@ -10529,7 +10529,7 @@
           "sma200": 8.860862536913567
         }
       },
-      "舒琴|MUUSDT|long|04": {
+      "交易员B|MUUSDT|long|04": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 1,
@@ -10666,7 +10666,7 @@
           "sma200": 8.66220787401571
         }
       },
-      "舒琴|ETHUSDT|long|04": {
+      "交易员B|ETHUSDT|long|04": {
         "n": 2,
         "full_24h": 2,
         "r_valid": 2,
@@ -10803,7 +10803,7 @@
           "sma200": 5.916086025519897
         }
       },
-      "赵哥|AVGOUSDT|long|04": {
+      "交易员C|AVGOUSDT|long|04": {
         "n": 2,
         "full_24h": 2,
         "r_valid": 0,
@@ -10940,7 +10940,7 @@
           "sma200": 1.5932664471700557
         }
       },
-      "赵哥|LITEUSDT|long|12": {
+      "交易员C|LITEUSDT|long|12": {
         "n": 6,
         "full_24h": 6,
         "r_valid": 0,
@@ -11077,7 +11077,7 @@
           "sma200": 6.441563719828973
         }
       },
-      "赵哥|MUUSDT|long|12": {
+      "交易员C|MUUSDT|long|12": {
         "n": 16,
         "full_24h": 16,
         "r_valid": 0,
@@ -11214,7 +11214,7 @@
           "sma200": 5.119899706943603
         }
       },
-      "赵哥|MUUSDT|long|08": {
+      "交易员C|MUUSDT|long|08": {
         "n": 4,
         "full_24h": 4,
         "r_valid": 0,
@@ -11351,7 +11351,7 @@
           "sma200": 6.683373607828891
         }
       },
-      "赵哥|AVGOUSDT|long|08": {
+      "交易员C|AVGOUSDT|long|08": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -11488,7 +11488,7 @@
           "sma200": 2.3868159203979835
         }
       },
-      "舒琴|SOLUSDT|short|08": {
+      "交易员B|SOLUSDT|short|08": {
         "n": 2,
         "full_24h": 2,
         "r_valid": 0,
@@ -11625,7 +11625,7 @@
           "sma200": 5.844835144927552
         }
       },
-      "三马|ETHUSDT|short|08": {
+      "交易员A|ETHUSDT|short|08": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 1,
@@ -11762,7 +11762,7 @@
           "sma200": 3.320257418662804
         }
       },
-      "赵哥|NOKUSDT|long|12": {
+      "交易员C|NOKUSDT|long|12": {
         "n": 2,
         "full_24h": 2,
         "r_valid": 0,
@@ -11899,7 +11899,7 @@
           "sma200": 4.664280389908268
         }
       },
-      "赵哥|MUUSDT|long|16": {
+      "交易员C|MUUSDT|long|16": {
         "n": 4,
         "full_24h": 4,
         "r_valid": 0,
@@ -12036,7 +12036,7 @@
           "sma200": 3.8012120724355665
         }
       },
-      "舒琴|ETHUSDT|long|16": {
+      "交易员B|ETHUSDT|long|16": {
         "n": 3,
         "full_24h": 3,
         "r_valid": 3,
@@ -12173,7 +12173,7 @@
           "sma200": 4.417614550022626
         }
       },
-      "赵哥|GOOGLUSDT|long|08": {
+      "交易员C|GOOGLUSDT|long|08": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -12310,7 +12310,7 @@
           "sma200": 4.210921698930921
         }
       },
-      "三马|ETHUSDT|long|04": {
+      "交易员A|ETHUSDT|long|04": {
         "n": 5,
         "full_24h": 5,
         "r_valid": 3,
@@ -12447,7 +12447,7 @@
           "sma200": 8.296770065944019
         }
       },
-      "舒琴|ETHUSDT|short|20": {
+      "交易员B|ETHUSDT|short|20": {
         "n": 2,
         "full_24h": 2,
         "r_valid": 2,
@@ -12584,7 +12584,7 @@
           "sma200": 4.982403344119899
         }
       },
-      "三马|BTCUSDT|long|08": {
+      "交易员A|BTCUSDT|long|08": {
         "n": 5,
         "full_24h": 5,
         "r_valid": 3,
@@ -12721,7 +12721,7 @@
           "sma200": 3.0306156633502987
         }
       },
-      "舒琴|BTCUSDT|short|04": {
+      "交易员B|BTCUSDT|short|04": {
         "n": 2,
         "full_24h": 2,
         "r_valid": 0,
@@ -12858,7 +12858,7 @@
           "sma200": 6.7315113686710415
         }
       },
-      "赵哥|GOOGLUSDT|long|20": {
+      "交易员C|GOOGLUSDT|long|20": {
         "n": 3,
         "full_24h": 3,
         "r_valid": 0,
@@ -12995,7 +12995,7 @@
           "sma200": 6.684309235725938
         }
       },
-      "赵哥|CONLUSDT|long|20": {
+      "交易员C|CONLUSDT|long|20": {
         "n": 1,
         "full_24h": 0,
         "r_valid": 0,
@@ -13132,7 +13132,7 @@
           "sma200": null
         }
       },
-      "舒琴|BZUSDT|short|12": {
+      "交易员B|BZUSDT|short|12": {
         "n": 3,
         "full_24h": 3,
         "r_valid": 0,
@@ -13269,7 +13269,7 @@
           "sma200": 9.697785484743898
         }
       },
-      "赵哥|PLUSDT|long|12": {
+      "交易员C|PLUSDT|long|12": {
         "n": 1,
         "full_24h": 0,
         "r_valid": 0,
@@ -13406,7 +13406,7 @@
           "sma200": null
         }
       },
-      "赵哥|MUUSDT|long|04": {
+      "交易员C|MUUSDT|long|04": {
         "n": 2,
         "full_24h": 2,
         "r_valid": 0,
@@ -13543,7 +13543,7 @@
           "sma200": 5.836351485470753
         }
       },
-      "舒琴|MUUSDT|long|12": {
+      "交易员B|MUUSDT|long|12": {
         "n": 3,
         "full_24h": 3,
         "r_valid": 1,
@@ -13680,7 +13680,7 @@
           "sma200": 9.736180582808656
         }
       },
-      "赵哥|MUUSDT|long|20": {
+      "交易员C|MUUSDT|long|20": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -13817,7 +13817,7 @@
           "sma200": 6.715276518585671
         }
       },
-      "赵哥|MUUSDT|long|00": {
+      "交易员C|MUUSDT|long|00": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -13954,7 +13954,7 @@
           "sma200": 4.490773208569316
         }
       },
-      "赵哥|INTCUSDT|long|16": {
+      "交易员C|INTCUSDT|long|16": {
         "n": 2,
         "full_24h": 2,
         "r_valid": 0,
@@ -14091,7 +14091,7 @@
           "sma200": 3.2120593764375314
         }
       },
-      "赵哥|AVGOUSDT|long|20": {
+      "交易员C|AVGOUSDT|long|20": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -14228,7 +14228,7 @@
           "sma200": 3.2052597573839927
         }
       },
-      "赵哥|QQQUSDT|long|20": {
+      "交易员C|QQQUSDT|long|20": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -14365,7 +14365,7 @@
           "sma200": 7.410833442024274
         }
       },
-      "舒琴|ETHUSDT|short|12": {
+      "交易员B|ETHUSDT|short|12": {
         "n": 2,
         "full_24h": 2,
         "r_valid": 1,
@@ -14502,7 +14502,7 @@
           "sma200": 14.606006853832017
         }
       },
-      "舒琴|CLBZUSDT|short|12": {
+      "交易员B|CLBZUSDT|short|12": {
         "n": 1,
         "full_24h": 0,
         "r_valid": 0,
@@ -14639,7 +14639,7 @@
           "sma200": null
         }
       },
-      "赵哥|TSMUSDT|long|12": {
+      "交易员C|TSMUSDT|long|12": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -14776,7 +14776,7 @@
           "sma200": 0.40356538356537497
         }
       },
-      "三马|BTCUSDT|long|12": {
+      "交易员A|BTCUSDT|long|12": {
         "n": 8,
         "full_24h": 8,
         "r_valid": 5,
@@ -14913,7 +14913,7 @@
           "sma200": 7.391438488052341
         }
       },
-      "赵哥|SPCXUSDT|long|12": {
+      "交易员C|SPCXUSDT|long|12": {
         "n": 2,
         "full_24h": 2,
         "r_valid": 0,
@@ -15050,7 +15050,7 @@
           "sma200": 5.122927261192622
         }
       },
-      "舒琴|OPENAIUSDT|long|08": {
+      "交易员B|OPENAIUSDT|long|08": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -15187,7 +15187,7 @@
           "sma200": 6.873479415670701
         }
       },
-      "三马|ETHUSDT|long|12": {
+      "交易员A|ETHUSDT|long|12": {
         "n": 4,
         "full_24h": 4,
         "r_valid": 3,
@@ -15324,7 +15324,7 @@
           "sma200": 4.205831638310315
         }
       },
-      "舒琴|BZUSDT|short|08": {
+      "交易员B|BZUSDT|short|08": {
         "n": 6,
         "full_24h": 6,
         "r_valid": 0,
@@ -15461,7 +15461,7 @@
           "sma200": 10.34564960045729
         }
       },
-      "三马|SNDKUSDT|long|04": {
+      "交易员A|SNDKUSDT|long|04": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 1,
@@ -15598,7 +15598,7 @@
           "sma200": 7.547696516052035
         }
       },
-      "舒琴|ETHUSDT|short|04": {
+      "交易员B|ETHUSDT|short|04": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -15735,7 +15735,7 @@
           "sma200": 4.007644756277666
         }
       },
-      "舒琴|GOOGLUSDT|long|16": {
+      "交易员B|GOOGLUSDT|long|16": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 1,
@@ -15872,7 +15872,7 @@
           "sma200": 2.5712409676405747
         }
       },
-      "赵哥|SPCXUSDT|long|20": {
+      "交易员C|SPCXUSDT|long|20": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -16009,7 +16009,7 @@
           "sma200": 1.5271643286573156
         }
       },
-      "舒琴|SOLUSDT|short|12": {
+      "交易员B|SOLUSDT|short|12": {
         "n": 2,
         "full_24h": 1,
         "r_valid": 1,
@@ -16146,7 +16146,7 @@
           "sma200": 7.06543444783578
         }
       },
-      "三马|BTCUSDT|long|16": {
+      "交易员A|BTCUSDT|long|16": {
         "n": 4,
         "full_24h": 4,
         "r_valid": 3,
@@ -16283,7 +16283,7 @@
           "sma200": 4.982341998008026
         }
       },
-      "舒琴|XAUUSDT|short|04": {
+      "交易员B|XAUUSDT|short|04": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 1,
@@ -16420,7 +16420,7 @@
           "sma200": 12.7016041057917
         }
       },
-      "舒琴|XAUUSDT|short|08": {
+      "交易员B|XAUUSDT|short|08": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -16557,7 +16557,7 @@
           "sma200": 6.959493325850942
         }
       },
-      "三马|SNDKUSDT|short|12": {
+      "交易员A|SNDKUSDT|short|12": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 1,
@@ -16694,7 +16694,7 @@
           "sma200": 19.81766092744788
         }
       },
-      "三马|SNDKUSDT|short|20": {
+      "交易员A|SNDKUSDT|short|20": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 1,
@@ -16831,7 +16831,7 @@
           "sma200": 10.12968668126959
         }
       },
-      "舒琴|SNDKUSDT|short|08": {
+      "交易员B|SNDKUSDT|short|08": {
         "n": 6,
         "full_24h": 6,
         "r_valid": 3,
@@ -16968,7 +16968,7 @@
           "sma200": 26.602241994476476
         }
       },
-      "三马|SNDKUSDT|long|00": {
+      "交易员A|SNDKUSDT|long|00": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -17105,7 +17105,7 @@
           "sma200": 40.6047631489266
         }
       },
-      "舒琴|MUUSDT|short|08": {
+      "交易员B|MUUSDT|short|08": {
         "n": 2,
         "full_24h": 2,
         "r_valid": 1,
@@ -17242,7 +17242,7 @@
           "sma200": 10.726193631566789
         }
       },
-      "舒琴|SNDKUSDT|long|20": {
+      "交易员B|SNDKUSDT|long|20": {
         "n": 3,
         "full_24h": 3,
         "r_valid": 1,
@@ -17379,7 +17379,7 @@
           "sma200": 1.751739130434782
         }
       },
-      "舒琴|MUUSDT|long|20": {
+      "交易员B|MUUSDT|long|20": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -17516,7 +17516,7 @@
           "sma200": 0.7835185283924548
         }
       },
-      "三马|ETHUSDT|long|08": {
+      "交易员A|ETHUSDT|long|08": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -17653,7 +17653,7 @@
           "sma200": 4.894152155886831
         }
       },
-      "舒琴|XAUUSDT|short|12": {
+      "交易员B|XAUUSDT|short|12": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 1,
@@ -17790,7 +17790,7 @@
           "sma200": 5.843465818194606
         }
       },
-      "舒琴|SNDKUSDT|long|12": {
+      "交易员B|SNDKUSDT|long|12": {
         "n": 2,
         "full_24h": 2,
         "r_valid": 2,
@@ -17927,7 +17927,7 @@
           "sma200": 7.840191479235845
         }
       },
-      "赵哥|CBRSUSDT|long|12": {
+      "交易员C|CBRSUSDT|long|12": {
         "n": 2,
         "full_24h": 2,
         "r_valid": 0,
@@ -18064,7 +18064,7 @@
           "sma200": 3.9875833068767967
         }
       },
-      "三马|BTCUSDT|long|04": {
+      "交易员A|BTCUSDT|long|04": {
         "n": 5,
         "full_24h": 5,
         "r_valid": 3,
@@ -18201,7 +18201,7 @@
           "sma200": 4.208481742854863
         }
       },
-      "舒琴|PENGUUSDT|long|08": {
+      "交易员B|PENGUUSDT|long|08": {
         "n": 2,
         "full_24h": 2,
         "r_valid": 0,
@@ -18338,7 +18338,7 @@
           "sma200": 8.05298209478838
         }
       },
-      "三马|ETHUSDT|long|00": {
+      "交易员A|ETHUSDT|long|00": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 1,
@@ -18475,7 +18475,7 @@
           "sma200": 3.6652753397268696
         }
       },
-      "赵哥|INTCUSDT|long|12": {
+      "交易员C|INTCUSDT|long|12": {
         "n": 2,
         "full_24h": 2,
         "r_valid": 0,
@@ -18612,7 +18612,7 @@
           "sma200": 5.682339714888557
         }
       },
-      "赵哥|NBISUSDT|long|12": {
+      "交易员C|NBISUSDT|long|12": {
         "n": 3,
         "full_24h": 3,
         "r_valid": 0,
@@ -18749,7 +18749,7 @@
           "sma200": 3.3455064043367932
         }
       },
-      "三马|ETHUSDT|short|16": {
+      "交易员A|ETHUSDT|short|16": {
         "n": 2,
         "full_24h": 2,
         "r_valid": 1,
@@ -18886,7 +18886,7 @@
           "sma200": 1.097908542394395
         }
       },
-      "赵哥|CRWVUSDT|long|16": {
+      "交易员C|CRWVUSDT|long|16": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -19023,7 +19023,7 @@
           "sma200": 4.288800588668132
         }
       },
-      "赵哥|WDCUSDT|long|16": {
+      "交易员C|WDCUSDT|long|16": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -19160,7 +19160,7 @@
           "sma200": 0.7019879094615604
         }
       },
-      "赵哥|INTCUSDT|long|20": {
+      "交易员C|INTCUSDT|long|20": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -19297,7 +19297,7 @@
           "sma200": 0.12424196018382394
         }
       },
-      "舒琴|PENGUUSDT|long|12": {
+      "交易员B|PENGUUSDT|long|12": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -19434,7 +19434,7 @@
           "sma200": 5.645027256208315
         }
       },
-      "赵哥|CIFRUSDT|long|16": {
+      "交易员C|CIFRUSDT|long|16": {
         "n": 1,
         "full_24h": 0,
         "r_valid": 0,
@@ -19571,7 +19571,7 @@
           "sma200": null
         }
       },
-      "赵哥|TSLAUSDT|long|12": {
+      "交易员C|TSLAUSDT|long|12": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -19708,7 +19708,7 @@
           "sma200": 1.140446385249945
         }
       },
-      "赵哥|DRAMUSDT|long|12": {
+      "交易员C|DRAMUSDT|long|12": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -19845,7 +19845,7 @@
           "sma200": 2.2412048192771006
         }
       },
-      "舒琴|PREOPAIUSDT|long|08": {
+      "交易员B|PREOPAIUSDT|long|08": {
         "n": 1,
         "full_24h": 0,
         "r_valid": 0,
@@ -19982,7 +19982,7 @@
           "sma200": null
         }
       },
-      "赵哥|IRENUSDT|long|12": {
+      "交易员C|IRENUSDT|long|12": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -20119,7 +20119,7 @@
           "sma200": 5.50796129032256
         }
       },
-      "赵哥|CRWVUSDT|long|20": {
+      "交易员C|CRWVUSDT|long|20": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -20256,7 +20256,7 @@
           "sma200": 5.1606812933024875
         }
       },
-      "赵哥|NBISUSDT|long|00": {
+      "交易员C|NBISUSDT|long|00": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -20393,7 +20393,7 @@
           "sma200": 4.48910014821086
         }
       },
-      "赵哥|HOODUSDT|long|00": {
+      "交易员C|HOODUSDT|long|00": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -20530,7 +20530,7 @@
           "sma200": 3.2726527643065397
         }
       },
-      "舒琴|ANTHROPICUSDT|long|08": {
+      "交易员B|ANTHROPICUSDT|long|08": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -20667,7 +20667,7 @@
           "sma200": 0.2490989836095477
         }
       },
-      "赵哥|COINUSDT|long|12": {
+      "交易员C|COINUSDT|long|12": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -20806,7 +20806,7 @@
       }
     },
     "by_trader_symbol": {
-      "舒琴|BTCUSDT": {
+      "交易员B|BTCUSDT": {
         "n": 81,
         "full_24h": 81,
         "r_valid": 40,
@@ -20943,7 +20943,7 @@
           "sma200": 7.510473381632004
         }
       },
-      "舒琴|CLUSDT": {
+      "交易员B|CLUSDT": {
         "n": 20,
         "full_24h": 20,
         "r_valid": 0,
@@ -21080,7 +21080,7 @@
           "sma200": 12.32435769703608
         }
       },
-      "舒琴|GOOGLUSDT": {
+      "交易员B|GOOGLUSDT": {
         "n": 10,
         "full_24h": 10,
         "r_valid": 5,
@@ -21217,7 +21217,7 @@
           "sma200": 17.229689673424325
         }
       },
-      "三马|ETHUSDT": {
+      "交易员A|ETHUSDT": {
         "n": 36,
         "full_24h": 36,
         "r_valid": 26,
@@ -21354,7 +21354,7 @@
           "sma200": 4.370821590557736
         }
       },
-      "三马|BTCUSDT": {
+      "交易员A|BTCUSDT": {
         "n": 60,
         "full_24h": 60,
         "r_valid": 41,
@@ -21491,7 +21491,7 @@
           "sma200": 6.9221056434579
         }
       },
-      "赵哥|TSLLUSDT": {
+      "交易员C|TSLLUSDT": {
         "n": 4,
         "full_24h": 0,
         "r_valid": 0,
@@ -21628,7 +21628,7 @@
           "sma200": null
         }
       },
-      "赵哥|AVGOUSDT": {
+      "交易员C|AVGOUSDT": {
         "n": 17,
         "full_24h": 17,
         "r_valid": 0,
@@ -21765,7 +21765,7 @@
           "sma200": 4.950603578756579
         }
       },
-      "赵哥|NVDLUSDT": {
+      "交易员C|NVDLUSDT": {
         "n": 1,
         "full_24h": 0,
         "r_valid": 0,
@@ -21902,7 +21902,7 @@
           "sma200": null
         }
       },
-      "舒琴|ETHUSDT": {
+      "交易员B|ETHUSDT": {
         "n": 49,
         "full_24h": 49,
         "r_valid": 25,
@@ -22039,7 +22039,7 @@
           "sma200": 6.878484641882233
         }
       },
-      "舒琴|SOLUSDT": {
+      "交易员B|SOLUSDT": {
         "n": 20,
         "full_24h": 19,
         "r_valid": 6,
@@ -22176,7 +22176,7 @@
           "sma200": 6.555876521528285
         }
       },
-      "赵哥|CONLUSDT": {
+      "交易员C|CONLUSDT": {
         "n": 9,
         "full_24h": 0,
         "r_valid": 0,
@@ -22313,7 +22313,7 @@
           "sma200": null
         }
       },
-      "赵哥|CRWVUSDT": {
+      "交易员C|CRWVUSDT": {
         "n": 8,
         "full_24h": 7,
         "r_valid": 0,
@@ -22450,7 +22450,7 @@
           "sma200": 6.280728244802721
         }
       },
-      "赵哥|HOODUSDT": {
+      "交易员C|HOODUSDT": {
         "n": 2,
         "full_24h": 2,
         "r_valid": 0,
@@ -22587,7 +22587,7 @@
           "sma200": 4.110808949945185
         }
       },
-      "赵哥|NVDAUSDT": {
+      "交易员C|NVDAUSDT": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -22724,7 +22724,7 @@
           "sma200": 9.596187335092415
         }
       },
-      "舒琴|SPCXUSDT": {
+      "交易员B|SPCXUSDT": {
         "n": 18,
         "full_24h": 18,
         "r_valid": 3,
@@ -22861,7 +22861,7 @@
           "sma200": 9.538425093132211
         }
       },
-      "赵哥|GOOGLUSDT": {
+      "交易员C|GOOGLUSDT": {
         "n": 15,
         "full_24h": 15,
         "r_valid": 0,
@@ -22998,7 +22998,7 @@
           "sma200": 6.436621829601989
         }
       },
-      "舒琴|IBMUSDT": {
+      "交易员B|IBMUSDT": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 1,
@@ -23135,7 +23135,7 @@
           "sma200": 4.931002102312619
         }
       },
-      "赵哥|LITEUSDT": {
+      "交易员C|LITEUSDT": {
         "n": 7,
         "full_24h": 7,
         "r_valid": 0,
@@ -23272,7 +23272,7 @@
           "sma200": 6.010126522818731
         }
       },
-      "赵哥|IBMUSDT": {
+      "交易员C|IBMUSDT": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -23409,7 +23409,7 @@
           "sma200": 0.7327588152327286
         }
       },
-      "赵哥|CBRSUSDT": {
+      "交易员C|CBRSUSDT": {
         "n": 4,
         "full_24h": 4,
         "r_valid": 0,
@@ -23546,7 +23546,7 @@
           "sma200": 6.750254540108486
         }
       },
-      "赵哥|SPCXUSDT": {
+      "交易员C|SPCXUSDT": {
         "n": 4,
         "full_24h": 4,
         "r_valid": 0,
@@ -23683,7 +23683,7 @@
           "sma200": 4.635241132513725
         }
       },
-      "舒琴|MUUSDT": {
+      "交易员B|MUUSDT": {
         "n": 14,
         "full_24h": 14,
         "r_valid": 4,
@@ -23820,7 +23820,7 @@
           "sma200": 15.136484654457556
         }
       },
-      "赵哥|MUUSDT": {
+      "交易员C|MUUSDT": {
         "n": 28,
         "full_24h": 28,
         "r_valid": 0,
@@ -23957,7 +23957,7 @@
           "sma200": 5.2405532403661415
         }
       },
-      "赵哥|NOKUSDT": {
+      "交易员C|NOKUSDT": {
         "n": 2,
         "full_24h": 2,
         "r_valid": 0,
@@ -24094,7 +24094,7 @@
           "sma200": 4.664280389908268
         }
       },
-      "舒琴|BZUSDT": {
+      "交易员B|BZUSDT": {
         "n": 9,
         "full_24h": 9,
         "r_valid": 0,
@@ -24231,7 +24231,7 @@
           "sma200": 10.129694895219494
         }
       },
-      "赵哥|PLUSDT": {
+      "交易员C|PLUSDT": {
         "n": 1,
         "full_24h": 0,
         "r_valid": 0,
@@ -24368,7 +24368,7 @@
           "sma200": null
         }
       },
-      "赵哥|INTCUSDT": {
+      "交易员C|INTCUSDT": {
         "n": 5,
         "full_24h": 5,
         "r_valid": 0,
@@ -24505,7 +24505,7 @@
           "sma200": 3.5826080285672006
         }
       },
-      "赵哥|QQQUSDT": {
+      "交易员C|QQQUSDT": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -24642,7 +24642,7 @@
           "sma200": 7.410833442024274
         }
       },
-      "舒琴|CLBZUSDT": {
+      "交易员B|CLBZUSDT": {
         "n": 1,
         "full_24h": 0,
         "r_valid": 0,
@@ -24779,7 +24779,7 @@
           "sma200": null
         }
       },
-      "赵哥|TSMUSDT": {
+      "交易员C|TSMUSDT": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -24916,7 +24916,7 @@
           "sma200": 0.40356538356537497
         }
       },
-      "舒琴|OPENAIUSDT": {
+      "交易员B|OPENAIUSDT": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -25053,7 +25053,7 @@
           "sma200": 6.873479415670701
         }
       },
-      "三马|SNDKUSDT": {
+      "交易员A|SNDKUSDT": {
         "n": 4,
         "full_24h": 4,
         "r_valid": 3,
@@ -25190,7 +25190,7 @@
           "sma200": 19.52495181842403
         }
       },
-      "舒琴|XAUUSDT": {
+      "交易员B|XAUUSDT": {
         "n": 3,
         "full_24h": 3,
         "r_valid": 2,
@@ -25327,7 +25327,7 @@
           "sma200": 8.501521083279082
         }
       },
-      "舒琴|SNDKUSDT": {
+      "交易员B|SNDKUSDT": {
         "n": 11,
         "full_24h": 11,
         "r_valid": 6,
@@ -25464,7 +25464,7 @@
           "sma200": 16.413550210603173
         }
       },
-      "舒琴|PENGUUSDT": {
+      "交易员B|PENGUUSDT": {
         "n": 3,
         "full_24h": 3,
         "r_valid": 0,
@@ -25601,7 +25601,7 @@
           "sma200": 7.2503304819283585
         }
       },
-      "赵哥|NBISUSDT": {
+      "交易员C|NBISUSDT": {
         "n": 4,
         "full_24h": 4,
         "r_valid": 0,
@@ -25738,7 +25738,7 @@
           "sma200": 3.63140484030531
         }
       },
-      "赵哥|WDCUSDT": {
+      "交易员C|WDCUSDT": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -25875,7 +25875,7 @@
           "sma200": 0.7019879094615604
         }
       },
-      "赵哥|CIFRUSDT": {
+      "交易员C|CIFRUSDT": {
         "n": 1,
         "full_24h": 0,
         "r_valid": 0,
@@ -26012,7 +26012,7 @@
           "sma200": null
         }
       },
-      "赵哥|TSLAUSDT": {
+      "交易员C|TSLAUSDT": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -26149,7 +26149,7 @@
           "sma200": 1.140446385249945
         }
       },
-      "赵哥|DRAMUSDT": {
+      "交易员C|DRAMUSDT": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -26286,7 +26286,7 @@
           "sma200": 2.2412048192771006
         }
       },
-      "舒琴|PREOPAIUSDT": {
+      "交易员B|PREOPAIUSDT": {
         "n": 1,
         "full_24h": 0,
         "r_valid": 0,
@@ -26423,7 +26423,7 @@
           "sma200": null
         }
       },
-      "赵哥|IRENUSDT": {
+      "交易员C|IRENUSDT": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -26560,7 +26560,7 @@
           "sma200": 5.50796129032256
         }
       },
-      "舒琴|ANTHROPICUSDT": {
+      "交易员B|ANTHROPICUSDT": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -26697,7 +26697,7 @@
           "sma200": 0.2490989836095477
         }
       },
-      "赵哥|COINUSDT": {
+      "交易员C|COINUSDT": {
         "n": 1,
         "full_24h": 1,
         "r_valid": 0,
@@ -26838,8 +26838,8 @@
   },
   "human": [
     {
-      "trader": "舒琴",
-      "family": "human_shuqin",
+      "trader": "交易员B",
+      "family": "human_trader_b",
       "available_from": 1780323748437,
       "stats": {
         "gross": {
@@ -34483,8 +34483,8 @@
       ]
     },
     {
-      "trader": "三马",
-      "family": "human_sanma",
+      "trader": "交易员A",
+      "family": "human_trader_a",
       "available_from": 1780360395483,
       "stats": {
         "gross": {
@@ -50819,8 +50819,8 @@
       ]
     },
     {
-      "trader": "赵哥",
-      "family": "human_zhaoge",
+      "trader": "交易员C",
+      "family": "human_trader_c",
       "available_from": null,
       "stats": {
         "gross": {

@@ -89,7 +89,7 @@ export function contractsToQtySync(sz: string | number, symbol: string): string 
 
 /**
  * 内部 timeframe → OKX bar(§3)。**≥6H 的档位必须用 UTC 版**:OKX 不带 `utc` 后缀的
- * `6H/12H/1D/1W` 按香港时间(UTC+8)分桶,策略与指标全系统按 UTC 切(codex-review #15)。
+ * `6H/12H/1D/1W` 按香港时间(UTC+8)分桶,策略与指标全系统按 UTC 切(review #15)。
  * `1m…4H` 没有 utc 变体 —— 这些档位在两种时区下的边界本来就重合,原样发。
  */
 export function tfToBar(tf: string): string {

@@ -1,3 +1,4 @@
+import { templateJudge, type JudgeTemplateCombination } from '../judge/templates.js';
 /**
  * 矩阵研究规格:请求体 → 完整 MatrixStudySpec(缺省值、校验、推荐预填)。跑前一次做完,之后只读。
  * 推荐预填只取 eligible 格子(HORIZON_TIMEFRAMES 映射到本首版支持的周期;1h/12h 不在首版矩阵里,写进 notes)。
@@ -8,7 +9,7 @@ import type { FamilyKey } from '../batch/families.js';
 import type { FrozenModelProfile } from '../judge/types.js';
 import { HORIZON_TIMEFRAMES, type AssetRecommendation, type Horizon } from '../../recommend.js';
 import { usdUnits } from './stats.js';
-import { ALL_FAMILIES, MATRIX_TIMEFRAMES, type MatrixArm, type MatrixProtocol, type MatrixSide, type MatrixStudySpec, type MatrixTimeframe } from './types.js';
+import { ALL_FAMILIES, MATRIX_TIMEFRAMES, type MatrixArm, type MatrixStrategyRef, type MatrixProtocol, type MatrixSide, type MatrixStudySpec, type MatrixTimeframe } from './types.js';
 
 const DAY = 86_400_000;
 export const DEFAULT_WINDOW_DAYS: Record<MatrixTimeframe, number> = { '3m': 30, '5m': 45, '15m': 180, '4h': 730, '1d': 1460 };
@@ -18,6 +19,8 @@ export const DEFAULT_ITERATE = { top_k: 3, generations: 3, candidates_per_genera
 export const DEFAULT_BUDGET = { max_variants: 300, max_judge_calls: 20000, max_judge_usd: '1', wall_clock_ms: 1_800_000 } as const;
 export const DEFAULT_PROTOCOL: MatrixProtocol = { version: 'matrix_v1', alpha: 0.025, min_trades: 30, block_days: 5, min_blocks: 20, bootstrap_replicates: 999, max_drawdown: 0.35, min_effect: 0, min_dsr: 0.95, seed: 20260925, evidence_mode: 'historical_replay', boundary: 'mtm_truncate_v1' };
 export const MAX_SYMBOLS = 6;
+/** 「我的策略」行最多几条(与资产上限同量级,避免矩阵爆炸) */
+export const MAX_STRATEGIES = 6;
 
 /**
  * 缺省判断要素(§9.53 C 的 DEFAULT_JUDGE 形状,按 contracts StrategyJudge 写):
@@ -25,16 +28,7 @@ export const MAX_SYMBOLS = 6;
  * 阈值在研究开始前冻结,验证与留出段不改。model_profile_ref 绑定到本次冻结的模型配置。
  */
 export function defaultJudge(profile_ref: string): StrategyJudge {
-  const fields = ['candidate.direction', 'candidate.stop_distance_atr', 'candidate.reward_risk', 'features.trend', 'features.volatility', 'features.volume_ratio'] as const;
-  return {
-    version: 1, engine: 'jev', model_profile_ref: profile_ref, state_schema_version: 'judge_state_v1',
-    questions: [
-      { key: 'take', type: 'noul', instructions: '按这条策略的规则,此刻按给定的入场、止损和目标开仓是否合理', criteria: ['趋势、波动与盈亏比支持这笔入场', '状态与策略前提不符或盈亏比不足'], state_fields: [...fields] as [typeof fields[number], ...typeof fields[number][]] },
-      { key: 'quality', type: 'score', instructions: '这笔候选的整体质量', criteria: ['差:前提明显不成立', '一般:勉强成立', '好:前提成立', '很好:多项证据一致'], labels: ['poor', 'fair', 'good', 'excellent'], state_fields: [...fields] as [typeof fields[number], ...typeof fields[number][]] },
-    ],
-    rule: { all: [{ question_key: 'take', label: 'yes', operator: 'gte', threshold: 0.55, margin: 0.02 }, { question_key: 'quality', label: 'poor', operator: 'lte', threshold: 0.5, margin: 0.02 }] },
-    on_uncertain: 'skip', on_error: 'skip', timeout_ms: 10_000, max_attempts: 1,
-  } as StrategyJudge;
+  return templateJudge(profile_ref);
 }
 
 const obj = (v: unknown, name: string): Record<string, unknown> => { if (v === undefined || v === null) return {}; if (typeof v !== 'object' || Array.isArray(v)) throw Error(`${name}_invalid`); return v as Record<string, unknown>; };
@@ -54,12 +48,33 @@ function profileOf(v: unknown): FrozenModelProfile | null {
   if (v === undefined || v === null) return null;
   const p = obj(v, 'model_profile'), keys = ['ref', 'connection_id', 'connection_revision', 'model', 'model_revision', 'routing', 'parser_version', 'max_call_usd', 'retry_policy'];
   if (Object.keys(p).some((k) => !keys.includes(k)) || keys.some((k) => typeof p[k] !== 'string' || !(p[k] as string).length)) throw Error('model_profile_invalid');
-  if (p.parser_version !== 'judge_answers_v1' || p.retry_policy !== 'none') throw Error('model_profile_invalid');
+  if (!['judge_answers_v1','judge_answers_v2_rounding_001'].includes(String(p.parser_version)) || p.retry_policy !== 'none') throw Error('model_profile_invalid');
   usdUnits(p.max_call_usd as string);
   return p as unknown as FrozenModelProfile;
 }
 
-export interface SpecContext { now: number; recommendation?: AssetRecommendation | null; model_profile?: FrozenModelProfile | null }
+export interface SpecContext {
+  now: number; recommendation?: AssetRecommendation | null; model_profile?: FrozenModelProfile | null;
+  /** 解析「我的策略」引用:version=null → 当前版本;不存在 / 已归档 / 该版本不存在 → null */
+  resolveStrategy?: (strategy_id: string, version: number | null) => { version: number } | null;
+}
+
+/** spec.strategies:[{strategy_id, version?}] → 去重后的具体版本引用;没有解析器时要求显式 version */
+function strategiesOf(v: unknown, ctx: SpecContext): MatrixStrategyRef[] {
+  if (v === undefined || v === null) return [];
+  if (!Array.isArray(v) || v.length > MAX_STRATEGIES) throw Error('strategies_invalid');
+  const out: MatrixStrategyRef[] = [];
+  for (const x of v) {
+    const o = obj(x, 'strategies');
+    if (Object.keys(o).some((k) => k !== 'strategy_id' && k !== 'version')) throw Error('strategies_unknown_fields');
+    if (typeof o.strategy_id !== 'string' || !/^[A-Za-z0-9_.:-]{1,120}$/.test(o.strategy_id)) throw Error('strategies.strategy_id_invalid');
+    const want = o.version === undefined || o.version === null ? null : int(o.version, 'strategies.version', 1, 1_000_000, 1);
+    const hit = ctx.resolveStrategy ? ctx.resolveStrategy(o.strategy_id, want) : want === null ? null : { version: want };
+    if (!hit) throw Error(`strategy_not_found:${o.strategy_id}${want === null ? '' : `@v${want}`}`);
+    if (!out.some((r) => r.strategy_id === o.strategy_id && r.version === hit.version)) out.push({ strategy_id: o.strategy_id, version: hit.version });
+  }
+  return out;
+}
 
 /** 推荐 → 规格草稿:只取 eligible 格子;短线 3m/5m 保留(矩阵里标 research_only),1h/12h 不在首版周期表里 */
 export function prefillFromRecommendation(r: AssetRecommendation): { spec: Partial<MatrixStudySpec>; notes: string[] } {
@@ -86,7 +101,7 @@ export function prefillFromRecommendation(r: AssetRecommendation): { spec: Parti
 /** 请求体(spec 片段 + 可选 recommendation_id)→ 完整规格;未知字段报错,不静默丢 */
 export function normalizeSpec(raw: unknown, ctx: SpecContext): MatrixStudySpec {
   const b0 = obj(raw, 'spec');
-  const known = new Set(['auto_finalize', 'portfolio', 'origin', 'research_program_id', 'symbols', 'timeframes', 'families', 'market', 'sides', 'arms', 'judge', 'model_profile', 'window_days', 'to_ms', 'split', 'purge_bars', 'iterate', 'budget', 'protocol', 'recommendation_id']);
+  const known = new Set(['auto_finalize', 'portfolio', 'origin', 'research_program_id', 'symbols', 'timeframes', 'families', 'strategies', 'market', 'sides', 'arms', 'judge_templates', 'judge', 'model_profile', 'window_days', 'to_ms', 'split', 'purge_bars', 'iterate', 'budget', 'protocol', 'recommendation_id']);
   const extra = Object.keys(b0).filter((k) => !known.has(k));
   if (extra.length) throw Error(`unknown_fields:${extra.join(',')}`);
   let b = b0;
@@ -100,13 +115,23 @@ export function normalizeSpec(raw: unknown, ctx: SpecContext): MatrixStudySpec {
   if (!Array.isArray(b.symbols) || !b.symbols.length || b.symbols.length > MAX_SYMBOLS || b.symbols.some((s) => typeof s !== 'string' || !/^[A-Za-z0-9_/-]{2,24}$/.test(s))) throw Error('symbols_invalid');
   const symbols = [...new Set((b.symbols as string[]).map(normSymbol))];
   const timeframes = list(b.timeframes, 'timeframes', MATRIX_TIMEFRAMES, ['15m', '4h', '1d'], 5);
-  const families = list(b.families, 'families', ALL_FAMILIES, ['breakout', 'ma_trend', 'ema_cross', 'pullback', 'mean_reversion', 'smc'], 8);
+  // 行 = 内置族 ∪ 我的策略,合计至少一项;只给了 strategies 时 families 缺省为空(不再自动铺满内置族)
+  const strategies = strategiesOf(b.strategies, ctx);
+  const families = Array.isArray(b.families) && !b.families.length ? [] : list(b.families, 'families', ALL_FAMILIES, strategies.length ? [] : ['breakout', 'ma_trend', 'ema_cross', 'pullback', 'mean_reversion', 'smc'], 8);
+  if (!families.length && !strategies.length) throw Error('families_or_strategies_required');
   const sides = list<MatrixSide>(b.sides, 'sides', ['long', 'short'], market === 'perp' ? ['long', 'short'] : ['long'], 2);
   const arms = list<MatrixArm>(b.arms, 'arms', ['code', 'code_judge'], ['code', 'code_judge'], 2);
   const model_profile = b.model_profile === undefined ? ctx.model_profile ?? null : profileOf(b.model_profile);
   let judge: StrategyJudge | null = null;
   if (b.judge !== undefined && b.judge !== null) judge = obj(b.judge, 'judge') as unknown as StrategyJudge;
   else if (arms.includes('code_judge') && model_profile) judge = defaultJudge(model_profile.ref);
+  let judge_templates: StrategyJudge[] | undefined;
+  if (b.judge_templates !== undefined) {
+    if (b.judge != null || !model_profile || !Array.isArray(b.judge_templates) || !b.judge_templates.length || b.judge_templates.length > 12) throw Error('judge_templates_invalid');
+    judge_templates = b.judge_templates.map(c => templateJudge(model_profile.ref,c as JudgeTemplateCombination));
+    if (new Set(judge_templates.map(j => hash(j))).size !== judge_templates.length) throw Error('judge_templates_duplicate');
+    judge = judge_templates[0]!;
+  }
   if (judge && model_profile && judge.model_profile_ref !== model_profile.ref) throw Error('judge_model_profile_ref_mismatch');
   const wd = obj(b.window_days, 'window_days'), window_days: Partial<Record<MatrixTimeframe, number>> = {};
   for (const tf of timeframes) window_days[tf] = int(wd[tf], `window_days.${tf}`, 30, 3650, DEFAULT_WINDOW_DAYS[tf]);
@@ -142,7 +167,7 @@ export function normalizeSpec(raw: unknown, ctx: SpecContext): MatrixStudySpec {
   const research_program_id = b.research_program_id === undefined ? programIdOf(symbols, market) : String(b.research_program_id);
   if (!/^[A-Za-z0-9_.:-]{1,160}$/.test(research_program_id)) throw Error('research_program_id_invalid');
   return {
-    research_program_id, symbols, timeframes, families, market, sides, arms, judge, model_profile, window_days, to_ms, split,
+    research_program_id, symbols, timeframes, families, strategies, market, sides, arms, judge, ...(judge_templates ? { judge_templates } : {}), model_profile, window_days, to_ms, split,
     purge_bars: int(b.purge_bars, 'purge_bars', 0, 5000, DEFAULT_PURGE_BARS), iterate, budget, protocol,
     recommendation_id: typeof b.recommendation_id === 'string' ? b.recommendation_id : null,
     auto_finalize: b.auto_finalize === undefined ? true : typeof b.auto_finalize === 'boolean' ? b.auto_finalize : (() => { throw Error('auto_finalize_invalid'); })(),

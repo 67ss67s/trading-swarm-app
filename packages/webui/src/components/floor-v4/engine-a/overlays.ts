@@ -2,6 +2,8 @@
  * 浮层:toast、像素 tooltip、NPC 对话框(打字机)、房间卡、进化日卡、审批卡、运行策略卡、像素命令行、拖拽幽灵、紧急停止长按。
  * 每个都只管 DOM;真实入口写在调用处注释里(main.ts / tasks.ts)。
  */
+import { t, tmap } from '@/lib/i18n';
+import type { DeskInfo } from '../engine-b/types';
 import type { AgentMetric, EvoDay, EvoDayDetail, InboxItem, StrategyRef } from './types';
 import { roleMeta } from './roles';
 import { charSprite } from './sprites';
@@ -48,10 +50,13 @@ export function makeTip(): { show(html: string, x: number, y: number): void; hid
   };
 }
 
-const STATUS_ZH: Record<EvoDay['status'], string> = { good: '好', ok: '一般', bad: '差', none: '无记录' };
+const STATUS_ZH: Record<EvoDay['status'], string> = tmap({ good: '好', ok: '一般', bad: '差', none: '无记录' });
 export function evoTipHtml(role: string, d: EvoDay, color: string): string {
   const m = roleMeta(role);
-  return `<b style="color:${m.color}">${esc(m.callsign)}</b> · <b>${esc(d.date)}</b><br><span class="sw" style="background:${color}"></span>${STATUS_ZH[d.status]}${d.score != null ? ` · ${d.score} 分` : ''}${d.headline ? `<br>${esc(d.headline)}` : ''}<br>进化事件 ${d.events ?? 0} 条 · 点一下看当天`;
+  const score = d.score != null ? ` · ${t('{n} 分', { n: d.score })}` : '';
+  const head = d.headline ? `<br>${esc(d.headline)}` : '';
+  const tail = t('进化事件 {n} 条 · 点一下看当天', { n: d.events ?? 0 });
+  return `<b style="color:${m.color}">${esc(m.callsign)}</b> · <b>${esc(d.date)}</b><br><span class="sw" style="background:${color}"></span>${STATUS_ZH[d.status]}${score}${head}<br>${esc(tail)}`;
 }
 
 // ---------- NPC 对话框 ----------
@@ -99,7 +104,7 @@ export function makeNpc(host: HTMLElement): { open(role: string, line: string, o
       const m = roleMeta(r);
       el = h('div', 'npc');
       el.setAttribute('role', 'dialog');
-      el.setAttribute('aria-label', `${m.callsign} 对话`);
+      el.setAttribute('aria-label', t('{cs} 对话', { cs: m.callsign }));
       const src = charSprite(m.shape, m.color, { cell: 3 });
       const [c, g] = makeCanvas(40, 40);
       g.drawImage(src, Math.round((40 - src.width) / 2), 40 - src.height - 1);
@@ -145,34 +150,84 @@ function card(host: HTMLElement, cls: string, pos: Partial<Record<'left' | 'righ
 
 const m3 = (ms: AgentMetric[] = []) => `<div class="m3">${ms.slice(0, 3).map((m) => `<div><span>${esc(m.label)}</span><b class="${m.tone === 'up' ? 'up' : m.tone === 'down' ? 'down' : m.tone === 'warn' ? 'warn' : ''}">${esc(m.value)}</b></div>`).join('')}</div>`;
 
+/** 这个角色用的模型;broken = 连接断了(红点)。null = 不用模型 */
+export type RoomBrain = { name: string; sourceLabel: string; broken: boolean } | null;
+export interface RoomCardData {
+  line: string;
+  status: string;
+  metrics?: AgentMetric[];
+  brain?: RoomBrain;
+  desk?: DeskInfo | null;
+}
 export interface RoomCardApi {
   el: HTMLDivElement;
-  update(a: { line: string; status: string; metrics?: AgentMetric[] }): void;
+  update(a: RoomCardData): void;
+}
+
+const ENGINE_BADGE: Record<string, string> = tmap({ code: '代码', decision: '决策模型', llm: 'LLM' });
+const clip = (s: string, n: number) => (s.length > n ? s.slice(0, n) + '…' : s);
+
+function brainHtml(b: RoomBrain | undefined): string {
+  if (!b) return '';
+  const dot = b.broken ? `<i class="bdot" title="${esc(t('模型连接断了'))}"></i>` : '';
+  return `${dot}<span>${esc(t('模型 {name} · {src}', { name: b.name, src: b.sourceLabel }))}</span>`;
+}
+
+function slicesHtml(d: DeskInfo | null | undefined): string {
+  if (!d) return '';
+  if (d.kind === 'free') return `<div class="sl-empty">${esc(t('自由判断(playbook)'))}</div>`;
+  if (!d.slices.length) return `<div class="sl-empty">${esc(t('当前策略没有分给这张桌的规则'))}</div>`;
+  return d.slices
+    .map((sl) => {
+      const rules = sl.rules.slice(0, 3).map((r) => `<li title="${esc(r)}">${esc(clip(r, 60))}</li>`).join('');
+      const more = sl.rules.length > 3 ? `<li class="more">${esc(t('还有 {n} 条', { n: sl.rules.length - 3 }))}</li>` : '';
+      return `<div class="sl"><div class="slh"><b title="${esc(sl.summary)}">${esc(sl.title)}</b><em class="eng ${sl.engine}">${esc(ENGINE_BADGE[sl.engine] ?? sl.engine)}</em></div>${rules || more ? `<ul>${rules}${more}</ul>` : ''}</div>`;
+    })
+    .join('');
 }
 
 /** 房间卡:只建一次,数据变化时 update() 原地改文字,不闪 */
-export function roomCard(host: HTMLElement, a: { role: string; line: string; status: string; metrics?: AgentMetric[] }, onBack: () => void, onEvo: () => void): RoomCardApi {
+export function roomCard(host: HTMLElement, a: RoomCardData & { role: string }, onBack: () => void, onEvo: () => void): RoomCardApi {
   const m = roleMeta(a.role);
   const el = card(host, 'room', { right: '16px', bottom: '16px' });
-  el.innerHTML = `<button class="x" title="返回全景(Esc)">×</button>
+  el.innerHTML = `<button class="x" title="${esc(t('返回全景(Esc)'))}">×</button>
 <div class="hd"><b class="cs" style="color:${m.color}">${esc(m.callsign)}</b><span class="rn">${esc(m.roomName)} · ${esc(m.title)}</span></div>
 <div class="st"><i class="lamp"></i><span class="stl"></span><span class="ln"></span></div>
+<div class="brain" hidden></div>
 <div class="m3"><div><span></span><b></b></div><div><span></span><b></b></div><div><span></span><b></b></div></div>
+<div class="slices" hidden></div>
 <div class="acts"></div>`;
   const acts = el.querySelector('.acts')!;
   // 真实入口:主应用 hash 页(roles.ts 的 page),例如 #intel / #my-strategies
-  const open = h('a', 'pbtn ok', `打开工作台 → ${esc(m.pageLabel)}`);
+  const open = h('a', 'pbtn ok', esc(t('打开工作台 → {page}', { page: m.pageLabel })));
   open.href = `#${m.page}`;
-  const evo = h('button', 'pbtn', '30 天进化');
+  const evo = h('button', 'pbtn', esc(t('30 天进化')));
   evo.onclick = onEvo;
-  const back = h('button', 'pbtn', '← 返回全景');
+  const back = h('button', 'pbtn', esc(t('← 返回全景')));
   back.onclick = onBack;
   acts.append(open, evo, back);
   el.querySelector<HTMLButtonElement>('.x')!.onclick = onBack;
-  const stZh: Record<string, string> = { working: '在干活', waiting: '等着', stuck: '卡住', idle: '空闲' };
+  const stZh: Record<string, string> = tmap({ working: '在干活', waiting: '等着', stuck: '卡住', idle: '空闲' });
   const stCol: Record<string, string> = { working: 'var(--up)', waiting: 'var(--warn)', stuck: 'var(--down)', idle: 'var(--faint)' };
   const cells = [...el.querySelectorAll<HTMLElement>('.m3 > div')];
+  const brainEl = el.querySelector<HTMLElement>('.brain')!;
+  const slicesEl = el.querySelector<HTMLElement>('.slices')!;
+  let lastBrain = '';
+  let lastSlices = '';
   const update: RoomCardApi['update'] = (x) => {
+    // 只在内容变了才重写,避免每次刷新重置滚动位置
+    const bh = brainHtml(x.brain);
+    if (bh !== lastBrain) {
+      lastBrain = bh;
+      brainEl.innerHTML = bh;
+      brainEl.hidden = !bh;
+    }
+    const sh = slicesHtml(x.desk);
+    if (sh !== lastSlices) {
+      lastSlices = sh;
+      slicesEl.innerHTML = sh;
+      slicesEl.hidden = !sh;
+    }
     el.querySelector<HTMLElement>('.lamp')!.style.background = stCol[x.status] ?? 'var(--faint)';
     el.querySelector('.stl')!.textContent = stZh[x.status] ?? x.status;
     el.querySelector('.ln')!.textContent = x.line;
@@ -192,11 +247,11 @@ export function roomCard(host: HTMLElement, a: { role: string; line: string; sta
 export function evoDayCard(host: HTMLElement, d: EvoDayDetail, href: string, onClose: () => void): HTMLDivElement {
   const m = roleMeta(d.role);
   const el = card(host, 'evo', { left: '16px', top: '16px' });
-  el.innerHTML = `<button class="x">×</button><h4 style="color:${m.color}">${esc(m.callsign)} · ${esc(d.date)}</h4><div class="sub">这一天的表现</div>${m3(d.metrics)}<ul>${d.records.map((r) => `<li><small>${esc(r.at)}</small>${esc(r.text)}</li>`).join('')}</ul><div class="acts"></div>`;
+  el.innerHTML = `<button class="x">×</button><h4 style="color:${m.color}">${esc(m.callsign)} · ${esc(d.date)}</h4><div class="sub">${esc(t('这一天的表现'))}</div>${m3(d.metrics)}<ul>${d.records.map((r) => `<li><small>${esc(r.at)}</small>${esc(r.text)}</li>`).join('')}</ul><div class="acts"></div>`;
   // 真实入口:#evolution?role=&date=
-  const a = h('a', 'pbtn ok', '去进化页看全部 →');
+  const a = h('a', 'pbtn ok', esc(t('去进化页看全部 →')));
   a.href = href;
-  const c = h('button', 'pbtn', '关闭');
+  const c = h('button', 'pbtn', esc(t('关闭')));
   c.onclick = onClose;
   el.querySelector('.acts')!.append(a, c);
   el.querySelector<HTMLButtonElement>('.x')!.onclick = onClose;
@@ -207,10 +262,10 @@ export function approvalCard(host: HTMLElement, it: InboxItem, onOk: () => void,
   const el = card(host, 'approve', { left: '50%', top: '50%' });
   el.style.transform = 'translate(-50%,-50%)';
   el.style.borderColor = '#b8862a';
-  el.innerHTML = `<button class="x">×</button><h4 style="color:#ffcf4a">金信封 · 待你批准</h4><div class="sub">${esc(it.detail)}</div><p style="font:700 18px var(--mono);margin:6px 0 12px">${esc(it.title)}</p><div class="acts"></div>`;
+  el.innerHTML = `<button class="x">×</button><h4 style="color:#ffcf4a">${esc(t('金信封 · 待你批准'))}</h4><div class="sub">${esc(it.detail)}</div><p style="font:700 18px var(--mono);margin:6px 0 12px">${esc(it.title)}</p><div class="acts"></div>`;
   // 真实入口:POST /api/approvals/{id}/approve | /reject(审批绑定 plan_hash,重闸只能拒不能改)
-  const ok = h('button', 'pbtn ok', '批准 → 交给 EXEC');
-  const no = h('button', 'pbtn no', '拒绝');
+  const ok = h('button', 'pbtn ok', esc(t('批准 → 交给 EXEC')));
+  const no = h('button', 'pbtn no', esc(t('拒绝')));
   ok.onclick = onOk;
   no.onclick = onNo;
   el.querySelector('.acts')!.append(ok, no);
@@ -221,9 +276,9 @@ export function approvalCard(host: HTMLElement, it: InboxItem, onOk: () => void,
 export function strategyRunCard(host: HTMLElement, s: StrategyRef, onRun: (mode: 'paper' | 'live', symbol: string) => void, onClose: () => void): HTMLDivElement {
   const el = card(host, 'run', { left: '50%', top: '50%' });
   el.style.transform = 'translate(-50%,-50%)';
-  el.innerHTML = `<button class="x">×</button><h4 style="color:${roleMeta('executor').color}">运行策略</h4><div class="sub">EXEC 接住了「${esc(s.name)} ${esc(s.version)}」</div>
+  el.innerHTML = `<button class="x">×</button><h4 style="color:${roleMeta('executor').color}">${esc(t('运行策略'))}</h4><div class="sub">${esc(t('EXEC 接住了「{name} {ver}」', { name: s.name, ver: s.version }))}</div>
   <div style="display:flex;gap:6px;margin:8px 0" data-k="sym">${['SOL', 'BTC', 'ETH'].map((x, i) => `<button class="pbtn" aria-pressed="${i === 0}" data-v="${x}">${x}</button>`).join('')}</div>
-  <div style="display:flex;gap:6px;margin:8px 0 12px" data-k="mode"><button class="pbtn" aria-pressed="true" data-v="paper">模拟盘 paper</button><button class="pbtn" aria-pressed="false" data-v="live">实盘(需审批)</button></div><div class="acts"></div>`;
+  <div style="display:flex;gap:6px;margin:8px 0 12px" data-k="mode"><button class="pbtn" aria-pressed="true" data-v="paper">${esc(t('模拟盘 paper'))}</button><button class="pbtn" aria-pressed="false" data-v="live">${esc(t('实盘(需审批)'))}</button></div><div class="acts"></div>`;
   const pick = (k: string) => {
     const g = el.querySelector(`[data-k=${k}]`)!;
     g.querySelectorAll<HTMLButtonElement>('button').forEach((b) => {
@@ -242,9 +297,9 @@ export function strategyRunCard(host: HTMLElement, s: StrategyRef, onRun: (mode:
   const sym = pick('sym');
   const mode = pick('mode');
   // 真实入口:§9.51 Strategy Run —— POST /api/strategy-runs { strategy_id, symbol, mode }
-  const run = h('button', 'pbtn ok', '开跑');
+  const run = h('button', 'pbtn ok', esc(t('开跑')));
   run.onclick = () => onRun(mode() as 'paper' | 'live', sym());
-  const c = h('button', 'pbtn', '算了');
+  const c = h('button', 'pbtn', esc(t('算了')));
   c.onclick = onClose;
   el.querySelector('.acts')!.append(run, c);
   el.querySelector<HTMLButtonElement>('.x')!.onclick = onClose;
@@ -257,7 +312,7 @@ export function makeCli(host: HTMLElement, onSubmit: (s: string) => void): { tog
   const api = {
     toggle() {
       if (el) return api.close();
-      el = h('div', 'cli', '&gt; <input aria-label="命令" placeholder="让 radar 盯 SOL" /><div class="hint">例:让 radar 盯 SOL · 回测 当前策略 ETH · 现在判断一次 BTC · 查风险 · 复盘昨天   (Enter 执行 · Esc 关闭)</div>');
+      el = h('div', 'cli', `&gt; <input aria-label="${esc(t('命令'))}" placeholder="${esc(t('让 radar 盯 SOL'))}" /><div class="hint">${esc(t('例:让 radar 盯 SOL · 回测 当前策略 ETH · 现在判断一次 BTC · 查风险 · 复盘昨天   (Enter 执行 · Esc 关闭)'))}</div>`);
       host.append(el);
       const inp = el.querySelector('input')!;
       inp.focus();
@@ -320,7 +375,7 @@ export function wireEstop(root: HTMLElement, onFire: () => void, onHint: (s: str
   let closeTimer = 0;
   cover.onclick = () => {
     root.classList.add('open');
-    onHint('保护罩已掀开:按住红钮 2 秒触发紧急停止');
+    onHint(t('保护罩已掀开:按住红钮 2 秒触发紧急停止'));
     window.clearTimeout(closeTimer);
     closeTimer = window.setTimeout(() => root.classList.remove('open'), 6000);
   };
@@ -347,7 +402,7 @@ export function wireEstop(root: HTMLElement, onFire: () => void, onHint: (s: str
     raf = requestAnimationFrame(step);
   };
   btn.onpointerup = () => {
-    if (root.style.getPropertyValue('--p') !== '0' && root.style.getPropertyValue('--p') !== '') onHint('松手了,没触发(要按满 2 秒)');
+    if (root.style.getPropertyValue('--p') !== '0' && root.style.getPropertyValue('--p') !== '') onHint(t('松手了,没触发(要按满 2 秒)'));
     stop();
     closeTimer = window.setTimeout(() => root.classList.remove('open'), 4000);
   };

@@ -1,11 +1,13 @@
 /**
- * Agent 页右栏(B+):顶部固定「异常 / 待办」块(不随 tab 隐藏),下面 tabs 状态 | 执行 | 团队。
- * 状态 = 线程 / 仓位 / 今日用量的紧凑视图;执行 = ExecutionSummary(09-25 起只读,写操作在 #connect 接入页);团队 = TeamRoster(各角色状态 + 30 天进化方格)。
- * tabs 上面一条常用入口(研究工作台 / 我的策略 / 判断记录 / 信号市场 / 进化)。
+ * Agent 页右栏(2026-09-25 改版):
+ *   1. 「需要你处理」置顶:告警 + 待批(两步确认卡 ApprovalsList)+ 交接,合成一块带总数;没有时显示一行「没有要你处理的事」。
+ *   2. 「今天」小结:判断次数与花费、开仓 / 平仓 / 已实现、当前持仓(components/agent/logic.ts 的 todaySummary,有单测)。
+ *   3. 入口条与新手旅程一致(开始清单 / 矩阵研究 / 我的策略 / 复盘)。
+ *   4. tabs 状态 | 执行 | 团队 保留在最下面(降级):状态 = 权益 / 线程 / 后端;执行 = ExecutionSummary(只读);团队 = TeamRoster。
  */
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { api } from '@/api/client';
 import { ApprovalsList, useNeedsYou } from '@/components/approvals';
 import { readSavedSession } from '@/components/chat-session-bar';
@@ -20,6 +22,7 @@ import { exchangeInfo } from '@/lib/exchange';
 import { THREAD_STATUS_LABEL, backendLabel, relativeTime, useNow } from '@/lib/format';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
+import { todaySummary } from '@/components/agent/logic';
 
 type Tab = 'status' | 'execution' | 'team';
 const TAB_KEY = 'tg.agent.side.tab';
@@ -41,6 +44,7 @@ export function AgentSide() {
   const sessionsQ = useQuery({ queryKey: ['chat', 'sessions', false], queryFn: () => api.chatSessions(false), retry: false, staleTime: 30_000 });
   const currentSessionId = readSavedSession();
   const riskQ = useQuery({ queryKey: ['risk', 'alerts', 'open'], queryFn: () => api.riskAlerts('open'), refetchInterval: 60_000, retry: false });
+  const historyQ = useQuery({ queryKey: ['history'], queryFn: () => api.history(200), retry: 0, staleTime: 60_000 });
   const [tab, setTab] = useState<Tab>(() => {
     try {
       const v = window.localStorage.getItem(TAB_KEY) as Tab | null;
@@ -99,10 +103,26 @@ export function AgentSide() {
   if (pendingHandoffs.length) alerts.push({ id: 'handoffs', level: 'warn', text: t('{n} 条 bot 交接待读', { n: pendingHandoffs.length }), onTab: 'team', hrefLabel: t('看团队') });
   if (ov?.market?.as_of && now - ov.market.as_of > 3 * 60_000) alerts.push({ id: 'stale', level: 'warn', text: t('行情 {ago}没更新了', { ago: relativeTime(ov.market.as_of, now) }), href: '#logs', hrefLabel: t('看日志') });
 
+  const today = todaySummary({ now, openThreads: threads, historyThreads: historyQ.data?.threads });
+  const needTotal = alerts.length + needs.total;
+
   return (
     <div className="flex min-h-0 flex-col gap-3">
-      {alerts.length ? (
-        <Workspace className="shrink-0">
+      {/* 1. 需要你处理 */}
+      <Workspace className="flex max-h-[45%] shrink-0 flex-col">
+        <div className="kicker flex shrink-0 items-center gap-2 border-b bg-muted/40 px-2.5 py-1 text-[10.5px] text-foreground/85">
+          {t('需要你处理')}
+          {needTotal ? <span className="num rounded-sm bg-destructive/15 px-1 text-destructive">{needTotal}</span> : null}
+          {needs.total ? <span className="ml-auto font-normal normal-case text-muted-foreground">{t('两步确认 · 120 秒')}</span> : null}
+        </div>
+        {!needTotal ? (
+          <div className="flex items-center gap-1.5 px-2.5 py-2 text-[11.5px] text-muted-foreground">
+            <CheckCircle2 className="size-3.5 text-up" />
+            {t('没有要你处理的事')}
+          </div>
+        ) : null}
+        <div className="min-h-0 overflow-y-auto">
+        {alerts.length ? (
           <ul className="divide-y">
             {alerts.map((a) => (
               <li key={a.id} className={cn('flex items-start gap-2 px-2.5 py-1.5 text-[11.5px]', a.level === 'danger' ? 'bg-destructive/10 text-destructive' : 'bg-warn/10 text-warn')}>
@@ -120,26 +140,43 @@ export function AgentSide() {
               </li>
             ))}
           </ul>
-        </Workspace>
-      ) : null}
+        ) : null}
+        {needs.total ? <ApprovalsList data={needs} showExecute={showExecute} className={cn(alerts.length && 'border-t')} /> : null}
+        </div>
+      </Workspace>
 
-      {needs.total ? (
-        <Workspace className="shrink-0">
-          <div className="kicker flex items-center gap-2 border-b bg-muted/40 px-2.5 py-1 text-[10.5px] text-foreground/85">
-            {t('需要你点')} <span className="num text-destructive">{needs.total}</span>
-            <span className="ml-auto font-normal normal-case text-muted-foreground">{t('两步确认 · 120 秒')}</span>
-          </div>
-          <div className="max-h-72 overflow-y-auto">
-            <ApprovalsList data={needs} showExecute={showExecute} />
-          </div>
-        </Workspace>
-      ) : null}
+      {/* 2. 今天 */}
+      <Workspace className="shrink-0">
+        <div className="kicker flex items-center gap-2 border-b bg-muted/40 px-2.5 py-1 text-[10.5px] text-foreground/85">
+          {t('今天')}
+          <a href="#history" className="ml-auto font-normal normal-case text-primary hover:underline">
+            {t('去复盘')}
+          </a>
+        </div>
+        <div className="grid grid-cols-3 divide-x text-[11.5px]">
+          <Cell k={t('判断')} v={usage ? `${usage.judgments}/${usage.cap || '∞'}` : '—'} tone={usage?.capped ? 'warn' : undefined} />
+          <Cell k={t('花费')} v={usage?.est_cny != null ? `¥${usage.est_cny.toFixed(2)}` : '—'} />
+          <Cell k={t('持仓')} v={String(today.holding)} sub={today.pendingEntry ? t('挂单 {n}', { n: today.pendingEntry }) : undefined} />
+        </div>
+        <div className="grid grid-cols-3 divide-x border-t text-[11.5px]">
+          <Cell k={t('开仓')} v={historyQ.isError && !threads.length ? '—' : String(today.opened)} />
+          <Cell k={t('平仓')} v={historyQ.isError ? '—' : String(today.closed)} />
+          <Cell
+            k={t('已实现')}
+            v={today.realized == null ? '—' : `${today.realized >= 0 ? '+' : ''}${today.realized.toFixed(2)}`}
+            tone={today.realized == null ? undefined : today.realized >= 0 ? 'up' : 'down'}
+            sub={today.unsettled ? t('{n} 笔待结算', { n: today.unsettled }) : undefined}
+          />
+        </div>
+      </Workspace>
 
+      {/* 3. 新手旅程入口 */}
       <Workspace className="shrink-0">
         <AgentQuickLinks />
       </Workspace>
 
-      <Workspace className="flex min-h-0 flex-1 flex-col">
+      {/* 4. 状态 / 执行 / 团队(降级到最下) */}
+      <Workspace className="flex min-h-72 flex-1 flex-col lg:min-h-0">
         <Tabs value={tab} onValueChange={pick} className="flex min-h-0 flex-1 flex-col gap-0">
           <TabsList className="h-8 w-full justify-start rounded-none border-b bg-muted/40 px-1">
             <TabsTrigger value="status" className="h-6 text-[11.5px]">
@@ -181,13 +218,8 @@ export function AgentSide() {
                   <div className="text-muted-foreground">{t('没有开着的线程。')}</div>
                 )}
               </div>
-              <div className="grid grid-cols-3 divide-x">
-                <Cell k={t('今日判断')} v={usage ? `${usage.judgments}/${usage.cap || '∞'}` : '—'} />
-                <Cell k={t('花费')} v={usage?.est_cny != null ? `¥${usage.est_cny.toFixed(2)}` : '—'} />
-                <Cell k={t('主脑')} v={ov?.loop?.brain?.split(':').pop() ?? '—'} />
-              </div>
               <div className="px-2.5 py-1.5 text-[10.5px] text-muted-foreground">
-                {t('后端')} {backendLabel(ov?.loop?.backend)} · {t('每 {n} 分钟', { n: Math.round((ov?.loop?.every_ms ?? 0) / 60000) })} · {t('观察列表')} {ov?.workflow?.watchlist.join(' / ') || '—'}
+                {t('主脑')} {ov?.loop?.brain?.split(':').pop() ?? '—'} · {t('后端')} {backendLabel(ov?.loop?.backend)} · {t('每 {n} 分钟', { n: Math.round((ov?.loop?.every_ms ?? 0) / 60000) })} · {t('观察列表')} {ov?.workflow?.watchlist.join(' / ') || '—'}
               </div>
             </div>
           </TabsContent>
@@ -215,11 +247,12 @@ export function AgentSide() {
   );
 }
 
-function Cell({ k, v, tone }: { k: string; v: string; tone?: 'up' | 'down' }) {
+function Cell({ k, v, tone, sub }: { k: string; v: string; tone?: 'up' | 'down' | 'warn'; sub?: string }) {
   return (
-    <div className="px-2.5 py-1.5">
+    <div className="min-w-0 px-2.5 py-1.5">
       <div className="text-[10px] text-muted-foreground">{k}</div>
-      <div className={cn('num text-[12px] font-semibold', tone === 'up' && 'text-up', tone === 'down' && 'text-down')}>{v}</div>
+      <div className={cn('num truncate text-[12.5px] font-semibold', tone === 'up' && 'text-up', tone === 'down' && 'text-down', tone === 'warn' && 'text-warn')}>{v}</div>
+      {sub ? <div className="truncate text-[9.5px] text-muted-foreground">{sub}</div> : null}
     </div>
   );
 }

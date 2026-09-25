@@ -2,7 +2,7 @@
 
 > 目的:在不碰真钱、不依赖 Binance 自建 MCP 客户端的前提下,把「事件触发 → JudgmentEpisode → 有限判断 → 策略状态机 → (演示账户)执行 → 回放」整条链跑给人看。
 > 口径来自 `~/Desktop/trading-swarm-eval/harness-assessment-and-eval-plan.md`(§4/§5/§9/§11):Agent 只在触发时读新鲜状态、维护 thesis、输出有限判断;数量/风险/执行由代码决定;每次判断可回放。
-> **不是 A2**:六记录状态机/plan 物化/durable 队列不在这里做;Codex NO-GO 的 P0 仍然挡着 live。本运行时只允许两种执行后端:`paper`(进程内模拟)与 `demo`(`https://demo-fapi.binance.com`,币安官方演示环境,假钱)。
+> **不是 A2**:六记录状态机/plan 物化/durable 队列不在这里做;外部评审 NO-GO 的 P0 仍然挡着 live。本运行时只允许两种执行后端:`paper`(进程内模拟)与 `demo`(`https://demo-fapi.binance.com`,币安官方演示环境,假钱)。
 
 ## 1. 进程与包
 

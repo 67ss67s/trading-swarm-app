@@ -12,7 +12,7 @@ import { SetAgentStrategyButton } from '@/components/agent-strategy/current-stra
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, useReducedMotion } from 'motion/react';
-import { ArrowLeft, Check, FileBarChart, Loader2, Lock, Play, Rocket, Settings2, Share } from 'lucide-react';
+import { ArrowLeft, Check, FileBarChart, Grid3x3, Loader2, Lock, Play, Rocket, Settings2, Share } from 'lucide-react';
 import { toast } from 'sonner';
 import type { ResearchStrategyDetail, ResearchStrategyEvent, ResearchStrategyStatus } from '@trading-swarm/contracts';
 import { researchApi } from '@/api/client';
@@ -262,6 +262,11 @@ export function StrategyDetail({ id, report, tab = 'report' }: { id: string; rep
           <Button variant="outline" size="sm" onClick={() => void doBacktest()} disabled={running}>
             {running ? <Loader2 className="animate-spin" /> : <Play />}
             {running ? t('回测运行中…') : d.report ? t('重新回测') : t('运行回测')}
+          </Button>
+          {/* §9.53 B:把这条策略当矩阵的一行,跨资产 × 周期 × 两臂测;表单预选它 */}
+          <Button variant="outline" size="sm" disabled={s.status === 'archived' || !s.current_version} title={t('资产 × 周期(15m/4h/1d)× 纯代码 / 代码 + Jev 一起测;通过的存成这条策略的新版本')} onClick={() => { window.location.hash = `matrix-study?strategy=${encodeURIComponent(s.id)}`; }}>
+            <Grid3x3 />
+            {t('在矩阵研究里测这条')}
           </Button>
           <StrategyMenu strategy={s} actions={actions} triggerClassName="size-7" />
           <RunButton run={run} disabled={s.status === 'archived'} onOpen={() => setRunOpen(true)} />

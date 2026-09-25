@@ -89,6 +89,7 @@ export interface StrategyRunDeps {
   /** 预检用:IR judge 钉住的决策连接此刻是否可用;返回不可用原因(null = 可用) */
   judgeAvailable?: (ir: StrategyIR) => string | null;
   /** IR judge 的依赖，所有模式共用；无配置时 fail closed。 */
+  microstructure?: import('./research/judge/microstructure.js').MicrostructureSource;
   judge?: (run: StrategyRun, ir: StrategyIR) => JudgeRuntime | null;
   filter: (run: StrategyRun, candidate: RunCandidate, ir: StrategyIR) => Promise<RunFilterResult>;
   publish: (event: PublishEvent) => Promise<unknown>;
@@ -450,7 +451,7 @@ export class StrategyRunner {
           else {
             const snapshot = candidateSnapshot(ir, { symbol, as_of: c.as_of, timeframe_ms: ms, direction: c.direction,
               entry: judgeDecimal(c.entry_ref), stop: judgeDecimal(c.stop), target: c.target === null ? null : judgeDecimal(c.target), reward_risk: c.rr });
-            const answer = await judgeWithBars(ir, snapshot, toResearchBars(ks, ms, c.as_of), runtime);
+            const answer = await judgeWithBars(ir, snapshot, toResearchBars(ks, ms, c.as_of), { ...runtime, ...(this.deps.microstructure ? { microstructure: this.deps.microstructure } : {}) });
             judgeFollow = answer.action === 'follow';
             this.event(r, judgeFollow ? 'agent_follow' : 'agent_skip', answer.reason_codes.join(',') || answer.action, symbol, { candidate_id: snapshot.id, judge: answer });
           }

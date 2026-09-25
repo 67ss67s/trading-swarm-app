@@ -12,7 +12,6 @@ import { hash } from '../primitives.js';
 import type { JudgeRuntime } from '../judge/index.js';
 import { better, failedCause, judgeTrials, type JudgedTrial, type TrialRec } from './compute.js';
 import { evaluateDev, singleAsset, type DataView } from './evaluate.js';
-import { withJudge } from './manifest.js';
 import type { MatrixStudyStore } from './store.js';
 import { MATRIX_RUNNER_VERSION, type DevResult, type MatrixCell, type MatrixGeneration, type MatrixStudyRow, type MatrixVariantRef } from './types.js';
 
@@ -31,29 +30,32 @@ export function configOf(row: MatrixStudyRow, cell: MatrixCell, v: MatrixVariant
 }
 
 /** 登记并评估一个试验(已完成的评估直接复用) */
-export async function evalTrial(x: SearchCtx, cell: MatrixCell, v: MatrixVariantRef, generation: number, parent: string | null): Promise<TrialRec> {
+export async function evalTrial(x: SearchCtx, cell: MatrixCell, v: MatrixVariantRef, generation: number, parent: string | null, stage: 'dev' | 'template_train' = 'dev'): Promise<TrialRec> {
   x.check();
   const row = x.row, config_hash = hash(configOf(row, cell, v)), ir_hash = hash(v.ir);
   const base = { cell_id: cell.id, variant_id: v.id, param: v.param, parent_trial_id: parent, generation, config_hash, ir_hash, ir: v.ir, ...(v.vol_target ? { vol_target: v.vol_target } : {}) };
   let t = x.store.trial(row.id, config_hash);
   const data_hash = dataHashOf(row, cell.timeframe, cell.symbol);
   if (t) {
-    const e = x.store.evaluation(t.trial_id, 'dev', data_hash, ENGINE_HASH);
-    if (e?.status === 'completed' && e.result) { const rec: TrialRec = { ...base, trial_id: t.trial_id, dev: e.result as DevResult, error: null, status: 'evaluated' }; x.onTrial(rec); return rec; }
+    const e = x.store.evaluation(t.trial_id, stage, data_hash, ENGINE_HASH);
+    if (e?.status === 'completed' && e.result) { const rec: TrialRec = { ...base, trial_id: t.trial_id, dev: e.result as DevResult, error: null, status: 'evaluated' }; if (stage === 'dev') x.onTrial(rec); return rec; }
   }
   const stop = x.overBudget();
-  if (stop && !t?.selection_visible_at) { const rec: TrialRec = { ...base, trial_id: t?.trial_id ?? `unregistered:${config_hash.slice(0, 12)}`, dev: null, error: stop, status: 'budget_skipped' }; x.onTrial(rec); return rec; }
+  if (stop && !t?.selection_visible_at) { const rec: TrialRec = { ...base, trial_id: t?.trial_id ?? `unregistered:${config_hash.slice(0, 12)}`, dev: null, error: stop, status: 'budget_skipped' }; if (stage === 'dev') x.onTrial(rec); return rec; }
   t ??= x.store.insertTrial({ study_id: row.id, program: row.research_program_id, cell_id: cell.id, variant_id: v.id, parent_trial_id: parent, generation, config_hash, ir_hash, judge_hash: v.ir.judge ? hash(v.ir.judge) : null, model_revision: cell.arm === 'code_judge' ? row.manifest.spec.model_profile?.model_revision ?? null : null, candidate: { variant: v, cell_id: cell.id } });
   const view = x.views.get(cell.timeframe), data = view ? singleAsset(view.data, cell.symbol) : null;
-  const fail = (error: string): TrialRec => { x.store.setTrialStatus(t!.trial_id, 'failed'); const rec: TrialRec = { ...base, trial_id: t!.trial_id, dev: null, error, status: 'failed' }; x.onTrial(rec); return rec; };
+  const fail = (error: string): TrialRec => { x.store.setTrialStatus(t!.trial_id, 'failed'); const rec: TrialRec = { ...base, trial_id: t!.trial_id, dev: null, error, status: 'failed' }; if (stage === 'dev') x.onTrial(rec); return rec; };
   if (!data) return fail('DATA_MISSING:no_bars_for_symbol_timeframe');
   if (v.ir.judge && !x.judge) return fail('judge_runtime_unavailable');
-  const a = x.store.beginAttempt(row.id, t.trial_id, 'dev', data_hash, ENGINE_HASH);
+  if (stage === 'template_train') x.store.markVisible(t.trial_id,'template_train_started');
+  const a = x.store.beginAttempt(row.id, t.trial_id, stage, data_hash, ENGINE_HASH);
   try {
-    const dev = await evaluateDev(data, cell.segments!, v, { check: x.check, ...(x.executorFor ? { executorFor: x.executorFor } : {}), judge: x.judge, onCandidate: (c) => { if (c.decision) x.store.putCandidate(row.id, t!.trial_id, 'dev', c.candidate.id, c.candidate, c.decision); } });
+    const trainOnly = stage === 'template_train';
+    const g = cell.segments!;
+    const dev = await evaluateDev(data, g, v, { train_only: trainOnly, check: x.check, ...(x.executorFor ? { executorFor: x.executorFor } : {}), judge: x.judge, onCandidate: (c) => { if (c.decision) x.store.putCandidate(row.id, t!.trial_id, stage, c.candidate.id, c.candidate, c.decision); } });
     x.store.finishAttempt(a, 'completed', dev, null);
-    x.store.markVisible(t.trial_id, 'evaluated');
-    const rec: TrialRec = { ...base, trial_id: t.trial_id, dev, error: null, status: 'evaluated' }; x.onTrial(rec); return rec;
+    x.store.markVisible(t.trial_id, stage === 'dev' ? 'evaluated' : 'template_train_evaluated');
+    const rec: TrialRec = { ...base, trial_id: t.trial_id, dev, error: null, status: 'evaluated' }; if (stage === 'dev') x.onTrial(rec); return rec;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (/CANCELLED/.test(msg)) { x.store.finishAttempt(a, 'cancelled', null, 'CANCELLED'); throw Error('CANCELLED'); }
@@ -65,7 +67,21 @@ export async function evalTrial(x: SearchCtx, cell: MatrixCell, v: MatrixVariant
 /** 矩阵阶段:全部 applicable 格子 × 变体(第 0 代) */
 export async function runMatrix(x: SearchCtx): Promise<TrialRec[]> {
   const out: TrialRec[] = [];
-  for (const cell of x.row.manifest.cells) if (cell.applicability === 'applicable') for (const v of cell.variants) out.push(await evalTrial(x, cell, v, 0, null));
+  for (const cell of x.row.manifest.cells) if (cell.applicability === 'applicable') {
+    const groups = new Map<string, MatrixVariantRef[]>();
+    for (const v of cell.variants) { const key=v.template_group??v.id;groups.set(key,[...(groups.get(key)??[]),v]); }
+    for (const vs of groups.values()) {
+      if (!vs[0]!.template_group) { out.push(await evalTrial(x,cell,vs[0]!,0,null));continue; }
+      const training: {v:MatrixVariantRef;t:TrialRec}[]=[];
+      for (const v of vs) training.push({v,t:await evalTrial(x,cell,v,0,null,'template_train')});
+      training.sort((a,b)=>(b.t.dev?.train.sharpe??-Infinity)-(a.t.dev?.train.sharpe??-Infinity)||a.v.id.localeCompare(b.v.id));
+      const winner=training.find(t=>t.t.dev)?.v;
+      for (const item of training) if(item.v!==winner) {
+        const rec:TrialRec={...item.t,dev:null,status:'failed',error:item.t.error??'template_train_not_selected'};out.push(rec);x.onTrial(rec);
+      }
+      if(winner)out.push(await evalTrial(x,cell,winner,0,null));
+    }
+  }
   return out;
 }
 
@@ -94,12 +110,14 @@ export async function runIterate(x: SearchCtx, all: TrialRec[], programTrials: (
       const diag = (parent.dev?.diagnosis ?? []).filter((d) => d.severity !== 'info');
       const pc: Candidate = { id: parent.trial_id, parent_id: parent.parent_trial_id, generation: parent.generation, generator: 'baseline', ir: parent.ir, diff: [], rationale: '父试验' };
       const ev: Evaluation = { candidate_id: parent.trial_id, folds: [], objective: parent.dev?.train.sharpe ?? null, gates: [], passed: false };
-      const ctx: GeneratorContext = { parent: pc, evaluation: ev, diagnosis: parent.dev?.diagnosis ?? [], data, budget: s.iterate.candidates_per_generation, check: (ir) => { const r = compileCheck(ir, cell.timeframe); return r.ok ? { ok: true } : { ok: false, reason: r.reason ?? 'invalid' }; } };
+      // 我的策略行:用户策略自带的规范阻断(父 IR 已有的)不拦子代,只拦新引入的;内置族照旧全拦
+      const baseline = cell.family.startsWith('my:') ? new Set(compileCheck(parent.ir, cell.timeframe).blocks) : new Set<string>();
+      const ctx: GeneratorContext = { parent: pc, evaluation: ev, diagnosis: parent.dev?.diagnosis ?? [], data, budget: s.iterate.candidates_per_generation, check: (ir) => { const r = compileCheck(ir, cell.timeframe, baseline); return r.ok ? { ok: true } : { ok: false, reason: r.reason ?? 'invalid' }; } };
       const lanes: { ir: StrategyIR; rationale: string; diff: Candidate['diff']; generator: string }[][] = [];
       for (const g of generators) {
         let out: Awaited<ReturnType<typeof g.generate>> = [];
         try { out = await g.generate(ctx); } catch { out = []; }
-        lanes.push(out.map((c) => ({ ir: cell.arm === 'code_judge' && !c.ir.judge ? withJudge(c.ir, s) : c.ir, rationale: c.rationale, diff: c.diff, generator: g.name })).filter((c) => { const h = hash(c.ir); if (seen.has(h)) return false; seen.add(h); return true; }));
+        lanes.push(out.map((c) => ({ ir: cell.arm === 'code_judge' ? { ...c.ir, version: 2 as const, judge: parent.ir.judge ?? s.judge! } : c.ir, rationale: c.rationale, diff: c.diff, generator: g.name })).filter((c) => { const h = hash(c.ir); if (seen.has(h)) return false; seen.add(h); return true; }));
       }
       const picked: (typeof lanes)[number] = [];
       for (let k = 0; picked.length < s.iterate.candidates_per_generation && lanes.some((l) => l.length > k); k++) for (const l of lanes) if (l[k] && picked.length < s.iterate.candidates_per_generation) picked.push(l[k]!);

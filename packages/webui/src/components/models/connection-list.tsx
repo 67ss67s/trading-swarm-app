@@ -106,7 +106,7 @@ function ConnectionRow({ conn, view, now, onEdit }: { conn: ModelConnection; vie
       </div>
       {blockedBy ? (
         <div className="mt-1.5 rounded-md border border-destructive/30 bg-destructive/10 px-2 py-1 text-[11px] text-destructive" data-testid="connection-in-use">
-          {t('还有这些角色绑着它,先在下面「角色底层」里改掉再删:{roles}', { roles: blockedBy.map((r) => MODEL_ROLE_LABEL[r]).join('、') || '—' })}
+          {t('还有这些 agent 绑着它,先在上面对应的 agent 卡里改掉再删:{roles}', { roles: blockedBy.map((r) => MODEL_ROLE_LABEL[r]).join('、') || '—' })}
         </div>
       ) : null}
       <ConfirmDialog

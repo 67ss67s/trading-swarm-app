@@ -190,25 +190,22 @@ describe('execution backend switching (§9.6)', () => {
     expect(seen).toHaveLength(1);
   });
 
-  it('refuses to switch while a thread is open, and leaves the workflow field untouched', async () => {
+  it('switches even while a thread is open (2026-09-25: account switching is unrestricted), and warns', async () => {
     const { rt, store } = await setup();
     openThread(store);
-    expect(rt.switchBlocker()).toContain('BTCUSDT');
-    const err = await rt.switchBackend('cli');
-    expect(err).toContain('先平掉');
-    expect(rt.backend.kind).toBe('paper');
-    expect(spy.started).toBe(0);
-
-    const r = await rt.applyWorkflow({ execution: 'cli', risk_pct: '0.7' });
-    expect(r.errors.join(';')).toContain('先平掉');
-    expect(r.workflow.execution).toBe('paper');
-    expect(r.workflow.risk_pct).toBe('0.7'); // the rest of the patch still applies
+    expect(rt.switchBlocker()).toBeNull();
+    expect(rt.switchWarnings().join(';')).toContain('BTCUSDT');
+    expect(await rt.switchBackend('cli')).toBeNull();
+    expect(rt.backend.kind).toBe('cli');
+    expect(rt.workflow.execution).toBe('cli');
   });
 
-  it('refuses to switch while an order is state-unknown', async () => {
+  it('switches even with a state-unknown order; the unknown order stays on the old backend', async () => {
     const { rt, store } = await setup();
     store.saveIntent({ id: 'in-1', episode_id: 'ep-1', thread_id: null, principal: 'agent', at: Date.now(), kind: 'open', symbol: 'BTCUSDT', direction: 'long', quantity: '0.01', entry: 'market', limit_price: null, stop_price: null, take_profit_price: null, sizing: { equity: '1', risk_pct: '1', risk_usdt: '1', stop_distance: '1', raw_qty: '1', step_size: '1', note: '' }, status: 'unknown', client_order_id: 'tgd-u', backend: 'paper', receipts: [], error: null });
-    expect(await rt.switchBackend('cli')).toContain('状态不明');
+    expect(rt.switchWarnings().join(';')).toContain('状态不明');
+    expect(await rt.switchBackend('cli')).toBeNull();
+    expect(rt.backend.kind).toBe('cli');
   });
 
   it('refuses an unregistered backend', async () => {
@@ -301,7 +298,7 @@ describe('execution backend switching (§9.6)', () => {
       expect((await get('/oauth/binance/client-metadata.json')).status).toBe(404);
     });
 
-    it('切回 binance 后 okx 不在可选/可恢复清单里(codex-review #13)', async () => {
+    it('切回 binance 后 okx 不在可选/可恢复清单里(review #13)', async () => {
       // main.ts 的 resumable 与工厂注册都是 `backendsFor(ex)` 裁出来的:binance 模式下
       // 上次存的 execution=okx 既不能被恢复,也没有工厂能造出来(显式指定会落回 paper)。
       process.env['TG_EXCHANGE'] = 'binance';
@@ -452,6 +449,33 @@ describe('启动时交易所通道起不来 → 退回纸面(2026-09-20 OKX 5000
       expect(acts.length).toBeGreaterThan(0);
       expect(String(acts[0]!.detail)).toContain('50001');
     } finally {
+      await rt.stop();
+      state.close();
+    }
+  });
+
+  it('退回纸面后每分钟重试,交易所恢复即自动切回原通道(2026-09-25)', async () => {
+    const state = openStateDb(':memory:');
+    const store = new DemoStore(state);
+    const dead = new SpyBackend('okx');
+    dead.start = async () => { throw new Error('timeout'); };
+    const rt = new DemoRuntime({
+      store,
+      backend: dead,
+      backends: { paper: () => new PaperBackend(10_000), okx: () => new SpyBackend('okx') },
+      brains: { stub: stubBrain() },
+      marketPollMs: 600_000,
+      accountPollMs: 600_000,
+    });
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    try {
+      await rt.start();
+      expect(rt.executionView().backend).toBe('paper');
+      await vi.advanceTimersByTimeAsync(60_000);
+      await vi.waitFor(() => expect(rt.executionView().backend).toBe('okx'));
+      expect(rt.workflow.execution).toBe('okx');
+    } finally {
+      vi.useRealTimers();
       await rt.stop();
       state.close();
     }

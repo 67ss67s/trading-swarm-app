@@ -495,7 +495,7 @@ function describeReduce(signal: TraderSignal): string {
 
 /**
  * 跟单仓位的风险预算:`risk_pct × weight`。**不用**带单员自称的仓位比重
- * (研究报告 §1「三马」节:2% 保证金 100 倍不是可比的风险权重)。
+ * (研究报告 §1「交易员A」节:2% 保证金 100 倍不是可比的风险权重)。
  */
 export function followRiskPct(riskPct: string | number, weight: number): string {
   const base = Number(riskPct);

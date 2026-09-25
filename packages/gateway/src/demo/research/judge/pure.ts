@@ -1,3 +1,4 @@
+import { calculateMicrostructure, LIVE_ONLY_FIELDS, type MicrostructureSnapshot } from './microstructure.js';
 import { Ajv2020 } from 'ajv/dist/2020.js';
 import { schemas, type StrategyJudge, type ResearchBar, type JudgeStateField } from '@trading-swarm/contracts';
 import type { DecisionQuestion } from '../../decisions.js';
@@ -23,7 +24,7 @@ const round = (n: number) => { if (!Number.isFinite(n)) throw Error('judge_nonfi
 const avg = (a: number[]) => a.reduce((s, v) => s + v, 0) / a.length;
 
 /** 固定最近 100 根已收盘 bar；不读取对象路径、不接受调用方提供的未来标签/账户对象。 */
-export function buildJudgeState(candidate: JudgeCandidateSnapshot, bars: readonly ResearchBar[], spec: StrategyJudge): JudgeStateV1 {
+export function buildJudgeState(candidate: JudgeCandidateSnapshot, bars: readonly ResearchBar[], spec: StrategyJudge, micro?: MicrostructureSnapshot | null): JudgeStateV1 {
   validateJudge(spec);
   exact(candidate, ['id','symbol','as_of','timeframe_ms','direction','entry','stop','target','reward_risk']);
   if (!Number.isSafeInteger(candidate.as_of) || !Number.isSafeInteger(candidate.timeframe_ms) || candidate.timeframe_ms <= 0 || !['long','short'].includes(candidate.direction)) throw Error('judge_candidate_invalid');
@@ -39,8 +40,12 @@ export function buildJudgeState(candidate: JudgeCandidateSnapshot, bars: readonl
   const atr = avg(seen.slice(-14).map((b, i) => Math.max(Number(b.high) - Number(b.low), Math.abs(Number(b.high) - closes[closes.length - 15 + i]!), Math.abs(Number(b.low) - closes[closes.length - 15 + i]!))));
   if (!(atr > 0)) throw Error('judge_atr_missing');
   const trend = avg(closes.slice(-20)) > avg(closes.slice(-50)) ? 'up' : 'down';
-  const values: Partial<Record<JudgeStateField, string | number>> = {
+  const values: Partial<Record<JudgeStateField, unknown>> = {
     'candidate.direction': candidate.direction,
+    'candidate.reference': candidate.entry, 'candidate.stop': candidate.stop,
+    ...(candidate.target ? { 'candidate.target': candidate.target } : {}),
+    // 最近已确认 2+2 摆动点，只使用已收盘过去 bar。无摆动不伪造。
+    ...swingLevels(seen),
     'candidate.stop_distance_atr': round(Math.abs(Number(candidate.entry) - Number(candidate.stop)) / atr),
     ...(candidate.reward_risk === null ? {} : { 'candidate.reward_risk': round(candidate.reward_risk) }),
     'features.trend': trend, 'features.volatility': round(atr / last),
@@ -48,10 +53,14 @@ export function buildJudgeState(candidate: JudgeCandidateSnapshot, bars: readonl
     'features.market_regime': atr / last > 0.04 ? 'volatile' : trend,
     // 历史 funding 要有 as-of 数据适配器后才开放，缺失不能伪造为 0。
   };
+  if (micro) {
+    if (micro.symbol !== candidate.symbol) throw Error('micro_symbol_mismatch');
+    for (const [k,v] of Object.entries(calculateMicrostructure(micro,candidate.as_of))) values[`features.${k}` as JudgeStateField]=v;
+  }
   const state: JudgeStateV1 = { version: 'judge_state_v1', as_of: candidate.as_of, timeframe_ms: candidate.timeframe_ms, candidate: {}, features: {} };
   for (const f of [...new Set(spec.questions.flatMap(q => q.state_fields))].sort()) {
-    const value = values[f]; if (value === undefined) throw Error(`judge_field_unavailable:${f}`);
-    const [group, key] = f.split('.') as ['candidate' | 'features', string]; (state[group] as Record<string,string|number>)[key] = value;
+    const value = values[f]; if (value === undefined) throw Error(`${(LIVE_ONLY_FIELDS as readonly string[]).includes(f)?'judge_live_only_data_unavailable':'judge_field_unavailable'}:${f}`);
+    const [group, key] = f.split('.') as ['candidate' | 'features', string]; (state[group] as Record<string,unknown>)[key] = value;
   }
   validateState(state,spec); return state;
 }
@@ -62,6 +71,9 @@ export function validateState(state: JudgeStateV1, spec: StrategyJudge): void {
   const actual = [...Object.keys(state.candidate).map(k => `candidate.${k}`), ...Object.keys(state.features).map(k => `features.${k}`)];
   if (actual.length !== want.size || actual.some(k => !want.has(k as JudgeStateField))) throw Error('judge_unknown_or_missing_state_field');
   for (const group of ['candidate','features'] as const) for (const [key,value] of Object.entries(state[group])) {
+    if (['reference','support','resistance','stop','target','liq_long_5m','liq_short_5m'].includes(key)) { if (typeof value !== 'string' || !/^(0|[1-9]\d*)(\.\d{1,12})?$/.test(value)) throw Error('judge_state_value'); continue; }
+    if (key === 'ob_wall_up' || key === 'ob_wall_down') { const wall = value as {price:string;notional:string}; if (!wall || typeof wall !== 'object' || Object.keys(wall).sort().join(',') !== 'notional,price' || ![wall.price,wall.notional].every(v=>typeof v==='string' && /^(0|[1-9]\d*)(\.\d{1,12})?$/.test(v)) || Number(wall.price)<=0) throw Error('judge_state_value'); continue; }
+    if (key === 'ob_imbalance_05') { if (typeof value !== 'number' || !Number.isFinite(value) || Math.abs(value)>1) throw Error('judge_state_value'); continue; }
     const choices = key === 'direction' ? ['long','short'] : key === 'trend' ? ['up','down'] : key === 'market_regime' ? ['up','down','volatile'] : null;
     if (choices ? typeof value !== 'string' || !choices.includes(value) : typeof value !== 'number' || !Number.isFinite(value) || (key !== 'funding' && value < 0)) throw Error('judge_state_value');
   }
@@ -70,7 +82,7 @@ export function decisionQuestions(spec: StrategyJudge): Record<string, DecisionQ
   return Object.fromEntries(spec.questions.map(q => [q.key, q.type === 'noul' ? { type: q.type, instructions: q.instructions, criteria: { true: q.criteria[0]!, false: q.criteria[1]! } } : q.type === 'score' ? { type: q.type, instructions: q.instructions, criteria: [...q.criteria] } : { type: q.type, instructions: q.instructions, criteria: Object.fromEntries(q.labels!.map((l,i) => [l,q.criteria[i]!])) }]));
 }
 /** score 使用有序类别概率，不把 score 的位置/期望当成获利概率。 */
-export function normalizeAnswers(spec: StrategyJudge, raw: unknown): NormalizedAnswer[] {
+export function normalizeAnswers(spec: StrategyJudge, raw: unknown, parser_version: import('@trading-swarm/contracts').FrozenModelProfile['parser_version'] = 'judge_answers_v1'): NormalizedAnswer[] {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw Error('judge_answers_invalid');
   const all = raw as Record<string, Record<string, unknown>>;
   if (Object.keys(all).length !== spec.questions.length) throw Error('judge_answers_keys');
@@ -85,7 +97,10 @@ export function normalizeAnswers(spec: StrategyJudge, raw: unknown): NormalizedA
     const keys = indexKeys ? labels.map((_,i) => String(i)) : labels;
     if (Object.keys(src).length !== keys.length || Object.keys(src).some(k => !keys.includes(k))) throw Error('judge_distribution_labels');
     const ps = keys.map(k => prob(src[k]));
-    if (Math.abs(ps.reduce((a,b) => a+b,0) - 1) > 1e-6) throw Error('judge_probability_sum');
+    const sum = ps.reduce((a,b) => a+b,0);
+    const tolerance = parser_version === 'judge_answers_v2_rounding_001' ? 0.01 + 1e-12 : 1e-6;
+    if (Math.abs(sum - 1) > tolerance) throw Error('judge_probability_sum');
+    if (parser_version === 'judge_answers_v2_rounding_001') for (let i=0;i<ps.length;i++) ps[i] = ps[i]! / sum;
     if (q.type === 'choice' && !labels.includes(String(a.choice))) throw Error('judge_choice_invalid');
     if (q.type === 'score' && (typeof a.score !== 'number' || !Number.isFinite(a.score) || a.score < 0 || a.score > labels.length - 1)) throw Error('judge_score_invalid');
     return { question_key: q.key, probabilities: Object.fromEntries(labels.map((l,i) => [l,ps[i]!])) };
@@ -100,4 +115,14 @@ export function evaluateJudgeRule(spec: StrategyJudge, answers: NormalizedAnswer
   });
   const uncertain = predicates.some((v,i) => !v.passed && (spec.rule.all[i]!.operator === 'gte' ? v.probability >= spec.rule.all[i]!.threshold : v.probability <= spec.rule.all[i]!.threshold));
   return { action: predicates.every(p => p.passed) ? 'follow' : 'skip', uncertain, predicates };
+}
+
+function swingLevels(bars: readonly ResearchBar[]): Partial<Record<JudgeStateField,string>> {
+ const out: Partial<Record<JudgeStateField,string>>={};
+ for(let i=2;i<bars.length-2;i++) {
+  const b=bars[i]!, adjacent=[bars[i-2]!,bars[i-1]!,bars[i+1]!,bars[i+2]!];
+  if(adjacent.every(a=>Number(a.low)>Number(b.low)))out['candidate.support']=b.low;
+  if(adjacent.every(a=>Number(a.high)<Number(b.high)))out['candidate.resistance']=b.high;
+ }
+ return out;
 }

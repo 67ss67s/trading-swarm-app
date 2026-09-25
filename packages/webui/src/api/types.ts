@@ -4110,6 +4110,12 @@ export interface ModelConnection {
 /** POST /api/models/connections/:id/test 的返回 = 一条 last_test */
 export type ModelConnectionTest = NonNullable<ModelConnection['last_test']>;
 export type ModelRole = 'chat' | 'judge' | 'research' | 'filter' | 'reviewer' | 'utility' | 'decision';
+/** POST /api/models/bindings/:role/test:用该角色当前生效的底层(绑定 / 回退主脑副脑)测一次 */
+export interface RoleTestResult extends ModelConnectionTest {
+  role: ModelRole;
+  source: EffectiveSource;
+  name: string;
+}
 /** connection_id / model 为 null = 回退旧槽位 */
 export interface RoleBinding {
   role: ModelRole;

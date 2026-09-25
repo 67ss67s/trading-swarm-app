@@ -11,7 +11,9 @@
  *   - meetings = 同一线程 / 判断在 3 分钟内牵动 ≥3 个角色的 activity 链(真数据推出来的「开会」)
  * 布局 B 直接吃 FloorModel(与 engine-b Snapshot 同形);布局 A 走 toSnapshotA 适配。
  */
-import type { ActivityItem, BotHandoff, BotsResponse, DemoIntent, ExecutionView, HistoryResponse, Kline, Overview, PortfolioSnapshotResponse, RiskAlertsResponse } from '@/api/types';
+import type { ActivityItem, BotHandoff, BotRole, BotsResponse, DemoIntent, EpisodeSummary, ExecutionView, HistoryResponse, Kline, ModelsView, Overview, PortfolioSnapshotResponse, RiskAlertsResponse } from '@/api/types';
+import { DESK_SLICES, type AgentStrategyView } from '@/api/agent-strategy';
+import { roleBrainDisplay } from '@/lib/role-brain';
 import type { EvoDailyResponse } from '@/api/evolution';
 import type { ResearchStrategy } from '@trading-swarm/contracts';
 import { activityToFeed, derivePresence } from '@/components/floor/presence';
@@ -21,7 +23,7 @@ import { t } from '@/lib/i18n';
 import type { Deco } from './deco';
 import type { FloorSnapshot as SnapshotA, TaskIcon } from './engine-a/types';
 import { ROLES, ROLE_ORDER } from './engine-b/roles';
-import type { ActivityItem as EngineActivity, AgentSnap, AgentStat, AgentStatus, EvoRoleRow, HandoffSnap, InboxItem, MarketState, MeetingSnap, Role, Snapshot, StrategyCard } from './engine-b/types';
+import type { ActivityItem as EngineActivity, AgentSnap, AgentStat, AgentStatus, DeskInfo, EvoRoleRow, HandoffSnap, InboxItem, MarketState, MeetingSnap, Role, Snapshot, StrategyCard } from './engine-b/types';
 
 export type { Role };
 
@@ -48,6 +50,23 @@ export interface FloorInputs {
   btcKlines?: readonly Kline[] | null;
   /** 你从楼层派出去、还没完成的活 */
   tasks?: Partial<Record<Role, FloorTask>>;
+  /** 最近的判断 episode 摘要(带策略议会票面时用它驱动「开会」) */
+  episodes?: readonly EpisodeSummary[] | null;
+  /** agent 当前策略(§9.54):右栏当前策略卡 + 每张桌的规则片 */
+  agentStrategy?: AgentStrategyView | null;
+  /** GET /api/models:每个角色用的模型 + 连接是否失效 */
+  models?: ModelsView | null;
+}
+
+/** 右栏「当前策略」卡 */
+export interface CurrentStrategy {
+  kind: 'free' | 'strategy';
+  name: string;
+  version: number | null;
+  symbol: string | null;
+  /** 运行状态原词(running / paused / stopped / error);null = 没在跑 */
+  run: string | null;
+  mode: string | null;
 }
 
 /** 右栏「团队动态」一行(与画布同源) */
@@ -73,6 +92,8 @@ export interface FloorModel extends Snapshot {
   pendingHandoffs: BotHandoff[];
   /** 当前策略原件(拖给 EXEC → RunDialog) */
   strategyObj: ResearchStrategy | null;
+  /** 当前策略卡(AgentStrategyView 优先;没有时回退「我的策略」推断) */
+  current: CurrentStrategy | null;
   /** 房间装饰数字(跑马灯 / 敞口),见 deco.ts */
   deco: Deco;
 }
@@ -319,6 +340,101 @@ export function deriveMeetings(activity: readonly ActivityItem[], now: number): 
   return out.sort((a, b) => b.at - a.at).slice(0, 5);
 }
 
+/** 进化接口的角色名 → 楼层角色(接口按楼层角色出;旧 / 别名也认,免得一换名方格就全灰) */
+const EVO_ROLE_ALIAS: Record<string, Role> = {
+  captain: 'gate_captain', helm: 'gate_captain', chat: 'gate_captain',
+  judge: 'thread_manager', thread: 'thread_manager', holding: 'thread_manager',
+  lab: 'strategy_lab', strategy: 'strategy_lab',
+  portfolio: 'portfolio_manager', book: 'portfolio_manager',
+  risk: 'risk_sentinel', sentinel: 'risk_sentinel',
+  execution: 'executor', exec: 'executor',
+  review: 'reviewer', audit: 'reviewer',
+  asp: 'asp_agent', market: 'asp_agent',
+};
+export function evoRoleOf(raw: string | null | undefined): Role | null {
+  if (!raw) return null;
+  const k = raw.trim().toLowerCase();
+  return isRole(k) ? k : EVO_ROLE_ALIAS[k] ?? null;
+}
+const EVO_STATUS = new Set(['good', 'ok', 'bad', 'none']);
+export const EVO_WINDOW = 30;
+const ymd = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+
+/**
+ * 进化方格:9 个角色 × 最近 30 个 UTC 日(以 now 为今天),按日期对齐真数据;
+ * 接口缺的日子 / 缺的角色 / 接口没回来 → 画灰格(none),但格子一定在。
+ */
+export function buildEvoRows(evo: EvoDailyResponse | null | undefined, now: number): EvoRoleRow[] {
+  const today = Math.floor(now / DAY) * DAY;
+  const dates = Array.from({ length: EVO_WINDOW }, (_, i) => ymd(today - (EVO_WINDOW - 1 - i) * DAY));
+  const byRole = new Map<Role, Map<string, EvoRoleRow['days'][number]>>();
+  for (const r of evo?.roles ?? []) {
+    const role = evoRoleOf(r.role);
+    if (!role) continue;
+    const m = byRole.get(role) ?? new Map();
+    for (const d of r.days ?? []) {
+      if (!d || typeof d.date !== 'string') continue;
+      const date = d.date.slice(0, 10);
+      const status = EVO_STATUS.has(d.status) ? d.status : 'none';
+      m.set(date, { date, status, score: d.score ?? null, headline: d.headline ?? null, ...(d.events != null ? { events: d.events } : {}) });
+    }
+    byRole.set(role, m);
+  }
+  return ROLE_ORDER.map((role) => {
+    const m = byRole.get(role);
+    return { role, days: dates.map((date) => m?.get(date) ?? { date, status: 'none' as const, score: null, headline: null }) };
+  });
+}
+
+/**
+ * 真议会驱动的「开会」:判断 episode 带策略议会票面(council ≠ null)= 一次开会。
+ * 参会:HELM(主持)+ THREAD(判断)+ LAB(策略投票)+ SENTINEL(闸门);出了意图再叫上 EXEC。
+ * 议会关着(现网 strategy_council=off 时全是 null)就返回空,调用方回退 deriveMeetings 推断。
+ */
+export function deriveCouncilMeetings(episodes: readonly EpisodeSummary[] | null | undefined, now: number): MeetingSnap[] {
+  const out: MeetingSnap[] = [];
+  for (const e of episodes ?? []) {
+    const c = e.council;
+    if (!c || now - e.at > 6 * 3600_000 || e.at > now + 60_000) continue;
+    const roles: Role[] = ['gate_captain', 'thread_manager', 'strategy_lab', 'risk_sentinel'];
+    if (e.has_intent) roles.push('executor');
+    const dir = c.direction === 'long' ? t('做多') : c.direction === 'short' ? t('做空') : '';
+    const topic = c.reached
+      ? t('{symbol} 议会:{a}/{r} 同意{dir}', { symbol: e.symbol, a: c.agreeing, r: c.required, dir })
+      : t('{symbol} 议会:没有共识({a}/{r})', { symbol: e.symbol, a: c.agreeing, r: c.required });
+    out.push({ id: `council:${e.id}`, roles, topic, at: e.at });
+  }
+  return out.sort((a, b) => b.at - a.at).slice(0, 5);
+}
+
+/** 开会 = 真议会优先;没有议会票面时用 activity 推断兜底 */
+export function pickMeetings(inp: Pick<FloorInputs, 'episodes' | 'activity' | 'now'>): MeetingSnap[] {
+  const real = deriveCouncilMeetings(inp.episodes, inp.now);
+  return real.length ? real : deriveMeetings(inp.activity ?? [], inp.now);
+}
+
+/** 当前策略分给这张桌的规则片(DESK_SLICES);这张桌不吃策略片 / 没拿到视图 → null */
+export function deskInfo(role: Role, view: AgentStrategyView | null | undefined): DeskInfo | null {
+  const binds = DESK_SLICES[role];
+  if (!binds || !view) return null;
+  if (view.kind === 'free') return { kind: 'free', strategy: null, slices: [] };
+  const slices = binds.flatMap((b) => {
+    const s = view.slices.find((x) => x.role === b);
+    return s ? [{ title: s.title, summary: s.summary, engine: view.role_engines[b] ?? 'code', rules: s.rules.map((r) => r.text) }] : [];
+  });
+  return { kind: 'strategy', strategy: view.name ?? view.strategy_id, slices };
+}
+
+/** 当前策略卡:AgentStrategyView 说了算;视图没回来时回退「我的策略」推断 */
+export function currentStrategy(view: AgentStrategyView | null | undefined, fallback: ResearchStrategy | null, running?: ReadonlySet<string>): CurrentStrategy | null {
+  if (view) {
+    if (view.kind === 'free') return { kind: 'free', name: t('自由判断'), version: null, symbol: null, run: null, mode: view.mode };
+    return { kind: 'strategy', name: view.name ?? view.strategy_id ?? '—', version: view.version, symbol: fallback?.id === view.strategy_id ? fallback.symbol : null, run: view.run_status, mode: view.mode };
+  }
+  if (!fallback) return null;
+  return { kind: 'strategy', name: fallback.name, version: fallback.current_version, symbol: fallback.symbol, run: running?.has(fallback.id) ? 'running' : null, mode: null };
+}
+
 export function buildFloorModel(inp: FloorInputs): FloorModel {
   const now = inp.now;
   const activity = inp.activity ?? [];
@@ -359,7 +475,7 @@ export function buildFloorModel(inp: FloorInputs): FloorModel {
     recentActivity: activity as ActivityItem[],
     now,
   };
-  const evoRows: EvoRoleRow[] = (inp.evolution?.roles ?? []).filter((r) => isRole(r.role)).map((r) => ({ role: r.role as Role, days: r.days.slice(-30).map((d) => ({ date: d.date, status: d.status, score: d.score, headline: d.headline, ...(d.events != null ? { events: d.events } : {}) })) }));
+  const evoRows = buildEvoRows(inp.evolution, now);
   const evoToday = new Map(evoRows.map((r) => [r.role, r.days[r.days.length - 1]]));
   const lastSaid = new Map<Role, FeedRow>();
   for (const r of feed) if (r.from !== 'user' && !lastSaid.has(r.from)) lastSaid.set(r.from, r);
@@ -375,7 +491,9 @@ export function buildFloorModel(inp: FloorInputs): FloorModel {
     const line = clip(presence.action || (presence.state === 'off' ? p.note ?? t('没上岗') : '') || said?.text || t('空闲'), 48);
     const ev = evoToday.get(role);
     const today = ev?.headline ? ev.headline : said ? t('最近一件事:{text}', { text: said.text }) : t('今天还没有可说的事。');
-    return { role, callsign: ROLES[role].callsign, color: ROLES[role].color, status, line, stats: roleStats(role, inp, pendingIntents.length, pendingHandoffs.length), task, today };
+    const b = roleBrainDisplay(role as BotRole, inp.models ?? null, ov?.loop ?? null);
+    const brain = b ? { name: b.name, sourceLabel: b.sourceLabel, broken: b.broken } : null;
+    return { role, callsign: ROLES[role].callsign, color: ROLES[role].color, status, line, stats: roleStats(role, inp, pendingIntents.length, pendingHandoffs.length), task, today, brain, desk: deskInfo(role, inp.agentStrategy) };
   });
 
   // ---- inbox ----
@@ -401,8 +519,10 @@ export function buildFloorModel(inp: FloorInputs): FloorModel {
   const equity = acct?.equity ?? (inp.portfolio?.snapshot ? inp.portfolio.snapshot.equity.toFixed(2) : '0');
   const money = { equity, pnl_today: pnlToday(inp), positions: acct?.positions.length ?? 0 };
 
-  // ---- 当前策略 ----
-  const st = pickStrategy(inp.strategies, inp.runningStrategyIds);
+  // ---- 当前策略:AgentStrategyView 指定的那条优先(拖给 EXEC 要原件,从我的策略里找),否则推断 ----
+  const av = inp.agentStrategy ?? null;
+  const pinned = av?.kind === 'strategy' ? (inp.strategies ?? []).find((x) => x.id === av.strategy_id) ?? null : null;
+  const st = av ? pinned : pickStrategy(inp.strategies, inp.runningStrategyIds);
   const strategy: StrategyCard | undefined = st ? { id: st.id, name: st.name, symbol: st.symbol, stage: STAGE[st.status] ?? 'draft' } : undefined;
 
   const engineActivity: EngineActivity[] = activity.slice(0, 60).flatMap((a) => {
@@ -417,7 +537,7 @@ export function buildFloorModel(inp: FloorInputs): FloorModel {
     handoffs,
     money,
     inbox: { count: items.length, items },
-    meetings: deriveMeetings(activity, now),
+    meetings: pickMeetings(inp),
     evolution: evoRows,
     activity: engineActivity,
     market: { btc_vol_1h: btcVol1h(inp.btcKlines), risk_level: riskToWeather(inp.risk?.level) },
@@ -428,6 +548,7 @@ export function buildFloorModel(inp: FloorInputs): FloorModel {
     pendingIntents,
     pendingHandoffs,
     strategyObj: st,
+    current: currentStrategy(av, st, inp.runningStrategyIds),
     deco: buildDeco(inp),
   };
 }

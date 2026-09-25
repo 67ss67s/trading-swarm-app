@@ -21,6 +21,7 @@ import {
   ChevronRight,
   CircleHelp,
   FlaskConical,
+  Grid3x3,
   History,
   LineChart,
   MessageSquare,
@@ -222,6 +223,7 @@ export function SessionSidebar({
   onOpenLegacy,
   onOpenHistory,
   runCount,
+  onOpenMatrix,
 }: {
   collapsed: boolean;
   onToggle: () => void;
@@ -236,6 +238,8 @@ export function SessionSidebar({
   onOpenLegacy: () => void;
   onOpenHistory: () => void;
   runCount: number;
+  /** 打开右栏「矩阵研究」页签(内嵌新建 + 最近列表,不另开会话) */
+  onOpenMatrix?: () => void;
 }) {
   if (collapsed) {
     return (
@@ -249,6 +253,11 @@ export function SessionSidebar({
         <Button size="xs" variant="ghost" onClick={onOpenHistory} title={t('实验历史')}>
           <History />
         </Button>
+        {onOpenMatrix ? (
+          <Button size="xs" variant="ghost" onClick={onOpenMatrix} title={t('矩阵研究')}>
+            <Grid3x3 />
+          </Button>
+        ) : null}
       </div>
     );
   }
@@ -306,6 +315,12 @@ export function SessionSidebar({
             <span className="truncate">{t('实验历史')}</span>
             <span className="num ml-auto text-[10px] text-muted-foreground">{runCount}</span>
           </button>
+          {onOpenMatrix ? (
+            <button type="button" onClick={onOpenMatrix} className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[11.5px] hover:bg-accent/60" title={t('资产 × 周期 × 策略的矩阵研究,在右栏打开')}>
+              <Grid3x3 className="size-3 shrink-0 text-muted-foreground" />
+              <span className="truncate">{t('矩阵研究')}</span>
+            </button>
+          ) : null}
         </div>
       </ScrollArea>
     </div>

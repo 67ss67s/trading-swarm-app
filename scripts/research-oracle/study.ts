@@ -113,7 +113,7 @@ for (const r of longPicks) {
 }
 out.baseline = { validation: baseVal, simulator: { trades: baseSim.trades.length, expectancy: baseSim.trades.reduce((a, b) => a + b, 0) / Math.max(1, baseSim.trades.length) } };
 out.validations = validations;
-// 做空版:只给 IR 草稿与检查结果,不回测不落库(做空执行由订单周期子代理在接)
+// 做空版:只给 IR 草稿与检查结果,不回测不落库(做空执行由订单周期工作线在接)
 const shortBase = simulate(() => true, 'short');
 out.short_baseline_sim = { trades: shortBase.trades.length, expectancy: meanOf(shortBase.trades) };
 out.short_drafts = primary.sides.find((s) => s.side === 'short')!.picks.map((r) => { const sim = ruleSim(r, 'short'); return { rule: r.text, conditions: r.conditions, ir: r.ir ?? null, check_ok: r.check_ok ?? null, check_failed: r.check_failed ?? [], train: r.train, test: r.test, p_perm: r.p_perm, validation_label: labelCheck(r.conditions, 'short'), validation_sim: { trades: sim.trades.length, expectancy: meanOf(sim.trades), win_rate: sim.trades.length ? sim.trades.filter((x) => x > 0).length / sim.trades.length : null } }; });

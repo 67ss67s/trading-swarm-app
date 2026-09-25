@@ -6,7 +6,7 @@
 
 Jacky 的要求(原话要点):跟单页去掉 8794 / bridge 的所有痕迹,改成完整的 ASP 适配;参考 okx.ai/tutorial、
 dev-docs、okx.ai/agents;信号 relay 参考 bridge console;用户可以订 ASP 信号自动交易,也可以让 agent 按研究好的
-策略跑,做判断时 relay 一份到 ASP 卖订阅;再加一个专管 ASP 的 agent 和对应 skill。后端 astra(Codex medium)写,
+策略跑,做判断时 relay 一份到 ASP 卖订阅;再加一个专管 ASP 的 agent 和对应 skill。后端 外部评审写,
 前端主线写。
 
 ## 0. 结论先行
@@ -208,7 +208,7 @@ ASP 订阅整条链路是**靠 Agentic Wallet 跑起来的**:买家身份(User #
 6. 故障手册:守护没跑(`okx-a2a daemon start` 后必须补代理,见 okx-signal-lab/fix-daemon-proxy.sh)、钱包未登录、本机不在接收集合、CLI 超时、`fundingNoticeCommand`。
 7. OKX 官方 `okx-ai` 技能与本 skill 的分工:平台原生对话流程(评审、争议投票、A2A 聊天)留给官方技能;交易信号买卖走本 skill。
 
-## 6. 后端接口契约(给 astra;同步抄进 `docs/demo/v3-ui-contract.md` §9.39)
+## 6. 后端接口契约(给 外部评审;同步抄进 `docs/demo/v3-ui-contract.md` §9.39)
 
 命名空间 `/api/market/*`;现有 `/api/follow/signals*`、`/api/follow/stats` 保留供信号栏用,`/api/follow`(设置)改为返回 `MarketSettings`。
 
@@ -248,7 +248,7 @@ ASP 订阅整条链路是**靠 Agentic Wallet 跑起来的**:买家身份(User #
 
 ## 8. 分工与顺序
 
-- **astra(Codex medium)— 后端**:§2.1 账本与 transport、§2.2 设置、§3.3 发布器、§4 asp_agent 目录与角色接线、§6 全部路由与迁移、测试。改动范围 `packages/gateway`、`packages/contracts`(类型)、`docs/demo/v3-ui-contract.md` §9.39。**不碰** `packages/webui`。
+- **外部评审— 后端**:§2.1 账本与 transport、§2.2 设置、§3.3 发布器、§4 asp_agent 目录与角色接线、§6 全部路由与迁移、测试。改动范围 `packages/gateway`、`packages/contracts`(类型)、`docs/demo/v3-ui-contract.md` §9.39。**不碰** `packages/webui`。
 - **主线 — 前端**:`pages/market.tsx` 四栏 + 组件、nav 改名、`api/types.ts` 与 `client.ts` 对齐契约、i18n、删 follow 页;`skills/asp-agent/SKILL.md`。
-- 顺序:契约 §6 先冻结(本文)→ 两边并行 → 前端先用契约 mock 接口 → 合并 → tester 跑全量 → Codex 对抗复审 → 重编 dist → 重启 18811。
+- 顺序:契约 §6 先冻结(本文)→ 两边并行 → 前端先用契约 mock 接口 → 合并 → tester 跑全量 → 外部评审对抗复审 → 重编 dist → 重启 18811。
 - 参赛演示路径:注册 ASP(Jacky 本人过目文案)→ 用 User #13529 订自己的服务不行(同钱包),改订 #8136 试用做「买」的演示 → 发布器开着,agent 判断实时 relay 到市场 → 页面上看到订阅者与投递账本。

@@ -51,4 +51,14 @@ export const STRATEGY_LOOP_EN: Record<string, string> = {
   '对照臂': 'Arms', '估算': 'Estimate', '格子': 'Cells', '试验': 'Trials', '次': 'calls', '回撤': 'drawdown', '{n} 笔': '{n} trades', '日': 'day', '保留': 'kept',
   '检验中…': 'Testing…', '读取研究失败': 'Failed to load study', '周期': 'Timeframe', '永续': 'Perp', '现货': 'Spot', '多': 'L', '空': 'S',
   '现货不能做空': 'Spot cannot short', '排队': 'Queued', '已完成': 'Completed', '已取消': 'Cancelled', '失败': 'Failed', '中断': 'Interrupted', '留出段检验中': 'Testing holdout', '完成': 'Done',
+  // §9.53 B 矩阵研究:策略来源可选「我的策略」+ 研究台内嵌入口
+  '内置策略族': 'Built-in families', '再选一条': 'Add another', '选择我的策略': 'Pick from My strategies',
+  '搜索策略名 / 资产 / 周期': 'Search name / asset / timeframe', '没有可选的策略': 'No strategies to pick', '无版本': 'no version',
+  '我的策略最多选 {n} 条': 'Up to {n} of My strategies', '没找到策略 {id}(可能已归档)': 'Strategy {id} not found (maybe archived)',
+  '我的策略按每个格子的周期跑(规则里的根数不变);存下来是这条策略的新版本,不新建策略': 'My strategies run at each cell\'s timeframe (bar counts in the rules stay the same); saving creates a new version of that strategy, not a new strategy',
+  '至少选一条我的策略或一个内置策略族': 'Pick at least one of My strategies or one built-in family', '我的策略 {n} 条': '{n} of My strategies',
+  '还没有矩阵研究': 'No matrix studies yet', '已存为「{name}」的新版本 v{v}': 'Saved as new version v{v} of "{name}"', '存为这条策略的新版本': 'Save as a new version',
+  '资产 × 周期 × 策略的矩阵研究,在右栏打开': 'Asset × timeframe × strategy matrix study, opens in the right panel',
+  '在矩阵研究里测这条': 'Test in matrix study',
+  '资产 × 周期(15m/4h/1d)× 纯代码 / 代码 + Jev 一起测;通过的存成这条策略的新版本': 'Test across assets × timeframes (15m/4h/1d) × pure code / code + Jev; passing results are saved as a new version of this strategy',
 };

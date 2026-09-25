@@ -102,6 +102,12 @@ describe('/api/models', () => {
     // 立即生效:runtime 的判断大脑就是这条连接;没绑的 chat 仍回退主脑
     expect(rt!.brainForRole('judge').name).toBe('openrouter:deepseek/deepseek-v4.1-flash');
     expect(rt!.brainForRole('chat').name).toBe('stub');
+    // 按角色测试:绑定的走连接,没绑的走回退槽位;未知角色 404
+    const roleTest = await api('POST', '/api/models/bindings/judge/test');
+    expect(roleTest.json).toMatchObject({ role: 'judge', source: 'binding', name: 'openrouter:deepseek/deepseek-v4.1-flash', ok: true });
+    expect(typeof roleTest.json.latency_ms).toBe('number');
+    expect((await api('POST', '/api/models/bindings/chat/test')).json).toMatchObject({ role: 'chat', source: 'fallback_main', name: 'stub' });
+    expect((await api('POST', '/api/models/bindings/nope/test')).status).toBe(404);
     await api('PUT', '/api/models/bindings/decision', { connection_id: id, model: null });
     expect(rt!.decisionClient()?.name).toBe('openrouter:~typesafe/jev-latest');
 

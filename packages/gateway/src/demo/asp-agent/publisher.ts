@@ -2,7 +2,7 @@ import type { StrategyThread } from '../types.js';
 import { settlementCompleteness } from '../judgment-ledger.js';
 import type { DemoStore } from '../store.js';
 import { symbolToInstId } from '../okx/instruments.js';
-import { MarketCli, data, list } from './cli.js';
+import { CliError, MarketCli, data, list } from './cli.js';
 import type { PublisherSettings } from './settings.js';
 import { captainHandoff, startAspRun, summarizeJudgmentForAnalysis } from './audit.js';
 export interface PublishEvent {
@@ -23,8 +23,58 @@ export function renderDeliverable(e: PublishEvent, settings: PublisherSettings) 
     ...(e.strategy ? { strategy: e.strategy, market: e.market, traded: e.traded, ...(e.entry_type ? { entry_type: e.entry_type } : {}), ...(e.take_profit_sizes ? { take_profit_sizes: e.take_profit_sizes } : {}) } : {}),
     reason: summarizeJudgmentForAnalysis(e.reason), source: 'trading-swarm', thread_id: e.thread_id, realized_r: settings.include_realized_pnl ? e.realized_r : null,
     backend: e.backend, paper: e.paper || e.backend === 'paper', ...(action === 'CLOSE' ? { exit_reason: e.exit_reason ?? e.reason } : {}), ...(action === 'REDUCE' ? { reduce_pct: e.reduce_pct ?? '50' } : {}) };
-  const text = `交易信号 / Trade signal · ${payload.symbol} ${action}${analysis ? ' · 分析 / Analysis' : ''}${payload.paper ? ' · 纸面模拟 / Paper' : ''}: ${payload.reason}\n${JSON.stringify(payload)}`;
+  // OKX.AI 订阅信号规范:以【Futures】/【Spot】等类型头开头、字段顺序固定、只含一个具体价格、≤200 字;
+  // 买方 agent 靠类型头判断能否执行,所以分析/纸面类一律发「Service message」而不带类型头。完整结构化字段留在 payload(投递账本)。
+  const text = formatSignalText(e);
   return { payload, text };
+}
+export const SIGNAL_MAX_CHARS = 200;
+/** 官方订阅信号类型头(中英)。 */
+export const SIGNAL_HEADERS = ['【Spot】', '【Futures】', '【Prediction】', '【Options】', '【DeFi】', '【现货】', '【合约】', '【预测市场】', '【期权】'];
+/** 订阅交付文本合规检查:可执行信号以类型头开头,非可执行消息以「Service message:」开头;≤200 字;无收益保证词。 */
+export function validateSignalText(text: string): { ok: boolean; executable: boolean; errors: string[] } {
+  const t = text.trim(); const errors: string[] = [];
+  const executable = SIGNAL_HEADERS.some((h) => t.startsWith(h));
+  if (!executable && !t.startsWith('Service message:')) errors.push('必须以【Futures】/【Spot】等类型头或「Service message:」开头');
+  if ([...t].length > SIGNAL_MAX_CHARS) errors.push(`超过 ${SIGNAL_MAX_CHARS} 字`);
+  if (!t) errors.push('空文本');
+  if (BANNED_WORDS.test(t)) errors.push('包含收益保证词');
+  return { ok: errors.length === 0, executable, errors };
+}
+/** 把一条发布事件格式化成订阅交付文本(可执行 → 规范信号行;分析/纸面/FLAT → Service message)。now 用于按剩余有效期写「Valid for」。 */
+export function formatSignalText(e: PublishEvent, now: number = e.signal_time): string {
+  const analysis = !e.signal_only && (e.paper || e.backend === 'paper' || e.kind === 'decision_record');
+  const action = e.kind === 'entry_filled' || e.kind === 'decision_record' || e.kind === 'strategy_signal' ? e.direction === 'long' ? 'LONG' : e.direction === 'short' ? 'SHORT' : 'FLAT' : e.kind === 'reduce_filled' ? 'REDUCE' : 'CLOSE';
+  if (analysis || action === 'FLAT') return serviceMessage(`${symbolToInstId(e.symbol, e.market)} ${action}${e.paper || e.backend === 'paper' ? ' · Paper' : ''} · 分析 / Analysis: ${summarizeJudgmentForAnalysis(e.reason)}`);
+  return signalLine(e, action, now);
+}
+const clip = (s: string, n = SIGNAL_MAX_CHARS) => [...s].length <= n ? s : `${[...s].slice(0, n - 1).join('')}…`;
+/** 非可执行的服务消息(官方参考实现 sig_text 同款前缀),≤200 字。 */
+export function serviceMessage(body: string): string { return clip(`Service message: Trading Swarm · ${body.replace(/\s+/g, ' ').trim()}`); }
+function validFor(ms: number): string {
+  const m = Math.max(1, Math.round(ms / 60_000));
+  return m < 120 ? `${m}min` : `${Math.round(m / 60)}h`;
+}
+/** 可执行信号的一行规范文本。now 用于重发旧信号时按剩余有效期计算「Valid for」。 */
+export function signalLine(e: PublishEvent, action: string, now: number): string {
+  const spot = e.market === 'spot';
+  const inst = symbolToInstId(e.symbol, e.market);
+  const limit = e.entry_type === 'limit';
+  const price = e.price ? `${limit ? 'Limit | Order Price' : 'Market | Reference Price'} ${e.price}${spot ? ' USDT' : ''}` : 'Market';
+  const risk = [e.stop_loss ? `Stop Loss ${e.stop_loss}` : null, e.take_profit[0] ? `Take Profit ${e.take_profit[0]}` : null];
+  const until = e.valid_until ?? e.signal_time + 180_000;
+  const valid = `Valid for ${validFor(until - now)}`;
+  const side = e.direction === 'short' ? 'SHORT' : 'LONG';
+  let fields: (string | null)[];
+  if (action === 'CLOSE' || action === 'REDUCE') {
+    const verb = action === 'CLOSE' ? 'CLOSE' : `REDUCE ${e.reduce_pct ?? '50'}%`;
+    fields = spot ? [`【Spot】OKX`, inst, action === 'CLOSE' ? 'SELL ALL' : `SELL ${e.reduce_pct ?? '50'}%`, e.price ? `Market | Reference Price ${e.price} USDT` : 'Market', valid]
+      : [`【Futures】${inst}`, `${verb} ${side}`, e.price ? `Market | Reference Price ${e.price}` : 'Market', valid];
+  } else fields = spot ? [`【Spot】OKX`, inst, e.direction === 'short' ? 'SELL' : 'BUY', price, ...risk, valid]
+    : [`【Futures】${inst}`, `${side} ${e.leverage ?? 1}x`, price, ...risk, valid];
+  const line = fields.filter(Boolean).join(' | ');
+  const tagged = `${line} | Trading Swarm${e.strategy ? ` ${e.strategy.name} ${e.strategy.timeframe}` : ''}`;
+  return [...tagged].length <= SIGNAL_MAX_CHARS ? tagged : clip(line);
 }
 export class MarketPublisher {
   private chain: Promise<unknown> = Promise.resolve();
@@ -45,7 +95,7 @@ export class MarketPublisher {
     if (!strategyRun && (!s.backend_filter.includes(backend) || (analysis ? !s.publish_analysis : !s.publish_orders) || (s.symbols.length && !s.symbols.includes(e.symbol)) || (s.min_confidence !== undefined && (e.confidence ?? 0) < s.min_confidence))) return null;
     if (e.kind === 'decision_record' && e.thread_id) return null;
     const { payload, text } = renderDeliverable(e, s);
-    let refusal: string | null = BANNED_WORDS.test(text) ? '敏感词拦截:禁止收益保证' : null;
+    let refusal: string | null = BANNED_WORDS.test(text) || BANNED_WORDS.test(e.reason) ? '敏感词拦截:禁止收益保证' : null;
     let asp = ''; let subscribers: string[] = [];
     if (!refusal) {
       try { asp = await this.deps.aspId(); subscribers = [...new Set(list(await this.deps.cli.call('subscribe-active', ['--agent-id', asp])).map((x) => String(x['jobId'] ?? x['job_id'] ?? '')).filter(Boolean))]; }
@@ -73,6 +123,8 @@ export class MarketPublisher {
       const result = await this.deps.cli.call('deliver', [job, '--deliverable-text', text, '--agent-id', asp]);
       this.db.prepare("UPDATE okx_market_delivery_out_job SET status='delivered',error=NULL,result_json=?,updated_at=? WHERE event_id=? AND job_id=?").run(JSON.stringify(data(result)), Date.now(), event, job);
     } catch (err) {
+      // deliver 成功时 CLI 可能只退出 0、不打 JSON(cli_invalid_json 只在 exit 0 时出现):按已投递记。
+      if (err instanceof CliError && err.code === 'cli_invalid_json') { this.db.prepare("UPDATE okx_market_delivery_out_job SET status='delivered',error=NULL,result_json=?,updated_at=? WHERE event_id=? AND job_id=?").run(JSON.stringify({ exit: 0, stdout: err.raw_message.slice(0, 500) }), Date.now(), event, job); return; }
       this.db.prepare("UPDATE okx_market_delivery_out_job SET status='failed',error=?,updated_at=? WHERE event_id=? AND job_id=?").run((err as Error).message, Date.now(), event, job);
     }
   }

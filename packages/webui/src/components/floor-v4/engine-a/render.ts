@@ -3,13 +3,14 @@
  * 世界画进 640×360 离屏缓冲,再按整数倍放大 + 相机裁切到画布;点人推镜头进房间。
  * 气泡用 DOM 覆盖层(中文清楚),其余全是 Canvas 像素。React 以后只需 useEffect 里 mount/destroy + setData。
  */
+import { t as tr } from '@/lib/i18n';
 import type { EvoDay, FloorHandle, FloorSnapshot, MountOptions, Pt, ScreenPt, TaskIcon, ThemeId } from './types';
 import { THEMES, type Theme } from './themes';
 import { BUF_H, BUF_W, DESKS, EX, EY, GLOBE, SOFA, TABLE, VIEW, WALL_H, WORLD_H, WORLD_W, deskOf } from './layout';
 import { buildBackground, buildLights, buildVignette, drawFloorDynamic, drawForeground, drawLounge, drawPlants, drawTable, drawWallDynamic, PLANTS, windowRects } from './scene';
 import { drawChair, drawDesk, drawMailbox, evoCellRect, EVO_CELLS, mailboxRect, MAILBOX, plateRect } from './desks';
 import { drawRoom, roomEvoCellRect, ROOM_AGENT } from './rooms';
-import { World, type AgentSim } from './world';
+import { World, computeWeather, type AgentSim } from './world';
 import { drawChar, drawEnvelope, shadow } from './sprites';
 import { ellipse, makeCanvas, mix, px, rect, rgba, text, textWidth, type Ctx } from './pixel';
 
@@ -35,6 +36,23 @@ const ENGINE_CSS = `
 .fa-bubble.alert{background:#ffd8de}.fa-bubble.alert::after{background:#ffd8de}
 @keyframes fa-pop{from{transform:translate(-50%,-80%) scale(.6);opacity:0}to{transform:translate(-50%,-100%) scale(1);opacity:1}}
 @media (prefers-reduced-motion: reduce){.fa-bubble{animation:none}}
+.card.room{max-height:min(70vh,calc(100% - 32px));overflow:auto}
+.card.room .brain{display:flex;align-items:center;gap:6px;font:12px/1.3 var(--mono);color:var(--dim);margin:-4px 0 6px;min-width:0}
+.card.room .brain[hidden],.card.room .slices[hidden]{display:none}
+.card.room .brain span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card.room .brain .bdot{flex:none;width:8px;height:8px;background:var(--down,#ff5d7a);box-shadow:0 0 0 2px rgba(0,0,0,.35)}
+.card.room .slices{max-height:150px;overflow:auto;margin:-4px 0 10px;border:2px solid var(--line);background:var(--panel-2);padding:5px 7px;font-size:12px;line-height:1.35}
+.card.room .slices .sl-empty{color:var(--dim)}
+.card.room .slices .sl + .sl{margin-top:5px;padding-top:5px;border-top:1px dashed var(--line)}
+.card.room .slices .slh{display:flex;align-items:baseline;gap:6px;min-width:0}
+.card.room .slices .slh b{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card.room .slices .eng{flex:none;font:700 10px/1.2 var(--mono);font-style:normal;padding:1px 4px;border:1px solid currentColor;color:var(--dim)}
+.card.room .slices .eng.code{color:var(--up)}
+.card.room .slices .eng.decision{color:var(--warn)}
+.card.room .slices .eng.llm{color:var(--accent)}
+.card.room .slices ul{margin:3px 0 0;padding:0 0 0 12px;list-style:square}
+.card.room .slices li{padding:1px 0;border:0;font-size:11px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card.room .slices li.more{list-style:none;color:var(--faint)}
 `;
 
 function glove(): string {
@@ -71,6 +89,7 @@ export function mount(canvas: HTMLCanvasElement, opts: MountOptions): FloorHandl
   const world = new World();
   let reduced = opts.reducedMotion ?? mq.matches;
   world.reduced = reduced;
+  world.onSfx = opts.onSfx ?? null;
   let th: Theme = THEMES[opts.theme];
   let bg = buildBackground(th);
   let lights = buildLights(th);
@@ -192,14 +211,16 @@ export function mount(canvas: HTMLCanvasElement, opts: MountOptions): FloorHandl
       hoverSince = t;
       waved = false;
       if (h?.kind === 'evo') opts.onHoverEvo?.({ role: h.role, day: h.day, at: { x: e.clientX, y: e.clientY } });
-      if (h?.kind === 'window') opts.onHoverWindow?.(world.weather.explain, { x: e.clientX, y: e.clientY });
+      if (h?.kind === 'window') opts.onHoverWindow?.(weatherText(), { x: e.clientX, y: e.clientY });
     } else if (h?.kind === 'evo') opts.onHoverEvo?.({ role: h.role, day: h.day, at: { x: e.clientX, y: e.clientY } });
-    else if (h?.kind === 'window') opts.onHoverWindow?.(world.weather.explain, { x: e.clientX, y: e.clientY });
+    else if (h?.kind === 'window') opts.onHoverWindow?.(weatherText(), { x: e.clientX, y: e.clientY });
     const clickable = h && h.kind !== 'floor' && h.kind !== 'window';
     canvas.style.cursor = clickable ? cursorUrl : cursorUrl;
-    canvas.title = h?.kind === 'plate' ? '看它 30 天的进化方格' : h?.kind === 'mailbox' ? '你的信箱:待批订单' : '';
+    canvas.title = h?.kind === 'plate' ? tr('看它 30 天的进化方格') : h?.kind === 'mailbox' ? tr('你的信箱:待批订单') : '';
   };
   let roomCursor: Pt | null = null;
+  /** 天气解释按当前语言现算(语言可运行时切换,缓存在 world.weather 里的会过期) */
+  const weatherText = () => (snapshot ? computeWeather(snapshot).explain : world.weather.explain);
   const onLeave = () => {
     world.cursor = null;
     roomCursor = null;
@@ -552,7 +573,7 @@ export function mount(canvas: HTMLCanvasElement, opts: MountOptions): FloorHandl
         mode = mode === 'room' ? 'room' : 'zoomIn';
         zoomP = 0;
         if (mode === 'room') opts.onFocusChange?.(role);
-        world.say(role, sim.data.line || '在呢', 3500, 'say');
+        world.say(role, sim.data.line || tr('在呢'), 3500, 'say');
       } else if (mode === 'room' || mode === 'zoomIn') {
         mode = 'zoomOut';
         zoomP = 0;
@@ -576,7 +597,8 @@ export function mount(canvas: HTMLCanvasElement, opts: MountOptions): FloorHandl
       world.say(role, text, ms ?? 2600);
     },
     sendGold(to) {
-      world.sendEnvelope('you', to, '', '接住,马上下单', true);
+      world.sendEnvelope('you', to, '', tr('接住,马上下单'), true);
+      opts.onSfx?.('approval');
     },
     setPaused(p) {
       paused = p;

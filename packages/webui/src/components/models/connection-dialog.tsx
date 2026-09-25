@@ -35,7 +35,7 @@ const ERROR_HINT: Record<string, string> = {
   base_url_unresolvable: 'base_url 的域名解析不了',
   api_key_invalid: 'API key 至少 16 位,不能有空白',
 };
-function saveErrorText(e: Error): string {
+export function saveErrorText(e: Error): string {
   const code = (e as Error & { code?: string }).code;
   const hint = code ? ERROR_HINT[code] : undefined;
   if (!hint) return e.message;

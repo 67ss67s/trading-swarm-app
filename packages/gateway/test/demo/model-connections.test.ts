@@ -205,6 +205,53 @@ describe('ModelRouter', () => {
     expect(router.store.get(cli.id)?.status).toBe('ok');
   });
 
+  it('testRole: bound role tests its own connection + model, fallback calls the legacy slot, decision unset fails, failures redacted', async () => {
+    let mode: 'ok' | 'unauthorized' = 'ok';
+    const f = fakeFetch((c) => {
+      if (mode === 'unauthorized') return { status: 401, body: { error: { message: `invalid key ${KEY}` } } };
+      if (c.url.endsWith('/alpha/decisions')) return { status: 200, body: { model: 'typesafe/jev-1.13', answers: { ok: { type: 'noul', noul: 0.5 } }, usage: { input_tokens: 30, output_tokens: 0, cost: 0.000002 } } };
+      if (c.url.endsWith('/models')) return { status: 200, body: { data: [] } };
+      return chatOk;
+    });
+    const failing: Brain = { name: 'pi:broken', async complete() { throw new Error('spawn pi ENOENT'); } };
+    const { router } = makeRouter({ fetchFn: f.fn, brains: { cheap: failing } });
+
+    // 回退主脑:直接调旧槽位,不产生出站请求
+    const chat = await router.testRole('chat');
+    expect(chat).toMatchObject({ role: 'chat', source: 'fallback_main', name: 'pi:zai/glm-5.3', ok: true });
+    expect(f.calls).toHaveLength(0);
+    // 回退副脑起不来:ok=false,带错误原因
+    const util = await router.testRole('utility');
+    expect(util).toMatchObject({ role: 'utility', source: 'fallback_cheap', ok: false });
+    expect(util.detail).toContain('ENOENT');
+    // decision 未绑定
+    expect(await router.testRole('decision')).toMatchObject({ role: 'decision', source: 'unset', ok: false });
+
+    const or = await router.createConnection({ kind: 'openrouter', api_key: KEY });
+    router.setBinding('judge', { connection_id: or.id, model: 'z-ai/glm-5.3' });
+    const judge = await router.testRole('judge');
+    expect(judge).toMatchObject({ role: 'judge', source: 'binding', name: 'openrouter:z-ai/glm-5.3', ok: true });
+    expect(f.calls.find((c) => c.url.endsWith('/chat/completions'))!.body['model']).toBe('z-ai/glm-5.3');
+    expect(router.store.get(or.id)?.status).toBe('ok');
+
+    router.setBinding('decision', { connection_id: or.id, model: null });
+    const dec = await router.testRole('decision');
+    expect(dec).toMatchObject({ role: 'decision', source: 'binding', ok: true });
+    expect(dec.detail).toContain('noul=');
+
+    // CLI 绑定走 testCli
+    const cli = await router.createConnection({ kind: 'cli', cli: 'codex' });
+    router.setBinding('research', { connection_id: cli.id, model: null });
+    expect(await router.testRole('research')).toMatchObject({ source: 'binding', name: 'codex:default', ok: true });
+
+    mode = 'unauthorized';
+    const bad = await router.testRole('judge');
+    expect(bad.ok).toBe(false);
+    expect(bad.detail).not.toContain(KEY);
+    expect(router.store.get(or.id)?.status).toBe('error');
+    await expect(router.testRole('nope')).rejects.toMatchObject({ status: 404 });
+  });
+
   it('imports openrouter.env once and binds decision to Jev', async () => {
     const d = tmp();
     const env = path.join(d, 'openrouter.env');

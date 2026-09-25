@@ -15,7 +15,7 @@ import type { AssetExecutor, BarsLoader } from '../backtest-report.js';
 import { hash } from '../primitives.js';
 import { ResearchStore } from '../store.js';
 import { StrategyStore } from '../strategies/store.js';
-import { StrategyService } from '../strategies/service.js';
+import { irHash, StrategyService } from '../strategies/service.js';
 import type { ResearchService } from '../service.js';
 import { JudgeDecisionStore } from '../judge/index.js';
 import type { AssetRecommendation } from '../../recommend.js';
@@ -27,7 +27,7 @@ import { runIterate, runMatrix, type SearchCtx } from './search.js';
 import { normalizeSpec, prefillFromRecommendation } from './spec.js';
 import { holdoutTest, holm } from './stats.js';
 import { MatrixStudyStore } from './store.js';
-import { HORIZON_OF, MATRIX_EVENT, type FailureCause, type MatrixConclusion, type MatrixEvent, type MatrixFinalist, type MatrixSource, type MatrixStudyRow, type MatrixStudyStatus, type MatrixTimeframe, type MatrixVariantRef } from './types.js';
+import { HORIZON_OF, isMyFamily, MATRIX_EVENT, type FailureCause, type MatrixStudySpec, type MyStrategySnapshot, type MatrixConclusion, type MatrixEvent, type MatrixFinalist, type MatrixSource, type MatrixStudyRow, type MatrixStudyStatus, type MatrixTimeframe, type MatrixVariantRef } from './types.js';
 
 export interface PreflightLike { deployable: boolean; blockers: { code: string; message: string }[]; warnings: { code: string; message: string }[] }
 export interface AdoptResult { strategy_id: string; version: number; preflight: { deployable: boolean; warnings: { code: string; message: string }[] }; horizon: MatrixFinalist['horizon']; source: MatrixSource }
@@ -66,25 +66,41 @@ export class MatrixStudyService {
   // ---------------------------------------------------------------- 规格 / 估算 / 创建
   private judgeDeps(): MatrixJudgeDeps | undefined { const j = this.deps.judge; return typeof j === 'function' ? j() : j; }
   private rec(id: string | null | undefined): AssetRecommendation | null { return id ? this.deps.recommendation?.(id) ?? null : null; }
+  /** 「我的策略」引用解析:未归档策略的指定版本(缺省当前版本) */
+  private resolveStrategy = (strategy_id: string, version: number | null): { version: number } | null => {
+    const st = new StrategyStore(this.deps.db).get(strategy_id);
+    if (!st || st.status === 'archived') return null;
+    const v = version ?? st.current_version;
+    return v && new StrategyStore(this.deps.db).versionIR(strategy_id, v) ? { version: v } : null;
+  };
+  /** spec.strategies → 冻结快照(IR 取该版本,之后策略再改也不影响本研究) */
+  private mineOf(spec: MatrixStudySpec): MyStrategySnapshot[] {
+    const store = new StrategyStore(this.deps.db);
+    return (spec.strategies ?? []).map((r) => {
+      const st = store.require(r.strategy_id), ir = store.versionIR(r.strategy_id, r.version);
+      if (!ir) throw Error(`strategy_not_found:${r.strategy_id}@v${r.version}`);
+      return { strategy_id: r.strategy_id, version: r.version, name: st.name, symbol: st.symbol, timeframe: st.timeframe, ir, ir_hash: irHash(ir) };
+    });
+  }
   prefill(recommendation_id: string) {
     const r = this.rec(recommendation_id); if (!r) throw Error('recommendation_not_found');
-    const p = prefillFromRecommendation(r), spec = normalizeSpec({ ...p.spec }, { now: this.now(), recommendation: r, model_profile: this.deps.modelProfile?.() ?? null });
-    return { spec, notes: p.notes, estimate: estimate(buildManifest(spec, r, this.now())) };
+    const p = prefillFromRecommendation(r), spec = normalizeSpec({ ...p.spec }, { now: this.now(), recommendation: r, model_profile: this.deps.modelProfile?.() ?? null, resolveStrategy: this.resolveStrategy });
+    return { spec, notes: p.notes, estimate: estimate(buildManifest(spec, r, this.now(), this.mineOf(spec))) };
   }
   private specOf(body: Record<string, unknown>) {
     const raw = (body.spec ?? {}) as Record<string, unknown>;
     const rid = (body.recommendation_id ?? raw.recommendation_id) as string | undefined;
     const r = rid ? this.rec(rid) : null;
     if (rid && !r) throw Error('recommendation_not_found');
-    const spec = normalizeSpec({ ...raw, ...(rid ? { recommendation_id: rid } : {}) }, { now: this.now(), recommendation: r, model_profile: this.deps.modelProfile?.() ?? null });
-    return { spec, rec: r };
+    const spec = normalizeSpec({ ...raw, ...(rid ? { recommendation_id: rid } : {}) }, { now: this.now(), recommendation: r, model_profile: this.deps.modelProfile?.() ?? null, resolveStrategy: this.resolveStrategy });
+    return { spec, rec: r, mine: this.mineOf(spec) };
   }
   estimate(body: Record<string, unknown>): { spec: ReturnType<typeof normalizeSpec>; estimate: MatrixEstimate; cells: { id: string; applicability: string; reason: string | null; variants: number }[] } {
-    const { spec, rec } = this.specOf(body), m = buildManifest(spec, rec, this.now());
+    const { spec, rec, mine } = this.specOf(body), m = buildManifest(spec, rec, this.now(), mine);
     return { spec, estimate: estimate(m), cells: m.cells.map((c) => ({ id: c.id, applicability: c.applicability, reason: c.reason, variants: c.variants.length })) };
   }
   create(body: Record<string, unknown>): MatrixStudyRow {
-    const { spec, rec } = this.specOf(body), m = buildManifest(spec, rec, this.now()), est = estimate(m);
+    const { spec, rec, mine } = this.specOf(body), m = buildManifest(spec, rec, this.now(), mine), est = estimate(m);
     if (!est.within_budget) throw Error(`budget_max_variants_exceeded:${est.matrix_trials}>${spec.budget.max_variants}`);
     if (!est.cells.applicable) throw Error('no_applicable_cells');
     for (const [tf, g] of Object.entries(m.segments)) {
@@ -336,6 +352,30 @@ export class MatrixStudyService {
     const h = f.holdout!;
     const description = `[矩阵研究 ${id} · horizon=${f.horizon}(${H} ${f.timeframe}) · ${f.family}/${f.side}/${f.arm} · 来源:${src}] 留出段 ${(h.total_return * 100).toFixed(1)}%(同敞口持有 ${h.exposure_matched_hold === null ? '—' : (h.exposure_matched_hold * 100).toFixed(1) + '%'},${h.trades} 笔,Holm p=${f.test?.p_value?.toFixed(4) ?? '—'});账户级回放 ${f.portfolio ? (f.portfolio.total_return * 100).toFixed(1) + '%' : '—'};证据口径 ${row.manifest.spec.protocol.evidence_mode}`;
     let result: AdoptResult | null = null;
+    // 我的策略行:adopt 出来的是该策略的新版本(同 IR 不重复建版本),不是新策略;登记的资产 / 周期跟到这一版
+    const snap = isMyFamily(f.family) ? (row.manifest.my_strategies ?? []).find((m) => `my:${m.strategy_id}@v${m.version}` === f.family) ?? null : null;
+    if (isMyFamily(f.family) && !snap) throw Error('my_strategy_snapshot_missing');
+    if (snap) {
+      this.store.tx(() => {
+        const st = svc.store.require(snap.strategy_id);
+        if (st.status === 'archived') throw Error('strategy_archived_conflict');
+        const moved = [st.symbol !== f.symbol ? `资产 ${st.symbol}→${f.symbol}` : null, st.timeframe !== f.timeframe ? `周期 ${st.timeframe}→${f.timeframe}` : null].filter(Boolean).join(',');
+        svc.addVersion(snap.strategy_id, { strategy_ir: f.ir, note: `${description}(基于 v${snap.version}${moved ? `;${moved}` : ''})`.slice(0, 4000) });
+        const version = svc.store.versionByHash(snap.strategy_id, irHash(f.ir));
+        if (!version) throw Error('adopt_version_missing');
+        if (moved) { svc.store.update(snap.strategy_id, { symbol: f.symbol, timeframe: f.timeframe }); svc.store.event(snap.strategy_id, 'version_added', { version, note: `矩阵研究 ${id} adopt:${moved}` }); }
+        const pf = this.deps.preflight ? this.deps.preflight(snap.strategy_id, version) : staticPreflight(svc, snap.strategy_id, version, f.ir, !!this.deps.runnerHasJudge);
+        if (!pf.deployable) throw Error(`adopt_preflight_blocked:${pf.blockers.map((b) => `${b.code}(${b.message})`).join(';').slice(0, 600)}`);
+        this.store.insertAdoption(id, finalist_id, snap.strategy_id, version);
+        result = { strategy_id: snap.strategy_id, version, preflight: { deployable: true, warnings: pf.warnings }, horizon: f.horizon, source: f.source };
+        const cur = this.store.require(id);
+        this.store.handoff(cur, { from: 'gate_captain', to: 'thread_manager', kind: 'request', key: `adopt:${finalist_id}`, summary: `矩阵研究 finalist ${f.symbol} ${f.timeframe} 已存为「${snap.name}」v${version}(基于 v${snap.version}),可设为当前策略`, payload: { finalist_id, strategy_id: snap.strategy_id, version, base_version: snap.version, horizon: f.horizon, source: f.source } });
+        this.store.event(cur, 'adopted', { adopted: { finalist_id, strategy_id: snap.strategy_id, version } });
+      });
+      this.flush();
+      try { this.deps.onAdopted?.(this.store.require(id), { ...result!, finalist_id }); } catch { /* 回调失败不影响 adopt */ }
+      return result!;
+    }
     this.store.tx(() => {
       const s = svc.create({ name: (name?.trim() || `${f.symbol.replace(/USDT$/, '')} ${H}${f.timeframe} ${f.family}${f.arm === 'code_judge' ? '+判断' : ''}`).slice(0, 120), description: description.slice(0, 4000), symbol: f.symbol, timeframe: f.timeframe, strategy_ir: f.ir });
       const version = svc.store.require(s.id).current_version;
@@ -355,7 +395,7 @@ export class MatrixStudyService {
 
   // ---------------------------------------------------------------- 读视图与事件
   view(row: MatrixStudyRow, detail = true) {
-    const s = row.state, base = { id: row.id, status: row.status, stage: row.stage, research_program_id: row.research_program_id, manifest_hash: row.manifest_hash, protocol_hash: row.protocol_hash, created_at: row.created_at, updated_at: row.updated_at, progress: s.progress, holdout_state: s.holdout_state, conclusion: s.conclusion, usage: s.usage, ledger: s.ledger, stop_reason: s.stop_reason, error: s.error, origin: row.manifest.spec.origin, spec: row.manifest.spec };
+    const s = row.state, base = { id: row.id, status: row.status, stage: row.stage, research_program_id: row.research_program_id, manifest_hash: row.manifest_hash, protocol_hash: row.protocol_hash, created_at: row.created_at, updated_at: row.updated_at, progress: s.progress, holdout_state: s.holdout_state, conclusion: s.conclusion, usage: s.usage, ledger: s.ledger, stop_reason: s.stop_reason, error: s.error, origin: row.manifest.spec.origin, spec: row.manifest.spec, my_strategies: (row.manifest.my_strategies ?? []).map((m) => ({ strategy_id: m.strategy_id, version: m.version, name: m.name, symbol: m.symbol, timeframe: m.timeframe })) };
     if (!detail) return { ...base, finalists: s.finalists.map((f) => ({ id: f.id, symbol: f.symbol, timeframe: f.timeframe, family: f.family, arm: f.arm, passed: f.passed, horizon: f.horizon })) };
     return { ...base, segments: row.manifest.segments, cells: row.manifest.cells.map((c) => ({ id: c.id, symbol: c.symbol, timeframe: c.timeframe, horizon: HORIZON_OF[c.timeframe], family: c.family, side: c.side, arm: c.arm, applicability: c.applicability, reason: c.reason, variants: c.variants.length, result: s.cells[c.id] ?? null })), generations: s.generations, finalists: s.finalists, notes: s.notes.slice(-50), release: this.store.release(row.id) ? { status: this.store.release(row.id)!.status, released_at: this.store.release(row.id)!.released_at } : null, adoptions: s.finalists.map((f) => ({ finalist_id: f.id, adopted: this.store.adoption(row.id, f.id) })).filter((x) => x.adopted) };
   }

@@ -8,11 +8,11 @@ import { DEFAULT_EXECUTION } from '../backtest-report.js';
 import { irVariants, type FamilyKey } from '../batch/families.js';
 import { PERP_MAKER, PERP_TAKER, STRESS_FEE_MULTIPLE } from '../improve/evaluate.js';
 import { hash } from '../primitives.js';
-import { timeframeMillis } from '../strategy.js';
+import { checkIR, timeframeMillis } from '../strategy.js';
 import { requiredPurgeBars } from '../judge/purge.js';
 import type { AssetRecommendation, Horizon } from '../../recommend.js';
 import { usdMul } from './stats.js';
-import { MATRIX_RUNNER_VERSION, RUNNABLE_TIMEFRAMES, type MatrixCell, type MatrixManifest, type MatrixStudySpec, type MatrixTimeframe, type MatrixVariantRef, type TimeframeSegments } from './types.js';
+import { MATRIX_RUNNER_VERSION, RUNNABLE_TIMEFRAMES, myFamilyKey, type MatrixCell, type MatrixFamily, type MatrixSide, type MyStrategySnapshot, type MatrixManifest, type MatrixStudySpec, type MatrixTimeframe, type MatrixVariantRef, type TimeframeSegments } from './types.js';
 
 const DAY = 86_400_000;
 export const horizonOf = (tf: MatrixTimeframe): Horizon => (tf === '1d' ? 'long' : tf === '4h' ? 'mid' : 'short');
@@ -58,12 +58,46 @@ export function withJudge(ir: StrategyIR, spec: MatrixStudySpec): StrategyIR {
   return { ...ir, version: 2, judge: spec.judge, label: `${ir.label} · 判断要素` } as StrategyIR;
 }
 
-export function expandCells(spec: MatrixStudySpec, rec: AssetRecommendation | null, segments: MatrixManifest['segments'] = {}): MatrixCell[] {
+/** 去掉 judge 块(纯代码臂):同一份规则,不经过判断;v2 只为 judge 存在,去掉后回到 v1(schema 要求) */
+export function withoutJudge(ir: StrategyIR): StrategyIR { if (!ir.judge) return ir; const { judge: _j, ...rest } = ir; void _j; return { ...rest, version: 1 } as StrategyIR; }
+
+/**
+ * 「我的策略」一格的 IR(§9.53 B 自选策略行):
+ * - 周期:IR 本身不带周期,参数按根数解释;策略登记周期 ≠ 格子周期时按格子周期跑,reason 记 `timeframe_override:<原>→<格>`;
+ *   IR 在格子周期上通不过结构检查(如高周期参数低于基础周期)→ not_applicable `my_strategy_incompatible:…`。
+ * - 方向:order.direction(无 order 块 = 做多);long/short 只进同向格;both 只在 long 格评估一次,short 格标 not_applicable。
+ * - 市场:order.market ≠ 研究市场时,现货 IR 进永续研究直接改 market;永续 IR 进现货研究只在做多且无杠杆时改,否则 not_applicable。
+ * - 臂:code 臂去掉 judge;code_judge 臂 IR 自带 judge 就用它自己的(model_profile_ref 钉到本次冻结的模型配置),没有就附研究 spec 的 judge。
+ */
+export function myCellIR(snap: MyStrategySnapshot, spec: MatrixStudySpec, tf: MatrixTimeframe, side: MatrixSide, arm: MatrixCell['arm']): { ir: StrategyIR; notes: string[] } | { na: string } {
+  let ir = snap.ir; const notes: string[] = [];
+  const dir = ir.order?.direction ?? 'long';
+  if (dir === 'both' && side === 'short') return { na: 'my_strategy_direction:both_evaluated_in_long_cell' };
+  if (dir !== 'both' && dir !== side) return { na: `my_strategy_direction:${dir}` };
+  if (ir.order && ir.order.market !== spec.market) {
+    if (spec.market === 'spot' && (dir !== 'long' || (ir.order.leverage ?? 1) > 1)) return { na: `my_strategy_market:${ir.order.market}` };
+    ir = { ...ir, order: { ...ir.order, market: spec.market, ...(spec.market === 'spot' ? { leverage: 1 } : {}) } };
+    notes.push(`market_override:${snap.ir.order!.market}→${spec.market}`);
+  }
+  if (snap.timeframe !== tf) notes.push(`timeframe_override:${snap.timeframe}→${tf}`);
+  const c = checkIR(withoutJudge(ir), tf);
+  if (!c.ok) return { na: `my_strategy_incompatible:${c.checks.filter((x) => !x.ok).map((x) => x.name).join(',') || 'invalid'}`.slice(0, 200) };
+  if (arm === 'code') return { ir: withoutJudge(ir), notes };
+  if (ir.judge) {
+    const ref = spec.model_profile!.ref;
+    if (ir.judge.model_profile_ref !== ref) { ir = { ...ir, judge: { ...ir.judge, model_profile_ref: ref } }; notes.push('own_judge:model_profile_rebound'); } else notes.push('own_judge');
+    return { ir, notes };
+  }
+  return { ir: withJudge(ir, spec), notes };
+}
+
+export function expandCells(spec: MatrixStudySpec, rec: AssetRecommendation | null, segments: MatrixManifest['segments'] = {}, mine: MyStrategySnapshot[] = []): MatrixCell[] {
   const cells: MatrixCell[] = [];
   const recRow = (sym: string) => rec?.rows.find((r) => r.symbol === sym) ?? null;
-  for (const symbol of spec.symbols) for (const tf of spec.timeframes) for (const family of spec.families) for (const side of spec.sides) for (const arm of spec.arms) {
-    const id = `${symbol}|${tf}|${family}|${side}|${arm}`;
-    const cell = (applicability: MatrixCell['applicability'], reason: string | null, variants: MatrixVariantRef[] = [], seg: TimeframeSegments | null = null, holding_cap: number | null = null): MatrixCell => ({ id, symbol, timeframe: tf, family: family as FamilyKey, side, arm, applicability, reason, variants, segments: seg, holding_cap });
+  const rows: { family: MatrixFamily; snap: MyStrategySnapshot | null }[] = [...spec.families.map((f) => ({ family: f as MatrixFamily, snap: null })), ...(spec.strategies ?? []).map((r) => ({ family: myFamilyKey(r.strategy_id, r.version), snap: mine.find((m) => m.strategy_id === r.strategy_id && m.version === r.version) ?? null }))];
+  for (const symbol of spec.symbols) for (const tf of spec.timeframes) for (const { family, snap } of rows) for (const side of spec.sides) for (const arm of spec.arms) {
+    const id = `${symbol}|${tf}|${family}|${side}|${arm}`, my = family.startsWith('my:');
+    const cell = (applicability: MatrixCell['applicability'], reason: string | null, variants: MatrixVariantRef[] = [], seg: TimeframeSegments | null = null, holding_cap: number | null = null): MatrixCell => ({ id, symbol, timeframe: tf, family, side, arm, applicability, reason, variants, segments: seg, holding_cap });
     if (family === 'xsmom' || family === 'carry') { cells.push(cell('not_applicable', 'portfolio_family_separate_study')); continue; }
     if (spec.market === 'spot' && side === 'short') { cells.push(cell('not_applicable', 'spot_cannot_short')); continue; }
     if (!RUNNABLE_TIMEFRAMES.includes(tf)) { cells.push(cell('research_only', 'short_timeframe_execution_unverified')); continue; }
@@ -74,31 +108,42 @@ export function expandCells(spec: MatrixStudySpec, rec: AssetRecommendation | nu
       if (!fit.eligible) { cells.push(cell('not_applicable', `recommendation:${fit.reason ?? 'ineligible'}`)); continue; }
       if (fit.direction && fit.direction !== 'both' && fit.direction !== side) { cells.push(cell('not_applicable', 'recommendation:direction')); continue; }
     }
-    const base = irVariants(spec.market, side, tf).filter((v) => v.family === family);
-    if (!base.length) { cells.push(cell('not_applicable', 'family_side_unavailable')); continue; }
     if (arm === 'code_judge' && (!spec.judge || !spec.model_profile)) { cells.push(cell('not_applicable', 'judge_runtime_unavailable')); continue; }
+    let base: { id: string; param: string; ir: StrategyIR; vol_target?: { annual: number; days: number } }[], notes: string[] = [];
+    if (my) {
+      if (!snap) { cells.push(cell('not_applicable', 'my_strategy_snapshot_missing')); continue; }
+      const r = myCellIR(snap, spec, tf, side, arm);
+      if ('na' in r) { cells.push(cell('not_applicable', r.na)); continue; }
+      notes = r.notes;
+      base = [{ id: `${family}:${spec.market}:${side}:${tf}`, param: `v${snap.version}`, ir: r.ir }];
+    } else {
+      base = irVariants(spec.market, side, tf).filter((v) => v.family === family);
+      if (!base.length) { cells.push(cell('not_applicable', 'family_side_unavailable')); continue; }
+    }
     const outer = segments[tf];
     if (!outer) { cells.push(cell('research_only', 'timeframe_segments_missing')); continue; }
     let cap: number | null = null;
-    const variants = base.map((v) => { const b = bounded(v.ir, tf); cap = b.cap ?? cap; return { id: `${v.id}|${arm}`, param: v.param, ir: arm === 'code_judge' ? withJudge(b.ir, spec) : b.ir, ...(v.vol_target ? { vol_target: v.vol_target } : {}) }; });
+    let variants: MatrixVariantRef[] = base.map((v) => { const b = bounded(v.ir, tf); cap = b.cap ?? cap; return { id: `${v.id}|${arm}`, param: v.param, ir: my || arm !== 'code_judge' ? b.ir : withJudge(b.ir, spec), ...(v.vol_target ? { vol_target: v.vol_target } : {}) }; });
+    if (arm === 'code_judge' && spec.judge_templates) variants = variants.flatMap(v => spec.judge_templates!.map((j,i) => ({ ...v, template_group: v.id, id: `${v.id}|template_${i}`, ir: { ...v.ir, judge: j } })));
     const purge = cellPurge(variants.map((v) => v.ir), tf, spec.purge_bars), seg = purge === null ? null : cellSegments(outer, purge);
     if (!seg) { cells.push(cell('not_applicable', purge === null ? 'holding_unbounded' : `holding_exceeds_window:purge_${purge}`)); continue; }
-    cells.push(cell('applicable', cap ? `bounded_holding_v1:max_holding_bars=${cap}` : null, variants, seg, cap));
+    const reason = [cap ? `bounded_holding_v1:max_holding_bars=${cap}` : null, ...notes].filter(Boolean).join(';');
+    cells.push(cell('applicable', reason || null, variants, seg, cap));
   }
   return cells;
 }
 
 export const executionSpec = () => ({ runner: MATRIX_RUNNER_VERSION, spot_fee_rate: DEFAULT_EXECUTION.fee_rate, perp_taker: PERP_TAKER, perp_maker: PERP_MAKER, slippage_bps: DEFAULT_EXECUTION.slippage_bps, stress_fee_multiple: STRESS_FEE_MULTIPLE, sizing: 'unit_notional_single_asset' });
-export const protocolHashOf = (s: MatrixStudySpec) => hash({ protocol: s.protocol, split: s.split, purge_bars: s.purge_bars, iterate: s.iterate, budget: s.budget, judge: s.judge, model_profile: s.model_profile });
+export const protocolHashOf = (s: MatrixStudySpec) => hash({ protocol: s.protocol, split: s.split, purge_bars: s.purge_bars, iterate: s.iterate, budget: s.budget, judge: s.judge, judge_templates: s.judge_templates ?? null, model_profile: s.model_profile });
 export const dataScopeOf = (s: MatrixStudySpec) => `scope_${hash({ symbols: [...s.symbols].sort(), market: s.market }).slice(0, 16)}`;
 
-export function buildManifest(spec: MatrixStudySpec, rec: AssetRecommendation | null, now: number): MatrixManifest {
+export function buildManifest(spec: MatrixStudySpec, rec: AssetRecommendation | null, now: number, mine: MyStrategySnapshot[] = []): MatrixManifest {
   const segments: MatrixManifest['segments'] = {};
   for (const tf of spec.timeframes) if (RUNNABLE_TIMEFRAMES.includes(tf)) segments[tf] = segmentsFor(spec, tf, spec.window_days[tf]!);
-  const cells = expandCells(spec, rec, segments);
+  const cells = expandCells(spec, rec, segments, mine);
   const dev = Object.fromEntries(Object.entries(segments).map(([tf, s]) => [tf, { from_ms: s!.train.from_ms, to_ms: s!.selection.to_ms }]));
   return {
-    version: 'matrix_manifest_v1', spec, segments, cells,
+    version: 'matrix_manifest_v1', spec, ...(mine.length ? { my_strategies: mine } : {}), segments, cells,
     data_request_hash: hash({ symbols: spec.symbols, market: spec.market, dev }),
     protocol_hash: protocolHashOf(spec), execution_spec_hash: hash(executionSpec()), data_scope_id: dataScopeOf(spec), created_at: now,
   };

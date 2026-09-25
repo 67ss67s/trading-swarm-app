@@ -227,7 +227,7 @@ export function StrategyBuilder({
         </div>
         <ScrollArea className="min-h-0 flex-1">
           <div className="p-2 text-[11px]">
-            {backendMissing ? <div className="text-muted-foreground">{t('后端还没有原语目录(第二轮 astra 交付中)')}</div> : null}
+            {backendMissing ? <div className="text-muted-foreground">{t('后端还没有原语目录(后端交付中)')}</div> : null}
             {primsQ.isLoading ? <div className="text-muted-foreground">{t('读取中…')}</div> : null}
             {groups.map(([cat, items]) => (
               <div key={cat} className="mb-2">

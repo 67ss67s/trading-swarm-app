@@ -9,11 +9,16 @@
  * 派活见 components/floor-v4/tasks.ts,运行策略复用我的策略的 RunDialog。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { api, researchApi } from '@/api/client';
 import type { ActivityResponse, BotsResponse, PortfolioSnapshotResponse, RiskAlertsResponse, Workflow } from '@/api/types';
 import { evolutionApi, useEvolutionDaily } from '@/api/evolution';
+import { useAgentStrategy } from '@/api/agent-strategy';
+import { CurrentStrategyChip, RUN_TEXT } from '@/components/agent-strategy/current-strategy';
+import { useModels } from '@/components/models/use-models';
+import { CoinPickerDialog, addCoin, effectiveCoins, loadCoins, moveCoin, removeCoin, saveCoins, COINS_MAX } from '@/components/floor-v4/coins';
+import { createSfx, loadSoundOn, saveSoundOn } from '@/components/floor-v4/sound';
 import { RunDialog, activeRunIds, useStrategyRuns } from '@/components/my-strategies/run-panel';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { mountA, mountB, type EngineCallbacks, type EvoDetail, type FloorEngine, type Layout, type UiTheme } from '@/components/floor-v4/adapters';
@@ -82,6 +87,9 @@ export function FloorV4Page({ connected = true }: { connected?: boolean }) {
   const runsQ = useStrategyRuns();
   const btcQ = useQuery({ queryKey: ['floor-v4', 'btc-1h'], queryFn: () => api.klines('1m', 60, 'BTCUSDT'), refetchInterval: 60_000, retry: false });
   const evoQ = useEvolutionDaily();
+  const episodesQ = useQuery({ queryKey: ['episodes'], queryFn: () => api.episodes({ limit: 100 }), refetchInterval: 60_000, retry: false });
+  const agentStrategyQ = useAgentStrategy();
+  const modelsQ = useModels();
 
   const runningIds = useMemo(() => activeRunIds(runsQ.data?.runs), [runsQ.data]);
   const model: FloorModel = useMemo(
@@ -101,8 +109,11 @@ export function FloorV4Page({ connected = true }: { connected?: boolean }) {
         history: historyQ.data ?? null,
         btcKlines: btcQ.data?.klines ?? null,
         tasks,
+        episodes: episodesQ.data ?? null,
+        agentStrategy: agentStrategyQ.data ?? null,
+        models: modelsQ.data ?? null,
       }),
-    [now, botsQ.data, activityQ.data, overviewQ.data, executionQ.data, portfolioQ.data, riskQ.data, evoQ.data, intentsQ.data, strategiesQ.data, runningIds, historyQ.data, btcQ.data, tasks],
+    [now, botsQ.data, activityQ.data, overviewQ.data, executionQ.data, portfolioQ.data, riskQ.data, evoQ.data, intentsQ.data, strategiesQ.data, runningIds, historyQ.data, btcQ.data, tasks, episodesQ.data, agentStrategyQ.data, modelsQ.data],
   );
   // 引擎第一次 setData 会把已有交接记成「看过」;等名册和活动流(信封的两个来源)都回来再喂,否则后到的旧交接会全飞一遍信封。
   // overview 可能很慢(账户读取走执行通道),不等它。
@@ -129,6 +140,18 @@ export function FloorV4Page({ connected = true }: { connected?: boolean }) {
   const nowRef = useRef(now);
   nowRef.current = now;
 
+  // ---- 8-bit 音效(默认关,开关存 localStorage)----
+  const [soundOn, setSoundOn] = useState(loadSoundOn);
+  const sfxRef = useRef<ReturnType<typeof createSfx> | null>(null);
+  if (!sfxRef.current) sfxRef.current = createSfx(soundOn);
+  const toggleSound = () => {
+    const next = !soundOn;
+    setSoundOn(next);
+    saveSoundOn(next);
+    sfxRef.current?.setOn(next);
+    if (next) sfxRef.current?.play('evolve');
+  };
+
   const flash = useCallback((text: string, sub?: string) => (sub ? toast(text, { description: sub }) : toast(text)), []);
 
   const runTask = useCallback(
@@ -152,7 +175,7 @@ export function FloorV4Page({ connected = true }: { connected?: boolean }) {
             }
             const res = await api.patchWorkflow({ watchlist: [...wf.watchlist, sym] });
             qc.setQueryData(['workflow'], res.workflow);
-            if (res.errors?.length) throw new Error(res.errors.join('；'));
+            if (res.errors?.length) throw new Error(res.errors.join('; '));
             void qc.invalidateQueries({ queryKey: ['overview'] });
             toast.success(t('RADAR 把 {s} 加进了观察列表', { s: sym }));
             break;
@@ -254,6 +277,7 @@ export function FloorV4Page({ connected = true }: { connected?: boolean }) {
       }
     },
     onOpenEvolution: (role, date) => (window.location.hash = `evolution?role=${role}&date=${date}`),
+    onSfx: (k) => sfxRef.current?.play(k),
   };
 
   useEffect(() => {
@@ -270,13 +294,18 @@ export function FloorV4Page({ connected = true }: { connected?: boolean }) {
       onToast: (a, b) => cbRef.current?.onToast(a, b),
       getEvoDetail: (r, d) => cbRef.current?.getEvoDetail(r, d) ?? Promise.resolve(null),
       onOpenEvolution: (r, d) => cbRef.current?.onOpenEvolution(r, d),
+      onSfx: (k) => cbRef.current?.onSfx?.(k),
     };
     const eng = layout === 'b' ? mountB(cv, theme, cb) : mountA(cv, theme, cb, host);
     engineRef.current = eng;
     if (readyRef.current) eng.setData(modelRef.current, nowRef.current);
+    // 深链 #floor?sel=risk_sentinel(Agent 页异常块「去楼层处理」)→ 镜头推到那个角色
+    const sel = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('sel');
+    const selTimer = sel && (ROLE_ORDER as readonly string[]).includes(sel) ? window.setTimeout(() => eng.focus(sel as Role), 400) : 0;
     // 开发态调试钩子(截图脚本用);生产包里没有
     if (import.meta.env.DEV) (window as unknown as { __floorV4?: unknown }).__floorV4 = { engine: eng, qc, openCard: setCard, openHalt: () => setHaltOpen(true), model: () => modelRef.current };
     return () => {
+      window.clearTimeout(selTimer);
       eng.destroy();
       host.querySelectorAll('.flb-overlay').forEach((el) => el.remove());
       engineRef.current = null;
@@ -319,7 +348,7 @@ export function FloorV4Page({ connected = true }: { connected?: boolean }) {
   };
 
   // ---- 拖拽:币 → RADAR/THREAD/LAB;策略卡 → EXEC ----
-  const drag = (e: React.PointerEvent, html: string, accept: (r: Role) => boolean, drop: (r: Role | null) => void) => {
+  const drag = (e: React.PointerEvent, html: string, accept: (r: Role) => boolean, drop: (r: Role | null, ev: PointerEvent) => void) => {
     e.preventDefault();
     const ghost = document.createElement('div');
     ghost.className = 'fv4-ghost';
@@ -337,12 +366,12 @@ export function FloorV4Page({ connected = true }: { connected?: boolean }) {
       ghost.classList.toggle('ok', !!ok);
       ghost.classList.toggle('no', !!r && !ok);
     };
-    const up = () => {
+    const up = (ev: PointerEvent) => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
       ghost.remove();
       engineRef.current?.setDropTarget(null);
-      drop(target);
+      drop(target, ev);
     };
     move(e.nativeEvent);
     window.addEventListener('pointermove', move);
@@ -350,20 +379,38 @@ export function FloorV4Page({ connected = true }: { connected?: boolean }) {
   };
   const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
-  const coins = useMemo(() => {
-    const wl = workflowQ.data?.watchlist ?? overviewQ.data?.workflow?.watchlist ?? [];
-    const markets = overviewQ.data?.markets ?? {};
-    return wl.slice(0, 5).map((sym) => ({ sym, last: markets[sym]?.last ?? null }));
-  }, [workflowQ.data, overviewQ.data]);
+  // ---- 顶栏币种芯片:用户自定义(存 localStorage),首次 = 观察列表前 5 个 ----
+  const watchlist = workflowQ.data?.watchlist ?? overviewQ.data?.workflow?.watchlist ?? [];
+  const [storedCoins, setStoredCoins] = useState<string[] | null>(loadCoins);
+  const coinList = useMemo(() => effectiveCoins(storedCoins, watchlist), [storedCoins, watchlist]);
+  const setCoinList = (next: string[]) => {
+    setStoredCoins(next);
+    saveCoins(next);
+  };
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const markets = overviewQ.data?.markets ?? {};
+  // 不在观察列表里的币,overview 没有价格:各拉 1 根 1m K 线取收盘价
+  const extraPx = useQueries({
+    queries: coinList.filter((sym) => !markets[sym]?.last).map((sym) => ({ queryKey: ['floor-v4', 'coin-px', sym], queryFn: () => api.klines('1m', 1, sym), refetchInterval: 60_000, retry: false, staleTime: 30_000 })),
+  });
+  const extraMap = new Map(coinList.filter((sym) => !markets[sym]?.last).map((sym, i) => [sym, extraPx[i]?.data?.klines?.at(-1)?.close ?? null] as const));
+  const coins = coinList.map((sym) => ({ sym, last: markets[sym]?.last ?? extraMap.get(sym) ?? null }));
 
-  const onCoinDown = (e: React.PointerEvent, sym: string) =>
-    drag(e, `<b>${esc(sym)}</b><small>${esc(t('拖给 RADAR / THREAD / LAB'))}</small>`, (r) => !!coinTask(r, sym, taskCtx), (r) => {
+  const onCoinDown = (e: React.PointerEvent, sym: string) => {
+    if ((e.target as HTMLElement).closest('.x')) return;
+    drag(e, `<b>${esc(sym)}</b><small>${esc(t('拖给 RADAR / THREAD / LAB · 拖到别的币上排序'))}</small>`, (r) => !!coinTask(r, sym, taskCtx), (r, ev) => {
+      const chip = (document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null)?.closest<HTMLElement>('.coin[data-sym]');
+      const over = chip?.dataset.sym;
+      if (over && over !== sym) return setCoinList(moveCoin(coinList, sym, over));
+      if (over === sym) return;
       if (!r) return void toast(t('把 {s} 拖到 RADAR(观察)/ THREAD(判断)/ LAB(回测)', { s: sym }));
       const task = coinTask(r, sym, taskCtx);
       if (task) void runTask(r, task);
     });
+  };
 
   const st = model.strategyObj;
+  const cur = model.current;
   const onStratDown = (e: React.PointerEvent) => {
     if (!st) return;
     drag(e, `<b>▶ ${esc(st.name)}</b><small>${esc(t('拖给 EXEC 运行'))}</small>`, (r) => r === 'executor', (r) => {
@@ -447,14 +494,34 @@ export function FloorV4Page({ connected = true }: { connected?: boolean }) {
             </span>
           </div>
         </div>
-        <div className="coins" title={t('把币拖给 RADAR / THREAD / LAB')}>
+        <div className="coins" title={t('把币拖给 RADAR / THREAD / LAB;拖到别的币上排序')}>
           {coins.map((c) => (
-            <div key={c.sym} className="coin" onPointerDown={(e) => onCoinDown(e, c.sym)}>
+            <div key={c.sym} className="coin" data-sym={c.sym} onPointerDown={(e) => onCoinDown(e, c.sym)}>
               <b>{c.sym.replace(/USDT$/, '')}</b>
               <span>{c.last ? fmtPrice(c.last) : '—'}</span>
+              <button type="button" className="x" title={t('从顶栏移除')} aria-label={t('从顶栏移除 {s}', { s: c.sym })} onPointerDown={(e) => e.stopPropagation()} onClick={() => setCoinList(removeCoin(coinList, c.sym))}>
+                ×
+              </button>
             </div>
           ))}
         </div>
+        {coins.length < COINS_MAX ? (
+          <button type="button" className="coin add" title={t('加一个币(最多 {n} 个)', { n: COINS_MAX })} aria-label={t('加一个币')} onClick={() => setPickerOpen(true)}>
+            +
+          </button>
+        ) : null}
+        <CoinPickerDialog
+          open={pickerOpen}
+          onOpenChange={setPickerOpen}
+          current={coinList}
+          watchlist={watchlist}
+          threadSymbols={taskCtx.threadSymbols}
+          onPick={(sym) => {
+            setCoinList(addCoin(coinList, sym));
+            setPickerOpen(false);
+          }}
+        />
+        <CurrentStrategyChip className="fv4-chip" />
         <div className="spacer" />
         <div className="seg" role="group" aria-label={t('布局')}>
           {(['a', 'b'] as Layout[]).map((l) => (
@@ -470,6 +537,9 @@ export function FloorV4Page({ connected = true }: { connected?: boolean }) {
             </button>
           ))}
         </div>
+        <button type="button" className={`sfx ${soundOn ? 'on' : ''}`} onClick={toggleSound} title={soundOn ? t('音效:开(点一下关)') : t('音效:关(点一下开)')} aria-pressed={soundOn}>
+          {soundOn ? '♪' : '♪̸'} <span>{soundOn ? t('音效开') : t('音效关')}</span>
+        </button>
         <EStop halted={model.halted} onFire={() => setHaltOpen(true)} />
       </header>
 
@@ -531,15 +601,17 @@ export function FloorV4Page({ connected = true }: { connected?: boolean }) {
                 <div className="k">{t('持仓')}</div>
               </div>
             </div>
-            {st ? (
-              <div className="strat" onPointerDown={onStratDown} title={t('拖到 EXEC 工位运行')}>
-                <span className="grip">⠿</span>
+            {cur ? (
+              <div className={`strat ${st ? '' : 'static'}`} onPointerDown={st ? onStratDown : undefined} title={st ? t('拖到 EXEC 工位运行') : t('顶栏「当前策略」可切换')}>
+                <span className="grip">{st ? '⠿' : '◇'}</span>
                 <div>
                   <b>
-                    {t('当前策略')} · {st.name}
+                    {t('当前策略')} · {cur.name}
                   </b>
                   <small>
-                    {st.symbol} · v{st.current_version} · {runningIds.has(st.id) ? t('运行中') : st.status} · {t('拖到 EXEC 运行')}
+                    {cur.kind === 'free'
+                      ? t('agent 按 playbook 自由判断')
+                      : [cur.symbol, cur.version != null ? `v${cur.version}` : null, cur.run ? RUN_TEXT[cur.run] ?? cur.run : t('没在运行'), st ? t('拖到 EXEC 运行') : null].filter(Boolean).join(' · ')}
                   </small>
                 </div>
               </div>

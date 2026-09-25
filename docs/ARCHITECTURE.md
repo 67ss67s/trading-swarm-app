@@ -20,7 +20,8 @@ flowchart LR
     RT["agent runtime<br/>runtime.ts, gates.ts, threads.ts, risk.ts"]
     EXE["execution channels<br/>execution.ts, execution-okx.ts,<br/>execution-cli.ts, execution-agent.ts"]
     MOD["model connections<br/>model-connections.ts, brain.ts,<br/>brain-http.ts, decisions.ts"]
-    ASP["signal market<br/>asp-agent/*, okx-asp-feed.ts"]
+    ASP["signal market + ASP services<br/>asp-agent/*, asp-agent/services/*"]
+    MICRO["microstructure source<br/>micro-source.ts, research/judge/microstructure.ts"]
     DB[("state.sqlite<br/>~/.trading-swarm/…")]
   end
   subgraph External
@@ -30,6 +31,7 @@ flowchart LR
     MCLI["local model CLIs<br/>pi, codex, claude"]
     A2A["onchainos / okx-a2a CLIs"]
     PUB["public market data<br/>OKX / Binance REST"]
+    REC["recorded order-book / liquidation frames<br/>TG_MICRO_DIR (external recorder)"]
   end
   UI -- "/api, SSE" --> HTTP
   HTTP --> CHAT & REC & RES & RUN & RT & MOD & ASP
@@ -41,6 +43,8 @@ flowchart LR
   EXE --> OKXCLI & BINCLI
   MOD --> LLM & MCLI
   ASP --> A2A
+  RES & RUN & ASP --> MICRO
+  MICRO --> REC
   REC & RES & RT --> PUB
   Gateway --- DB
 ```
@@ -56,6 +60,8 @@ flowchart LR
 | Execution channels | `execution*.ts` | `paper` (in-process), `okx` (official `okx` CLI), Binance channels behind `TG_EXCHANGE=binance` |
 | Model connections | `model-connections.ts`, `brain*.ts`, `decisions.ts` | API-key and CLI connections, per-role binding, key vault, Jev decisions client |
 | Signal market | `asp-agent/*`, `okx-asp-feed.ts` | OKX.AI ASP browse / subscribe / publish through the `onchainos` / `okx-a2a` CLIs |
+| ASP services | `asp-agent/services/*`, `asp-agent/provider-tasks.ts` | seven outward services (two subscriptions, five per-call); one job poller dispatches to handlers by `serviceId`, subscriptions fan out per `serviceId` |
+| Microstructure | `micro-source.ts`, `research/judge/microstructure.ts`, `research/judge/recordings.ts` | order-book imbalance, walls, spread and 5-minute liquidations for BTC/ETH perps from recorded frames; same source for live runs and backtests |
 | Rust crates | `crates/*` | Binance REST executor, execution service skeleton, MCP OAuth client, contracts |
 
 ## Data flow: chat → research → strategy → run
@@ -64,9 +70,11 @@ flowchart LR
    market, applies the daily regime and the three-horizon radar (short 3m/5m/15m, mid 1h/4h, long 12h/1d) and a liquidity gate
    for short horizons. The UI renders the result as a recommendation card; numbers come from the tool, not the model.
 2. **Matrix study.** "Verify in research" opens a study prefilled from the card (`routes-matrix-study.ts`,
-   `research/matrix-study/*`). The study evaluates each asset × timeframe × strategy family in two arms:
+   `research/matrix-study/*`). Rows are built-in strategy families and/or saved strategies (`spec.strategies`, chosen from
+   My strategies). The study evaluates each asset × timeframe × row in two arms:
    pure code, and code plus a Jev judgment step (`research/judge/*`, OpenRouter Decisions API via `decisions.ts`).
-   Fees, slippage and funding are charged. Data is split into train, validation and held-out; the held-out segment is only
+   When the judge asks about live-only microstructure fields, it reads only recorded frames that were on disk at the decision
+   time; periods without recordings are reported as unavailable. Fees, slippage and funding are charged. Data is split into train, validation and held-out; the held-out segment is only
    evaluated once for the frozen finalists. The result can be "no strategy passed", with the reason per cell.
 3. **Strategy.** A finalist is adopted as a `ResearchStrategy` version: IR, judge block (questions and thresholds), asset pool,
    horizon and source. Adoption runs a pre-check and is rejected if it has blockers.
@@ -85,6 +93,11 @@ flowchart LR
 - **Model keys stay server-side.** API keys are stored in `secrets/model-keys.json` next to the state database (directory 700,
   file 600). The model-connection routes accept a key but only ever return `key_masked`; error text is passed through a
   redactor before it is logged or returned (`routes-model-connections.ts`, `model-connections.ts`, `brain-http.ts`).
+- **Optional bridges degrade instead of failing.** The zero-model account-read bridge for the Binance `agent_mcp` path is an
+  external executable named by `TG_DIRECT_READ_BIN`. If that variable is unset or the file is missing, account reads go through the agent
+  CLI. Missing microstructure recordings make the judge report those fields as unavailable.
+- **Paid services are opt-in.** The ASP services that call Jev are off by default and are capped per call (`JUDGE_MAX_CALL_USD`).
+  Listing on OKX.AI is done by a person.
 - **Loopback only.** The gateway listens on `127.0.0.1`. Writes are accepted only from loopback origins on the configured UI ports
   (`http.ts`); other origins get 403.
 - **Fail-closed behaviour.**

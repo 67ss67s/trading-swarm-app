@@ -23,6 +23,16 @@ export default defineConfig({
         changeOrigin: true,
         ws: false,
         headers: { origin: 'http://127.0.0.1:5180' },
+        // 网关重启/没起来时 vite 默认回一个空 body 的 502,页面只会显示「Bad Gateway」。
+        // 改回 503 + 结构化错误码,前端据此自动重试并在连上后整页刷新(configure 先于 vite 自己的 502 处理注册)。
+        configure: (proxy) => {
+          proxy.on('error', (err, _req, res) => {
+            if (!('req' in res) || res.headersSent || res.writableEnded) return;
+            res.writeHead(503, { 'content-type': 'application/json; charset=utf-8', 'retry-after': '3' }).end(
+              JSON.stringify({ error: { code: 'gateway_unavailable', message: `网关暂时连不上(${(err as NodeJS.ErrnoException).code ?? err.message}),多半在重启,恢复后自动刷新` } }),
+            );
+          });
+        },
       },
     },
   },

@@ -3,9 +3,10 @@
  * 选项:聊聊(→ #agent 预选该角色)/ 派个活(TASKS 里 2–3 个一键任务)/ 你今天干了啥 / 打开工作台 / 离开。
  * ↑↓ 选、Enter 确认、点对话框跳过打字。
  */
+import { t } from '@/lib/i18n';
 import { ROLES, TASKS, STATUS_LABEL } from './roles';
 import { agentSprite } from './sprites';
-import type { AgentSnap, Role, TaskDef } from './types';
+import type { AgentSnap, DeskInfo, Role, RoleEngine, TaskDef } from './types';
 
 export const NPC_CSS = `
 .flb-npc{position:absolute;left:50%;bottom:16px;transform:translateX(-50%) translateY(10px);width:min(780px,calc(100% - 32px));pointer-events:auto;display:flex;gap:14px;
@@ -30,6 +31,20 @@ export const NPC_CSS = `
 .flb-npc .num{border:1px solid #2e293a;background:#15121c;padding:4px 8px;text-align:right;min-width:74px}
 .flb-npc .num .v{font-family:ui-monospace,monospace;font-weight:700;font-size:15px}
 .flb-npc .num .k{font-size:10px;color:#8a8398}
+.flb-npc .br{margin-top:3px;font-size:11px;color:#9a93a8;display:flex;align-items:center;gap:5px;min-width:0}
+.flb-npc .br[hidden],.flb-npc .dk[hidden]{display:none}
+.flb-npc .br em{font-style:normal;color:#d8d3e2;font-family:ui-monospace,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.flb-npc .br .dot{width:7px;height:7px;background:#ff3b4e;box-shadow:0 0 0 1px #000;flex:none}
+.flb-npc .dk{margin-top:6px;max-height:92px;overflow:auto;border:1px solid #2e293a;background:#15121c;padding:4px 8px;font-size:12px;line-height:1.4}
+.flb-npc .dk .sl+.sl{margin-top:4px;padding-top:4px;border-top:1px dashed #2e293a}
+.flb-npc .dk .st{display:flex;align-items:center;gap:6px;color:#f4f1ea;font-weight:600}
+.flb-npc .dk .bd{font-size:10px;font-weight:400;padding:0 4px;border:1px solid #4a4358;color:#b8b0c8}
+.flb-npc .dk .bd.code{border-color:#3d7a5a;color:#8fe0b0}.flb-npc .dk .bd.decision{border-color:#7a6a3d;color:#f0d890}.flb-npc .dk .bd.llm{border-color:#5a4a8a;color:#c8b4ff}
+.flb-npc .dk ul{display:block;grid-template-columns:none}
+.flb-npc .dk li{cursor:default;padding:0 0 0 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#b8b0c8}
+.flb-npc .dk li:hover{background:none}
+.flb-npc .dk li::before{content:"·";position:absolute;left:2px}
+.flb-npc .dk .mute{color:#8a8398}
 @media (prefers-reduced-motion: reduce){.flb-npc{transition:none}.flb-npc .say .cur,.flb-npc li.on::before{animation:none}}
 `;
 
@@ -81,6 +96,12 @@ export function createNpc(overlay: HTMLElement, deps: NpcDeps) {
     const s = el.querySelector('.say');
     if (s) s.innerHTML = `${esc(full.slice(0, shown))}${shown < full.length ? '<span class="cur"></span>' : ''}`;
   }
+  function renderNums(): void {
+    const box = el.querySelector('.nums');
+    if (!box) return;
+    const stats = (snap?.stats ?? []).slice(0, 3);
+    box.innerHTML = stats.map((x) => `<div class="num"><div class="v">${esc(x.value)}</div><div class="k">${esc(x.label)}</div></div>`).join('');
+  }
   function drawPortrait(): void {
     if (!pt || !role) return;
     const info = ROLES[role];
@@ -90,8 +111,25 @@ export function createNpc(overlay: HTMLElement, deps: NpcDeps) {
     const sp = agentSprite(info.shape, info.color, deps.outline(), { pose: talking && talkT % 6 < 3 ? 'talk' : 'stand', blink: false, look: 0, breath: talking ? ((talkT >> 1) % 2) as 0 | 1 : 0 });
     c.drawImage(sp, 1, 2);
   }
+  /** 模型行 + 策略片:open / update 都重画 */
+  function renderMeta(): void {
+    const br = el.querySelector<HTMLElement>('.br');
+    const dk = el.querySelector<HTMLElement>('.dk');
+    if (br) {
+      const b = snap?.brain;
+      br.hidden = b === undefined;
+      br.innerHTML = b === undefined ? ''
+        : b === null ? `<span>${esc(t('不用模型(纯代码)'))}</span>`
+        : `${b.broken ? `<span class="dot" title="${esc(t('模型连接断了'))}"></span>` : ''}<span>${esc(t('模型'))}</span><em title="${esc(`${b.name} · ${b.sourceLabel}`)}">${esc(b.name)} · ${esc(b.sourceLabel)}</em>`;
+    }
+    if (dk) {
+      const d = snap?.desk;
+      dk.hidden = !d;
+      dk.innerHTML = d ? deskHtml(d) : '';
+    }
+  }
   function renderOpts(): void {
-    const ul = el.querySelector('ul')!;
+    const ul = el.querySelector('.row2 ul')!;
     ul.innerHTML = opts.map((o, i) => `<li data-i="${i}" class="${i === sel ? 'on' : ''}">${esc(o.label)}${o.hint ? `<small>${esc(o.hint)}</small>` : ''}</li>`).join('');
   }
   function rootOpts(): void {
@@ -99,11 +137,11 @@ export function createNpc(overlay: HTMLElement, deps: NpcDeps) {
     const r = role;
     const info = ROLES[r];
     opts = [
-      { label: '聊聊', hint: '打开 Agent 对话', run: () => { deps.onChat(r); type(`好,去对话页找我,我已经在等你了。`); } },
-      { label: '派个活', hint: `${taskList(r).length} 个一键任务`, run: () => taskOpts() },
-      { label: '你今天干了啥', run: () => { type(snap?.today ?? '今天还没什么可说的。'); } },
-      { label: `打开工作台 · ${info.pageLabel}`, run: () => deps.onWorkbench(r) },
-      { label: '离开', hint: 'Esc', run: () => deps.onLeave() },
+      { label: t('聊聊'), hint: t('打开 Agent 对话'), run: () => { deps.onChat(r); type(t('好,去对话页找我,我已经在等你了。')); } },
+      { label: t('派个活'), hint: t('{n} 个一键任务', { n: taskList(r).length }), run: () => taskOpts() },
+      { label: t('你今天干了啥'), run: () => { type(snap?.today ?? t('今天还没什么可说的。')); } },
+      { label: t('打开工作台 · {page}', { page: info.pageLabel }), run: () => deps.onWorkbench(r) },
+      { label: t('离开'), hint: 'Esc', run: () => deps.onLeave() },
     ];
     sel = 0;
     renderOpts();
@@ -111,24 +149,24 @@ export function createNpc(overlay: HTMLElement, deps: NpcDeps) {
   function taskOpts(): void {
     if (!role) return;
     const r = role;
-    type('要我做什么?');
+    type(t('要我做什么?'));
     opts = [
-      ...taskList(r).map((t) => ({ label: t.label, run: () => { deps.onTask(r, t); type(`好,这就去「${t.label}」!干完我在动态里告诉你。`); rootOpts(); } })),
-      { label: '← 返回', run: () => { type(greet()); rootOpts(); } },
+      ...taskList(r).map((task) => ({ label: task.label, run: () => { deps.onTask(r, task); type(t('好,这就去「{task}」!干完我在动态里告诉你。', { task: task.label })); rootOpts(); } })),
+      { label: t('← 返回'), run: () => { type(greet()); rootOpts(); } },
     ];
     sel = 0;
     renderOpts();
   }
   function greet(): string {
-    if (!snap) return '找我有事吗?';
-    if (snap.task) return `我正在「${snap.task.label}」,马上好。还有别的吗?`;
-    if (snap.status === 'stuck') return `${snap.line}……我卡住了,可能需要你看一眼。`;
-    return `${snap.line}。找我有事吗?`;
+    if (!snap) return t('找我有事吗?');
+    if (snap.task) return t('我正在「{task}」,马上好。还有别的吗?', { task: snap.task.label });
+    if (snap.status === 'stuck') return t('{line}……我卡住了,可能需要你看一眼。', { line: snap.line });
+    return t('{line}。找我有事吗?', { line: snap.line });
   }
 
   el.addEventListener('click', (e) => {
-    const li = (e.target as HTMLElement).closest('li');
-    if (li) { const o = opts[Number(li.dataset['i'])]; o?.run(); return; }
+    const li = (e.target as HTMLElement).closest('.row2 li');
+    if (li) { const o = opts[Number((li as HTMLElement).dataset['i'])]; o?.run(); return; }
     if (shown < full.length) { shown = full.length; clearInterval(timer); renderSay(); drawPortrait(); }
   });
 
@@ -139,16 +177,19 @@ export function createNpc(overlay: HTMLElement, deps: NpcDeps) {
       snap = s;
       const info = ROLES[r];
       el.style.setProperty('--c', info.color);
-      const stats = (s?.stats ?? []).slice(0, 3);
       el.innerHTML = `<canvas class="pt" width="21" height="21"></canvas>
         <div class="body">
-          <div class="nm"><b>${info.callsign}</b><span>${info.title} · ${info.desk}</span><i>${STATUS_LABEL[s?.status ?? 'idle']}</i></div>
+          <div class="nm"><b>${info.callsign}</b><span>${esc(info.title)} · ${esc(info.desk)}</span><i>${esc(STATUS_LABEL[s?.status ?? 'idle'] ?? '')}</i></div>
+          <div class="br" hidden></div>
           <div class="say"></div>
-          <div class="row2"><ul></ul><div class="nums">${stats.map((x) => `<div class="num"><div class="v">${esc(x.value)}</div><div class="k">${esc(x.label)}</div></div>`).join('')}</div></div>
+          <div class="row2"><ul></ul><div class="nums"></div></div>
+          <div class="dk" hidden></div>
         </div>`;
       pt = el.querySelector('canvas');
       el.style.display = 'flex';
       requestAnimationFrame(() => el.classList.add('on'));
+      renderNums();
+      renderMeta();
       rootOpts();
       type(greet());
       drawPortrait();
@@ -157,6 +198,7 @@ export function createNpc(overlay: HTMLElement, deps: NpcDeps) {
       snap = s;
       const st = el.querySelector('.nm i');
       if (st && s) st.textContent = STATUS_LABEL[s.status] ?? s.status;
+      if (role) { renderNums(); renderMeta(); }
     },
     close(): void {
       role = null;
@@ -173,6 +215,22 @@ export function createNpc(overlay: HTMLElement, deps: NpcDeps) {
       return false;
     },
   };
+}
+
+const ENGINE_LABEL = (e: RoleEngine): string => (e === 'code' ? t('代码') : e === 'decision' ? t('决策模型') : 'LLM');
+const clip = (s: string, n: number): string => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+
+/** 策略片:自由判断 / 策略没给这张桌分片 / 逐片(标题 + 执行者徽章 + 最多 3 条规则) */
+function deskHtml(d: DeskInfo): string {
+  if (d.kind === 'free') return `<div class="mute">${esc(t('自由判断(playbook)'))}</div>`;
+  const head = d.strategy ? `<div class="mute">${esc(t('策略 {name}', { name: d.strategy }))}</div>` : '';
+  if (!d.slices.length) return `${head}<div class="mute">${esc(t('当前策略没有分给这张桌的规则'))}</div>`;
+  return head + d.slices.map((sl) => {
+    const more = sl.rules.length - 3;
+    const rules = sl.rules.slice(0, 3).map((r) => `<li title="${esc(r)}">${esc(clip(r, 64))}</li>`).join('')
+      + (more > 0 ? `<li class="mute">${esc(t('另 {n} 条', { n: more }))}</li>` : '');
+    return `<div class="sl"><div class="st" title="${esc(sl.summary)}">${esc(clip(sl.title, 40))}<span class="bd ${sl.engine}">${esc(ENGINE_LABEL(sl.engine))}</span></div>${rules ? `<ul>${rules}</ul>` : ''}</div>`;
+  }).join('');
 }
 
 function esc(s: string): string {

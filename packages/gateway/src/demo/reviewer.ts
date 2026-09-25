@@ -5,7 +5,7 @@
  *      → memory.propose(status=proposed,等人批)+ handoff reviewer → gate_captain(kind=review)。
  *   ③ 提案反方审查(countercase)这版**不做**(见设计文档 §5 延后项)。
  *
- * 教训的硬闸(Codex 稿 §5.3):每条必须有 observation / mechanism / falsifier(可证伪条件)/ source_refs(非空且属于本批);
+ * 教训的硬闸(评审稿 §5.3):每条必须有 observation / mechanism / falsifier(可证伪条件)/ source_refs(非空且属于本批);
  * 正文不许出现具体价位(≥ 3 位的数字或带小数的价格);symbol 只能是本批出现过的或 null;regime 只能是枚举。
  * 教训被批准也只是「记忆」——它不能改任何策略参数(参数 diff 归 Strategy Lab)。
  */

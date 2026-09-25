@@ -9,10 +9,10 @@
 //   2. 独立挂的算法单可以带客户端 id(`swap algo place --clOrdId` → OKX 的 `algoClOrdId`),
 //      **附带单(swap place 的 --slTriggerPx/--tpTriggerPx)不行** —— CLI 没有 attachAlgoClOrdId。
 //      所以附带腿的 algoId 只能从父订单详情的 `attachAlgoOrds[]` 读回;读不到就是 unknown,
-//      绝不按「最新的那张 reduceOnly 单」瞎认(codex-review #4)。
+//      绝不按「最新的那张 reduceOnly 单」瞎认(review #4)。
 //
 // 状态发现不打开凭证文件（断开连接按请求原子删除目标表）。profile 名与 demo 标志一律从
-// `okx config show`(非 --json 的那一份,api_key 已被 CLI 掩码)解析出来(codex-review #5)。
+// `okx config show`(非 --json 的那一份,api_key 已被 CLI 掩码)解析出来(review #5)。
 
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
@@ -77,12 +77,12 @@ const ORDER_TTL_MS = 30_000;
 /**
  * 无持仓时 close 会报的 code:等价于 Binance 的 -4509,按「已经平掉了」处理。
  * **不包含 51024** —— 官方错误码表里 51024 是「账户被限制」,仓位很可能还在;
- * 把它当成已平会让 runtime 直接结束线程(codex-review #1)。仓位不存在只有 51023。
+ * 把它当成已平会让 runtime 直接结束线程(review #1)。仓位不存在只有 51023。
  */
 const NO_POSITION_CODES = new Set(['51023', '51169']);
 /**
  * 「请求结果未知」的 code:官方明说 50004 超时既不代表成功也不代表失败,必须去查。
- * 写请求命中它一律 ambiguous → outcome 'unknown',沿原 clOrdId 对账(codex-review #2)。
+ * 写请求命中它一律 ambiguous → outcome 'unknown',沿原 clOrdId 对账(review #2)。
  */
 const AMBIGUOUS_CODES = new Set(['50004']);
 /**
@@ -96,7 +96,7 @@ const BILL_PAGE = 100;
 
 /**
  * 这一页能不能证明覆盖了 `startMs`?两种情况算覆盖:没满页(后面没有更旧的了),
- * 或者最旧一条已经落在窗口起点之前。否则起点之前的记录被挤掉了,数据不完整(codex-review #11)。
+ * 或者最旧一条已经落在窗口起点之前。否则起点之前的记录被挤掉了,数据不完整(review #11)。
  */
 export function coversWindow(rows: Record<string, unknown>[], pageCap: number, startMs: number): boolean {
   if (rows.length < pageCap) return true;
@@ -107,7 +107,7 @@ export function coversWindow(rows: Record<string, unknown>[], pageCap: number, s
 /**
  * 从**父订单详情**里取附带 TP/SL 的 algoId(v5 `GET /api/v5/trade/order` 的 `attachAlgoOrds[]`,
  * 成员字段 `attachAlgoId` / `attachAlgoClOrdId`;老一点的返回体用 `linkedAlgoOrd.algoId`)。
- * 拿不到就返回 null —— 调用方必须输出 'unknown',不许拿别的单顶上(codex-review #4)。
+ * 拿不到就返回 null —— 调用方必须输出 'unknown',不许拿别的单顶上(review #4)。
  */
 export function attachedAlgoIdOf(raw: unknown): string | null {
   const o = raw as Record<string, unknown> | null | undefined;
@@ -204,7 +204,7 @@ export function parseOkxConfigShow(text: string): OkxConfigView {
   for (const line of text.split(/\r?\n/)) {
     const t = line.trim();
     if (t === '') continue;
-    // `[default]` 是一个**合法的 profile 名**,不是容器段:这份输出里方括号行只可能是 profile(codex-review #14)。
+    // `[default]` 是一个**合法的 profile 名**,不是容器段:这份输出里方括号行只可能是 profile(review #14)。
     const section = /^\[([^\]]+)\]$/.exec(t);
     if (section) {
       const name = section[1]!.trim();
@@ -227,7 +227,7 @@ export function parseOkxConfigShow(text: string): OkxConfigView {
 
 /**
  * profile 名与 demo 标志(§1、§5)。**网关不打开凭证文件** —— 跑一次 `okx config show`,
- * 由持有密钥的那个进程(CLI 自己)把掩码后的元数据交出来(codex-review #5)。
+ * 由持有密钥的那个进程(CLI 自己)把掩码后的元数据交出来(review #5)。
  * 残留面:进程内只出现 profile 名、default_profile、demo 布尔与掩码后的 `****abcd` 尾四位;
  * secret_key/passphrase 在掩码版输出里根本不印,所以配置发现路径不接收它们（配置向导单次透传除外）。
  */
@@ -235,12 +235,16 @@ export function readOkxConfig(bin = defaultOkxCliBin()): OkxConfigView {
   try {
     const r = spawnSync(...okxInvocation(bin, ['config', 'show']), { stdio: ['ignore', 'pipe', 'pipe'], timeout: 8_000, encoding: 'utf8' });
     if (r.error) return { exists: false, profiles: [], defaultProfile: null, demo: {}, error: r.error.message };
-    const view = parseOkxConfigShow(String(r.stdout ?? ''));
-    if (!view.exists && r.status !== 0) return { ...view, error: String(r.stderr ?? '').trim().slice(0, 200) || `okx config show exit ${r.status}` };
-    return view;
+    return okxConfigFromOutput(String(r.stdout ?? ''), String(r.stderr ?? ''), r.status);
   } catch (e) {
     return { exists: false, profiles: [], defaultProfile: null, demo: {}, error: (e as Error).message };
   }
+}
+
+function okxConfigFromOutput(stdout: string, stderr: string, status: number | null): OkxConfigView {
+  const view = parseOkxConfigShow(stdout);
+  if (!view.exists && status !== 0) return { ...view, error: stderr.trim().slice(0, 200) || `okx config show exit ${status}` };
+  return view;
 }
 
 /** TG_OKX_PROFILE 优先,否则 config 的 default_profile,再否则第一个 profile。 */
@@ -249,41 +253,99 @@ export function resolveOkxProfile(cfg: OkxConfigView): string | null {
 }
 
 let availCache: { at: number; key: string; result: Availability } | null = null;
+/** reset 时加一;后台刷新回来发现代数变了就丢弃结果,免得旧 profile 覆盖 reset 后的新发现。 */
+let availGen = 0;
+let availRefreshing = false;
+
+type OkxProbe = { binOk: boolean; cfg: OkxConfigView; version: string | null };
 
 /**
  * okx 通道现在能不能用:二进制在不在 + config 能不能解析 + profile 存不存在。
- * 缓存 60s(executionView 调用很频繁,不能每次 spawn)。
+ * 缓存 60s(executionView 调用很频繁,不能每次 spawn)。只有首次(或 reset / 换 key 后)同步探测;
+ * 过期后先回旧结果、后台异步重探 —— 同步 spawn `okx config show` + `okx --version` 每次要卡住事件循环几秒,
+ * 期间所有 HTTP 请求一起排队(页面上表现为各 tab 转圈/没数据)。
  */
 export function okxAvailability(bin = defaultOkxCliBin(), wantProfile?: string | null): Availability {
   const key = `${bin}|${wantProfile ?? ''}|${okxConfigPath()}|${process.env['TG_OKX_PROFILE'] ?? ''}`;
-  if (availCache && availCache.key === key && Date.now() - availCache.at < 60_000) return availCache.result;
+  if (availCache && availCache.key === key) {
+    if (Date.now() - availCache.at >= 60_000 && !availRefreshing) void refreshOkxAvailability(bin, wantProfile, key);
+    return availCache.result;
+  }
   let result: Availability;
-  let profiles: OkxProfileView[] = [];
-  let profile: string | null = wantProfile ?? null;
   try {
     const binOk = bin.includes('/') ? existsSync(bin) : which(bin);
     // 二进制都没有就别 spawn 了:config 元数据只能由 CLI 自己交出来。
     const cfg: OkxConfigView = binOk ? readOkxConfig(bin) : { exists: false, profiles: [], defaultProfile: null, demo: {} };
-    if (wantProfile === undefined) profile = resolveOkxProfile(cfg);
-    profiles = cfg.profiles.map(name => ({ name, demo: cfg.demo[name] === true, is_default: name === cfg.defaultProfile }));
-    const demo = profile ? (cfg.demo[profile] ?? null) : null;
-    const version = binOk ? okxVersion(bin) : null;
-    if (!binOk) result = { available: false, note: `OKX 组件不可用，请尝试重新安装。\n${OKX_SETUP_GUIDE}`, demo, profile, version, cli: bin, profiles };
-    else if (!cfg.exists) result = { available: false, note: `请使用本页表单连接 OKX 账户。\n${OKX_SETUP_GUIDE}`, demo, profile, version, cli: bin, profiles };
-    else if (cfg.error) result = { available: false, note: `无法读取 OKX 配置，请重新连接账户。`, demo, profile, version, cli: bin, profiles };
-    else if (!profile) result = { available: false, note: `尚未连接 OKX 账户，请填写本页配置表单。\n${OKX_SETUP_GUIDE}`, demo, profile, version, cli: bin, profiles };
-    else if (cfg.profiles.length && !cfg.profiles.includes(profile)) result = { available: false, note: `指定的 OKX 账户配置不存在，请在本页重新连接或切换。`, demo, profile, version, cli: bin, profiles };
-    else result = { available: true, demo, profile, version, cli: bin, profiles };
-  } catch (e) {
-    result = { available: false, note: `检查 OKX 组件失败，请刷新或重新安装。`, demo: null, profile, version: null, cli: bin, profiles };
+    result = availabilityFrom(bin, wantProfile, { binOk, cfg, version: binOk ? okxVersion(bin) : null });
+  } catch {
+    result = availabilityFailed(bin, wantProfile);
   }
   availCache = { at: Date.now(), key, result };
   return result;
 }
 
+async function refreshOkxAvailability(bin: string, wantProfile: string | null | undefined, key: string): Promise<void> {
+  const gen = availGen;
+  availRefreshing = true;
+  let result: Availability;
+  try {
+    const binOk = bin.includes('/') ? existsSync(bin) : (await runQuiet('which', [bin], 8_000)).status === 0;
+    let cfg: OkxConfigView = { exists: false, profiles: [], defaultProfile: null, demo: {} };
+    let version: string | null = null;
+    if (binOk) {
+      const [c, v] = await Promise.all([runQuiet(...okxInvocation(bin, ['config', 'show']), 8_000), runQuiet(...okxInvocation(bin, ['--version']), 8_000)]);
+      cfg = c.error ? { ...cfg, error: c.error } : okxConfigFromOutput(c.stdout, c.stderr, c.status);
+      version = /(\d+\.\d+\.\d+)/.exec(v.stdout)?.[1] ?? null;
+    }
+    result = availabilityFrom(bin, wantProfile, { binOk, cfg, version });
+  } catch {
+    result = availabilityFailed(bin, wantProfile);
+  } finally {
+    availRefreshing = false;
+  }
+  if (gen === availGen && availCache?.key === key) availCache = { at: Date.now(), key, result };
+}
+
+function availabilityFrom(bin: string, wantProfile: string | null | undefined, { binOk, cfg, version }: OkxProbe): Availability {
+  const profile = wantProfile === undefined ? resolveOkxProfile(cfg) : wantProfile;
+  const profiles: OkxProfileView[] = cfg.profiles.map(name => ({ name, demo: cfg.demo[name] === true, is_default: name === cfg.defaultProfile }));
+  const demo = profile ? (cfg.demo[profile] ?? null) : null;
+  if (!binOk) return { available: false, note: `OKX 组件不可用，请尝试重新安装。\n${OKX_SETUP_GUIDE}`, demo, profile, version, cli: bin, profiles };
+  if (!cfg.exists) return { available: false, note: `请使用本页表单连接 OKX 账户。\n${OKX_SETUP_GUIDE}`, demo, profile, version, cli: bin, profiles };
+  if (cfg.error) return { available: false, note: `无法读取 OKX 配置，请重新连接账户。`, demo, profile, version, cli: bin, profiles };
+  if (!profile) return { available: false, note: `尚未连接 OKX 账户，请填写本页配置表单。\n${OKX_SETUP_GUIDE}`, demo, profile, version, cli: bin, profiles };
+  if (cfg.profiles.length && !cfg.profiles.includes(profile)) return { available: false, note: `指定的 OKX 账户配置不存在，请在本页重新连接或切换。`, demo, profile, version, cli: bin, profiles };
+  return { available: true, demo, profile, version, cli: bin, profiles };
+}
+
+function availabilityFailed(bin: string, wantProfile: string | null | undefined): Availability {
+  return { available: false, note: `检查 OKX 组件失败，请刷新或重新安装。`, demo: null, profile: wantProfile ?? null, version: null, cli: bin, profiles: [] };
+}
+
+/** 异步跑一个短命令收 stdout/stderr;超时杀掉。不抛错。 */
+function runQuiet(file: string, args: string[], timeoutMs: number): Promise<{ status: number | null; stdout: string; stderr: string; error?: string }> {
+  return new Promise((resolve) => {
+    let stdout = '';
+    let stderr = '';
+    let child: ReturnType<typeof spawn>;
+    try {
+      child = spawn(file, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    } catch (e) {
+      resolve({ status: null, stdout, stderr, error: (e as Error).message });
+      return;
+    }
+    const timer = setTimeout(() => child.kill('SIGKILL'), timeoutMs);
+    child.stdout?.on('data', (d: Buffer) => { stdout += d.toString('utf8'); });
+    child.stderr?.on('data', (d: Buffer) => { stderr += d.toString('utf8'); });
+    child.on('error', (e) => { clearTimeout(timer); resolve({ status: null, stdout, stderr, error: e.message }); });
+    child.on('close', (code) => { clearTimeout(timer); resolve({ status: code, stdout, stderr }); });
+  });
+}
+
 /** 测试用:丢掉可用性缓存。 */
 export function resetOkxAvailability(): void {
   availCache = null;
+  availGen += 1;
 }
 
 function which(bin: string): boolean {
@@ -388,7 +450,7 @@ export class OkxCliBackend implements ExecBackend {
   /**
    * OKX 的 tdMode 是**每张单**指定的,没有「账户级仓位模式」可改:记在这里,下单时用(§4 setMarginType)。
    * 必须按 symbol 存 —— 一个实例上 BTC 用 isolated、ETH 用 cross 是常态,共用一个字段会让
-   * 后开的币把先开的币的模式改掉,平仓/保护腿再按错的模式去找仓位(codex-review #6)。
+   * 后开的币把先开的币的模式改掉,平仓/保护腿再按错的模式去找仓位(review #6)。
    */
   private readonly marginModes = new Map<string, 'cross' | 'isolated'>();
   /** 每个 symbol 最后一次请求的杠杆:模式变了要在新模式下重设一次(OKX 的杠杆是按 instId+mgnMode 存的)。 */
@@ -462,7 +524,7 @@ export class OkxCliBackend implements ExecBackend {
     // `--demo` 不是可选的保险,是**唯一**能保证「启动检查看到的模拟盘」就是「命令实际打的环境」的东西:
     // `--profile` 只从 CLI 写死的 ~/.okx/config.toml 里选名字,同名 profile 在别处可以是实盘。
     // 只有明确 TG_OKX_LIVE=1 且 profile 自己就不是 demo 时才不带(CLI 里 --demo/--live 互斥;
-    // live=1 但 profile 是 demo 的组合仍然按模拟盘走,不替用户升实盘)(codex-review #3)。
+    // live=1 但 profile 是 demo 的组合仍然按模拟盘走,不替用户升实盘)(review #3)。
     const demoFlag = this.opts.live === true && this.opts.demo !== true ? [] : ['--demo'];
     const full = [...(this.opts.profile ? ['--profile', this.opts.profile] : []), ...demoFlag, '--json', ...args];
     this.health.runs++;
@@ -492,7 +554,7 @@ export class OkxCliBackend implements ExecBackend {
     }
     if (r.code !== 0) {
       const msg = ((r.stderr || r.stdout) ?? '').trim().slice(-400) || `exit ${r.code}`;
-      // 纯文本错误里也可能只印出 code:同样先认 50004(codex-review #2)。
+      // 纯文本错误里也可能只印出 code:同样先认 50004(review #2)。
       const plainAmbiguous = [...AMBIGUOUS_CODES].find((c) => new RegExp(`\\b${c}\\b`).test(msg));
       if (plainAmbiguous) throw new OkxCliError('transport', `${msg}${codeHint(plainAmbiguous)}`, plainAmbiguous, write);
       // 根本没发出去:没配 profile、参数不合法、命令不存在。
@@ -517,7 +579,7 @@ export class OkxCliBackend implements ExecBackend {
 
   /**
    * 平仓/保护腿要用**仓位实际的** mgnMode,不是我们本地记的那个:
-   * 仓位可能是上一轮、甚至别的实例按别的模式开的(codex-review #6)。
+   * 仓位可能是上一轮、甚至别的实例按别的模式开的(review #6)。
    * 返回 undefined = 这个合约当前没有仓位。
    */
   private async positionRow(instId: string): Promise<Record<string, unknown> | undefined> {
@@ -578,12 +640,12 @@ export class OkxCliBackend implements ExecBackend {
   }
 
   private async readAccount(): Promise<AccountView> {
-    // 张数 → 币要 ctVal:合约表没加载就先拉一次,拉不到下面 toCoin() 会硬失败(codex-review #10)。
+    // 张数 → 币要 ctVal:合约表没加载就先拉一次,拉不到下面 toCoin() 会硬失败(review #10)。
     await this.ensureInstruments();
     // 五次只读调用可并发(§4);算法单两种 ordType 只能分开问。
     //
     // **算法单查询失败必须让整个快照失败**:把错误吞成 `[]` 等于对巡检说「此刻没有保护单」,
-    // 巡检会据此判止损缺失并补挂一张(codex-review #9)。查不到 ≠ 没有。
+    // 巡检会据此判止损缺失并补挂一张(review #9)。查不到 ≠ 没有。
     const [balRaw, posRaw, ordRaw, condRaw, ocoRaw, spotOrd, spotCond, spotOco] = await Promise.all([
       this.run(['account', 'balance']),
       this.acctLv === 1 ? Promise.resolve([]) : this.run(['account', 'positions', '--instType', 'SWAP']),
@@ -692,7 +754,7 @@ export class OkxCliBackend implements ExecBackend {
   /**
    * 算法单 → 挂单视图。**必须翻译成 runtime 的内部词表**:巡检的 `hasLiveStop()`(threads.ts:106)
    * 只认 `STOP_MARKET`/`STOP` + `BUY`/`SELL`;直接吐 OKX 的 `conditional` / `sell` 会让巡检
-   * 一直判「保护缺失」并反复补挂(codex-review #8)。
+   * 一直判「保护缺失」并反复补挂(review #8)。
    *
    * 带 slTriggerPx 的 conditional/OCO = 止损(OCO 同时带 TP 也仍然是一张有止损的单);
    * **只有 tpTriggerPx 的单不能冒充止损** —— 它到不了止损价。
@@ -734,7 +796,7 @@ export class OkxCliBackend implements ExecBackend {
 
   /**
    * 张 → 币。**规格缺失时硬失败**:ctVal=0.01 的 BTC 合约 100 张是 1 BTC,不是 100 BTC;
-   * 1:1 回退会把风控敞口、成交量、结算数量一起污染(codex-review #10)。
+   * 1:1 回退会把风控敞口、成交量、结算数量一起污染(review #10)。
    */
   private toCoin(sz: unknown, symbol: string, market: Market = 'perp'): string {
     if (market === 'spot') return String(sz ?? '0');
@@ -830,7 +892,7 @@ export class OkxCliBackend implements ExecBackend {
       };
     }
     const st = await this.getOrder(req.symbol, req.client_order_id, true, market).catch(() => null);
-    // 附带腿的归属**只能**从父订单详情里读(§4 / codex-review #4)。
+    // 附带腿的归属**只能**从父订单详情里读(§4 / review #4)。
     const attachId = attachedAlgoIdOf(st?.raw);
     // 2026-09-21 真 key 实测(SOLUSDT 金丝雀两次同样失败):父订单详情里的 attachAlgoId **不是**成交后
     // OKX 真正生成的那张条件单的 algoId——拿它去 orders-algo-pending 查不到,拿它撤单回 51400。
@@ -872,7 +934,7 @@ export class OkxCliBackend implements ExecBackend {
    *  1. 列表里有 algoId === attachAlgoId(OKX 将来若对齐两者,直接命中);
    *  2. 列表里有 algoClOrdId === 我们的 cid'(CLI 将来支持 attachAlgoClOrdId 时);
    *  3. 无 algoClOrdId 的行,方向/止损触发价/止盈触发价与请求全等,且创建时间不早于入场单;
-   *     命中必须**唯一**,多于一张就不认(那是别处的同价单,codex-review #4 的红线)。
+   *     命中必须**唯一**,多于一张就不认(那是别处的同价单,review #4 的红线)。
    * 列表可能比成交晚一拍,最多查 3 次;列表本身查不到(CLI 失败)返回 null 让调用方按 unknown 处理。
    */
   private async resolveAttachedAlgo(symbol: string, market: Market, attachId: string, want: { side: string; stop: string; tp: string | null; notBefore: number }): Promise<{ algoId: string | null; note: string }> {
@@ -940,7 +1002,7 @@ export class OkxCliBackend implements ExecBackend {
         if (!(Number(wanted) > 0) || Number(wanted) > Number(sz)) return this.localReject('partial_tp_quantity_invalid');
         sz = wanted;
       }
-      // 保护腿的 tdMode 必须跟仓位一致,否则 OKX 定位不到要保护的那个仓位(codex-review #6)。
+      // 保护腿的 tdMode 必须跟仓位一致,否则 OKX 定位不到要保护的那个仓位(review #6)。
       mgnMode = String(row['mgnMode'] ?? '') === 'isolated' ? 'isolated' : String(row['mgnMode'] ?? '') === 'cross' ? 'cross' : this.mgnModeOf(symbol);
     } catch (e) {
       const err = e as OkxCliError;
@@ -948,7 +1010,7 @@ export class OkxCliBackend implements ExecBackend {
     }
     // 独立挂的算法单**可以**带客户端 id:CLI 的 `--clOrdId` 透到 OKX 的 `algoClOrdId`
     // (dist 里 `algoClOrdId: readString(args,"algoClOrdId") ?? readString(args,"clOrdId")`)。
-    // 有了它,algoOrderExists/listAlgoOrders 就不必只靠 KV 猜(codex-review #4)。
+    // 有了它,algoOrderExists/listAlgoOrders 就不必只靠 KV 猜(review #4)。
     const algoClOrdId = toClOrdId(clientAlgoId);
     const args = ['swap', 'algo', 'place', '--instId', instId, '--side', this.closeSide(position), '--ordType', 'conditional', '--sz', sz, '--reduceOnly', '--tdMode', mgnMode, '--cxlOnClosePos', '--clOrdId', algoClOrdId];
     if (kind === 'sl') args.push('--slTriggerPx', trigger, '--slOrdPx=-1', '--slTriggerPxType', 'mark');
@@ -1075,7 +1137,7 @@ export class OkxCliBackend implements ExecBackend {
     if (rejection) return {closed:false,receipt:{kind:'local_reject',code:rejection},error:rejection};
     if (market === 'spot') return this.closeSpot(symbol, _client_order_id);
     const instId = symbolToInstId(symbol, market);
-    // 平仓的 mgnMode 取**仓位实际的**那个,不是本地记的(codex-review #6);读不到就退回本地记的,
+    // 平仓的 mgnMode 取**仓位实际的**那个,不是本地记的(review #6);读不到就退回本地记的,
     // 平仓本身比「模式猜错被拒」更要紧,而被拒是显性的(runtime 会再查一次新鲜仓位)。
     let mgnMode = this.mgnModeOf(symbol);
     try {
@@ -1091,13 +1153,13 @@ export class OkxCliBackend implements ExecBackend {
       return { closed: true, receipt: r[0] ?? null, error: null };
     } catch (e) {
       // 「没有持仓」不是失败:等价于已经平掉了(Binance 的 -4509 同理)。
-      // 注意 51024(账户受限)**不在**这个集合里:那不是「仓位没了」(codex-review #1)。
+      // 注意 51024(账户受限)**不在**这个集合里:那不是「仓位没了」(review #1)。
       if (isRejectedWith(e, NO_POSITION_CODES) || /no position|position does not exist|持仓不存在/i.test((e as Error).message)) {
         this.invalidateAccount();
         return { closed: true, receipt: null, error: null };
       }
       // 写超时 / 50004:命令可能已经到交易所了。丢掉这个标记会让 runtime 把意图写成 failed,
-      // 而实际仓位可能已经平掉 —— 必须传上去让它保持 unknown(codex-review #7)。
+      // 而实际仓位可能已经平掉 —— 必须传上去让它保持 unknown(review #7)。
       const ambiguous = e instanceof OkxCliError && e.ambiguous;
       if (ambiguous) this.invalidateAccount();
       return { closed: false, receipt: null, error: (e as Error).message, ...(ambiguous ? { ambiguous: true } : {}) };
@@ -1245,7 +1307,7 @@ export class OkxCliBackend implements ExecBackend {
    *
    * runtime 的开仓准备是 setLeverage → setMarginType(Binance 的顺序,不动它)。OKX 的杠杆是按
    * (instId, mgnMode) 存的,所以第一次开 isolated 单时刚才那次 setLeverage 改的是 cross 的杠杆;
-   * 模式在这里变了就**在新模式下重设一次**,等价于「先定模式再设杠杆」(codex-review #6)。
+   * 模式在这里变了就**在新模式下重设一次**,等价于「先定模式再设杠杆」(review #6)。
    */
   async setMarginType(symbol: string, mode: 'cross' | 'isolated'): Promise<{ ok: boolean; error: string | null }> {
     const prev = this.mgnModeOf(symbol);
@@ -1282,7 +1344,7 @@ export class OkxCliBackend implements ExecBackend {
     // okx CLI 1.4.7 的 `swap fills` **只透传 instId/ordId/archive**(cmdSwapFills),没有
     // begin/end/after/limit —— 拿到的永远是最新的一页。所以只能证明覆盖,不能翻页:
     // 整页塞满且最旧一条还在窗口起点之后 = 起点之前的成交被挤掉了,结算不完整 → 返回 null,
-    // 由调用方按「没查到」处理,绝不当成 0(codex-review #11)。
+    // 由调用方按「没查到」处理,绝不当成 0(review #11)。
     const fillRows = fillsRaw as Record<string, unknown>[];
     const fillPageCap = fillArchive ? FILL_ARCHIVE_PAGE : FILL_PAGE;
     if (!coversWindow(fillRows, fillPageCap, startMs)) {
@@ -1307,7 +1369,7 @@ export class OkxCliBackend implements ExecBackend {
         qty: this.toCoin(f['fillSz'], symbol, market),
         realized_pnl: String(f['fillPnl'] ?? '0'),
         // OKX 的 fee:负数 = 扣费、正数 = 返佣。内部算的是 `realized - commission + funding`,
-        // 所以 commission = -fee,**保号**(maker 返佣要让收益增加,不是减少)(codex-review #12)。
+        // 所以 commission = -fee,**保号**(maker 返佣要让收益增加,不是减少)(review #12)。
         commission: negDec(market === 'spot' && String(f['feeCcy'] ?? '') === symbol.replace(/USDT$/, '') ? mulDec(String(f['fee'] ?? '0'), String(f['fillPx'] ?? '0')) : String(f['fee'] ?? '0')),
         position_side: String(f['posSide'] ?? '') || null,
       });

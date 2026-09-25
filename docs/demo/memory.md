@@ -2,7 +2,7 @@
 
 > 09-23 起:**记忆分域**(`docs/design/self-evolution-2026-09-23.md` §5 / §2.2,工单 P0-2)——scope 加 layer/role/strategy_id/thread_id,读写按角色矩阵过滤,被引用的记忆回写结算后果。接口口径见 `v3-ui-contract.md` §9.48。
 >
-> 回应 Codex 09-04 的记忆评估("交易状态连续性 8/10、长期记忆设计 7/10、实现 2/10")。这份文档是运行时契约;设计层的定位见 `docs/design/trading-swarm-design-v1-2026-09-02.md` §11(L1–L4 分层),接口口径同步在 `docs/demo/v3-ui-contract.md` §9.5。
+> 回应 外部评审09-04 的记忆评估("交易状态连续性 8/10、长期记忆设计 7/10、实现 2/10")。这份文档是运行时契约;设计层的定位见 `docs/design/trading-swarm-design-v1-2026-09-02.md` §11(L1–L4 分层),接口口径同步在 `docs/demo/v3-ui-contract.md` §9.5。
 
 ## 0. 我们采纳/不采纳 Mem0 路线的哪些部分
 

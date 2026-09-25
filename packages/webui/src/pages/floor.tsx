@@ -2,7 +2,7 @@
  * 楼层页(#/floor):Grok Bot Architecture 风格的「值班团队作战楼层」。
  * 设计:docs/design/ops-floor-2026-09-05.md —— 三层监督的前两层(状态提示 + 侧栏预览),
  * 每张桌子是既有工作台的入口,不新增任何权限;楼层只读,唯一的写动作是 ack 交接(= 已阅,
- * 不代表接手或授权);Radar 的 watchlist 提案在这里只预览 diff,应用去筛选页确认(Codex 评审 §8)。
+ * 不代表接手或授权);Radar 的 watchlist 提案在这里只预览 diff,应用去筛选页确认(评审 §8)。
  *
  * 数据全部走 App.tsx 约定的 query key(['overview'] ['activity'] ['bots'] ['execution']
  * ['backtest'] ['history']),本页不开 SSE;bots.changed / screener.changed / activity 由 App.tsx 失效。
@@ -104,7 +104,7 @@ export function FloorPage({ connected = true }: { connected?: boolean }) {
   const chatMessages = chatQ.data?.messages ?? [];
   const pulses = useFloorPulses({ handoffs, activity, episodes: overviewQ.data?.recent_episodes ?? [], chat: chatMessages, now });
 
-  // 有证据的常驻提示(Codex §6):断流 / 行情过期 / 预算耗尽 / 认证失败。只挂在相关角色上,不盖住 blocked。
+  // 有证据的常驻提示(评审 §6):断流 / 行情过期 / 预算耗尽 / 认证失败。只挂在相关角色上,不盖住 blocked。
   const overlays = useMemo(() => {
     const out: Partial<Record<BotRole, { text: string; tone: 'warn' | 'danger' }>> = {};
     const ov = overviewQ.data;

@@ -1,5 +1,5 @@
 import { HORIZON_POLICY, inferHorizon, type StrategyHorizon } from './horizon.js';
-// 策略库(docs/design/strategy-library-2026-09-05.md;决定稿 §2 E/F;Codex 调研 Part 2)。
+// 策略库(docs/design/strategy-library-2026-09-05.md;决定稿 §2 E/F;调研 Part 2)。
 //
 // 一条策略是一个**不可变的版本化对象**:触发(纯函数,哪些事件才唤醒它)+ 清单(代码必须能算出来的
 // 证据)+ 规则(模型只能在这些边里选)+ 参数(带范围,改一个就是新版本 + 新 hash)+ 评测统计。

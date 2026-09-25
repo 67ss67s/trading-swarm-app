@@ -931,7 +931,7 @@ export function TradePage() {
       return null;
     }
   });
-  // Codex(trade-page-layout):只有「成功加载且进行中为 0」才自动收起,失败/加载中不收
+  // 评审(trade-page-layout):只有「成功加载且进行中为 0」才自动收起,失败/加载中不收
   const threadsPaneOpen = threadsPaneUser ?? !(threadsQ.isSuccess && threads.length === 0);
   const setThreadsPane = (open: boolean) => {
     setThreadsPaneUser(open);

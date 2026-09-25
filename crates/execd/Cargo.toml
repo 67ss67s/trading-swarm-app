@@ -28,7 +28,3 @@ uuid.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
-
-[[bin]]
-name = "execd-mcp-read"
-path = "src/bin/mcp-read.rs"

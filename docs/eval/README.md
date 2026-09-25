@@ -2,7 +2,7 @@
 
 > 目的:对「ContextBuilder → 大脑 → 输出校验 → 代码闸 / 线程 reducer」这条判断链做**全面、自动化、可复现**的评测。
 > 口径来自 `~/Desktop/trading-swarm-eval/harness-assessment-and-eval-plan.md` §10(visible/hidden 分层、分项打分、PASS/FAIL/BLOCKED/NOT_IMPLEMENTED、晋升门)。
-> 本规格同时交给两个独立实现(A:Fable 子代理,`packages/eval-a`;B:Codex,`packages/eval-b`),之后由第三方 agent 按 `docs/eval/grading-rubric.md` 打分。两套实现**只能**通过 `import { demo } from '@trading-swarm/gateway'` 复用线上同一份 context builder / validator / gates / threads,不得复制它们。
+> 本规格同时交给两个独立实现(A:一条工作线,`packages/eval-a`;B:外部评审,`packages/eval-b`),之后由第三方 agent 按 `docs/eval/grading-rubric.md` 打分。两套实现**只能**通过 `import { demo } from '@trading-swarm/gateway'` 复用线上同一份 context builder / validator / gates / threads,不得复制它们。
 
 ## 1. 被测对象与不变量
 

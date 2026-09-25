@@ -641,7 +641,23 @@ export class OkxAspFeed {
   // ---- 三盏灯
 
   /** 钱包 / A2A 守护 / Trade Kit 三盏灯,缓存 30s(`fresh` 强刷)。 */
+  /**
+   * 先返回上一次结果,过期了在后台刷新(stale-while-revalidate):三盏灯要跑 onchainos / okx-a2a 两个 CLI,
+   * 过期后同步现算要 7s+,网络抖时会超时,前端就显示「账户没连接」(2026-09-25)。只有从没算过或 fresh=1 才同步等。
+   */
+  private lightsRefresh: Promise<OkxAccountLights> | null = null;
   async accountLights(fresh = false): Promise<OkxAccountLights> {
+    if (!fresh && this.lights) {
+      if (this.now() - this.lightsAt >= OKX_ACCOUNT_TTL_MS && !this.lightsRefresh) {
+        this.lightsRefresh = this.computeAccountLights(true).catch(() => this.lights!).finally(() => { this.lightsRefresh = null; });
+      }
+      return this.lights;
+    }
+    if (!fresh && this.lightsRefresh) return this.lightsRefresh;
+    return this.computeAccountLights(fresh);
+  }
+
+  private async computeAccountLights(fresh: boolean): Promise<OkxAccountLights> {
     const now = this.now();
     if (!fresh && this.lights && now - this.lightsAt < OKX_ACCOUNT_TTL_MS) {
       const v = await this.wallet.status();
@@ -792,7 +808,7 @@ export function parseFileDelivery(text: string): FileDelivery | null {
  * 平台不规定 payload schema,每家 ASP 都可能是自己的文本样式,这里是第一家文本适配器;新样式加新分支,别放宽正则去「猜」。
  */
 export function parseTextSignal(text: string, createdAt: string | number | null | undefined): Record<string, unknown> | null {
-  const line = text.split('\n').map((l) => l.trim()).find((l) => /^【?(合约|永续|现货)?信号】?/.test(l) && /\|/.test(l));
+  const line = text.split('\n').map((l) => l.trim()).find((l) => (/^【?(合约|永续|现货)?信号】?/.test(l) || /^【(Futures|合约)】/i.test(l)) && /\|/.test(l));
   if (!line) return null;
   const parts = line.split('|').map((x) => x.trim());
   const head = parts[0]!.replace(/^【[^】]*】\s*/, '');
@@ -801,9 +817,9 @@ export function parseTextSignal(text: string, createdAt: string | number | null 
   const dir = parts[1]?.match(/^(LONG|SHORT|BUY|SELL|多|空)\s*(\d+(?:\.\d+)?)?x?/i); if (!dir) return null;
   const action = /^(LONG|BUY|多)/i.test(dir[1]!) ? 'LONG' : 'SHORT';
   const num = (label: RegExp) => { const p = parts.find((x) => label.test(x)); const m = p?.match(/(\d+(?:\.\d+)?)(?:\s*[-~–]\s*(\d+(?:\.\d+)?))?/); return m ? [m[1]!, ...(m[2] ? [m[2]] : [])] : []; };
-  const entry = num(/^(入场|entry)/i); const sl = num(/^(SL|止损)/i); const tp = parts.filter((x) => /^(TP\d*|止盈)/i.test(x)).flatMap((x) => x.replace(/^(TP\d*|止盈\d*)\s*/i, '').match(/\d+(?:\.\d+)?/g) ?? []);
+  const entry = num(/^(入场|entry|reference price|order price)/i); const sl = num(/^(SL|止损|stop loss)/i); const tp = parts.filter((x) => /^(TP\d*|止盈|take profit)/i.test(x)).flatMap((x) => x.replace(/^(TP\d*|止盈\d*|take profit)\s*/i, '').match(/\d+(?:\.\d+)?/g) ?? []);
   const pct = parts.find((x) => /^(仓位|position)/i.test(x))?.match(/\d+(?:\.\d+)?/)?.[0];
-  const hours = parts.find((x) => /有效|valid/i.test(x))?.match(/(\d+)\s*h/i)?.[1];
+  const validPart = parts.find((x) => /有效|valid/i.test(x)); const hours = validPart?.match(/(\d+)\s*h/i)?.[1] ?? (validPart?.match(/(\d+)\s*min/i) ? String(Number(validPart.match(/(\d+)\s*min/i)![1]) / 60) : undefined);
   const published = createdAt === null || createdAt === undefined ? NaN : typeof createdAt === 'number' ? createdAt : Date.parse(createdAt);
   // 同一条行式信号会到两次:XMTP 原件([Received])和守护里无头 Claude 的「信号送达」回执;幂等键按行内容哈希,两份合成一条。
   const deliveryId = `line-${createHash('sha256').update(`${symbol}|${action}|${entry.join('-')}|${sl[0] ?? ''}|${tp.join('/')}`).digest('hex').slice(0, 16)}`;

@@ -58,6 +58,10 @@ export async function run() {
     writeFileSync(path + ".tmp", JSON.stringify(value, null, 2) + "\n");
     renameSync(path + ".tmp", path);
   };
+  if (!existsSync(`${dir}/raw_messages.json`) || !existsSync(`${dir}/structured_signals.json`)) {
+    console.error(`缺少原始输入:${dir}/raw_messages.json 与 structured_signals.json 不随仓库分发,重跑研究需自备`);
+    process.exit(2);
+  }
   const raw = read(`${dir}/raw_messages.json`),
     signals = read(`${dir}/structured_signals.json`),
     registration = read(`${dir}/preregistration.json`);
@@ -199,7 +203,7 @@ export async function run() {
       ]),
     );
   const corpus = Object.fromEntries(
-    ["舒琴", "三马", "赵哥"].map((trader) => {
+    ["交易员B", "交易员A", "交易员C"].map((trader) => {
       const rs = raw.filter((r) => r.trader === trader),
         ss = signals.filter((s) => {
           const m = JSON.parse(s.metadata);

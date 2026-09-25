@@ -121,7 +121,7 @@ export interface ExecBackend {
   /**
    * `ambiguous: true` = 请求可能已经到交易所了(写超时 / OKX 50004),结果**未知**:
    * 调用方要把意图留在 unknown、等新鲜仓位收敛,不能写成 failed。Binance 的实现不带这个字段
-   * (undefined),行为不变(codex-review #7)。
+   * (undefined),行为不变(review #7)。
    */
   closePosition(symbol: string, client_order_id: string, market?: Market): Promise<{ closed: boolean; receipt: unknown; error: string | null; ambiguous?: boolean }>;
   reducePosition(symbol: string, qty: string, client_order_id: string, market?: Market): Promise<OrderReceipt>;

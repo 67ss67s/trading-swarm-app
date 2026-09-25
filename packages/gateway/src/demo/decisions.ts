@@ -21,6 +21,10 @@ export interface DecisionResult {
   answers: Record<string, DecisionAnswer>;
   usage: { input_tokens: number; cost_usd: number | null };
   latency_ms: number;
+  /** 脱敏供应商原文（仅允许 model/id/answers/usage）；解析失败也随错误返回。 */
+  raw_response?: unknown;
+  provider_request_id?: string;
+  response_error?: string;
 }
 
 export interface DecisionRequest {
@@ -50,7 +54,7 @@ export function memorySpendLedger(): DecisionSpendLedger {
 }
 
 export class DecisionError extends Error {
-  constructor(message: string, readonly code: 'decision_budget_exhausted' | 'auth' | 'network' | 'timeout' | 'http' | 'bad_response' | 'bad_request', readonly status: number | null = null) {
+  constructor(message: string, readonly code: 'decision_budget_exhausted' | 'auth' | 'network' | 'timeout' | 'http' | 'bad_response' | 'bad_request', readonly status: number | null = null, readonly recorded_response: DecisionResult | null = null) {
     super(message);
     this.name = 'DecisionError';
   }
@@ -213,8 +217,10 @@ export class JevDecisionClient implements DecisionClient {
           /* 原文 */
         }
         detail = redact(`${res.status} ${detail}`.trim());
-        if (res.status === 401 || res.status === 403) throw new DecisionError(detail, 'auth', res.status);
-        last = new DecisionError(detail, 'http', res.status);
+        const recorded = this.envelope(text, started);
+        if (recorded?.usage.cost_usd != null && recorded.usage.cost_usd > 0) this.ledger.add(day,recorded.usage.cost_usd);
+        if (res.status === 401 || res.status === 403) throw new DecisionError(detail, 'auth', res.status, recorded);
+        last = new DecisionError(detail, 'http', res.status, recorded);
         if (res.status !== 429 && res.status < 500) throw last;
         const ra = Number(res.headers.get('retry-after'));
         if (Number.isFinite(ra) && ra > 0) wait = Math.min(10_000, ra * 1000);
@@ -225,22 +231,35 @@ export class JevDecisionClient implements DecisionClient {
     throw last ?? new DecisionError(`请求超时(${budget}ms)`, 'timeout');
   }
 
+  private envelope(text: string, started: number): DecisionResult | null {
+    let j: Record<string, unknown>;
+    try { j = JSON.parse(redactKeyText(text, [this.key])) as Record<string, unknown>; } catch { return { model:this.model,answers:{},usage:{input_tokens:0,cost_usd:null},latency_ms:this.now()-started,raw_response:{body_text:redactKeyText(text,[this.key])},response_error:'provider_non_json' }; }
+    if (!j || typeof j !== 'object' || Array.isArray(j)) return { model:this.model,answers:{},usage:{input_tokens:0,cost_usd:null},latency_ms:this.now()-started,raw_response:{body_text:redactKeyText(text,[this.key])},response_error:'provider_invalid_json_shape' };
+    const u = j.usage as Record<string, unknown> | undefined;
+    const cost = typeof u?.cost === 'number' ? u.cost : typeof u?.cost === 'string' && /^(0|[1-9]\d*)(\.\d+)?$/.test(u.cost) ? Number(u.cost) : null;
+    const raw_response = Object.fromEntries(['model','id','answers','usage'].filter(k => k in j).map(k => [k,j[k]]));
+    return { model: typeof j.model === 'string' ? j.model : this.model, answers: {},
+      usage: { input_tokens: Number(u?.input_tokens ?? 0), cost_usd: cost !== null && Number.isFinite(cost) && cost >= 0 ? cost : null },
+      latency_ms: this.now() - started, raw_response,
+      ...(typeof j.id === 'string' ? { provider_request_id: j.id } : {}) };
+  }
+
   private parse(text: string, req: DecisionRequest, started: number, day: string): DecisionResult {
-    let j: { model?: string; answers?: Record<string, unknown>; usage?: { input_tokens?: number; output_tokens?: number; cost?: number } };
-    try {
-      j = JSON.parse(text) as typeof j;
-    } catch {
-      throw new DecisionError('响应不是 JSON', 'bad_response');
-    }
-    if (!j.answers || typeof j.answers !== 'object') throw new DecisionError('响应缺 answers', 'bad_response');
-    const cost = typeof j.usage?.cost === 'number' && Number.isFinite(j.usage.cost) ? j.usage.cost : null;
-    // 先记账再校验答案:服务端已经收了钱,坏答案也照样算花费。
+    const result = this.envelope(text, started);
+    if (!result) throw new DecisionError('响应不是 JSON', 'bad_response');
+    const cost = result.usage.cost_usd;
     if (cost !== null && cost > 0) this.ledger.add(day, cost);
-    const answers: Record<string, DecisionAnswer> = {};
-    for (const key of Object.keys(req.questions)) {
-      if (!(key in j.answers)) throw new DecisionError(`响应缺答案 ${key}`, 'bad_response');
-      answers[key] = normalizeAnswer(key, req.questions[key], j.answers[key]);
+    try {
+      const j = result.raw_response as { answers?: Record<string, unknown> };
+      if (!j.answers || typeof j.answers !== 'object') throw new DecisionError('响应缺 answers', 'bad_response');
+      for (const key of Object.keys(req.questions)) {
+        if (!(key in j.answers)) throw new DecisionError(`响应缺答案 ${key}`, 'bad_response');
+        result.answers[key] = normalizeAnswer(key, req.questions[key], j.answers[key]);
+      }
+      return result;
+    } catch (e) {
+      result.response_error = 'provider_bad_response';
+      throw new DecisionError((e as Error).message, 'bad_response', null, result);
     }
-    return { model: j.model ?? this.model, answers, usage: { input_tokens: Number(j.usage?.input_tokens ?? 0), cost_usd: cost }, latency_ms: this.now() - started };
   }
 }

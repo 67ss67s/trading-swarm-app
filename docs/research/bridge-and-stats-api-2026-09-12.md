@@ -341,7 +341,7 @@ curl -sS -X POST "https://<bridge-domain>/api/v1/subscriber/agent-deliveries/bat
 | GET | `/api/leaderboard/{source}/detail?window=&{economics params}` | 单个带单员详情(含权益曲线、白名单字段的跟单配置) |
 | GET | `/api/copytrading/trader-stats/{source}/replays` | 该带单员的逐笔回放明细(全量,不分窗口) |
 
-`{source}`/`trader-stats` 里的 `source` **是带单员名字**(如"三马""舒琴"),不是传输源
+`{source}`/`trader-stats` 里的 `source` **是带单员名字**(如"交易员A""交易员B"),不是传输源
 (lark/telegram)——代码里专门做了 `thread_key → trader` 的映射来纠正这个命名(见
 `core.rs:11971` `trader_replays` 的注释:"入参是**交易员名**…但 shadow_replays.source 存的是
 传输源…直接按列过滤永远空")。
@@ -363,7 +363,7 @@ strategy-public-api 而不是直接打 8794。
 ```jsonc
 // GET /api/leaderboard 中 "traders" 数组的每个元素(stats_with_leverage 在 aggregate 基础上叠加杠杆相关字段)
 {
-  "source": "三马",                    // 实为 trader 名
+  "source": "交易员A",                    // 实为 trader 名
   "signals_total": 60,
   "no_fill": 2,
   "awaiting_fill": 0,                  // 入场窗口未走完,既不算接到也不算没接到

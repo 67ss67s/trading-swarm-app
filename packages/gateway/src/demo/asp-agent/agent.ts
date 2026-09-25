@@ -1,8 +1,10 @@
 import { MarketWallet } from './wallet.js';
 import type { DemoRuntime } from '../runtime.js';
 import { MarketCli, CliError, data, list, object, payload } from './cli.js';
+import { ProviderTaskPoller, ensureBuyerSession, registerProviderHandler } from './provider-tasks.js';
+import { AspServices } from './services/index.js';
 import { MarketInbox, downloadFileDelivery } from './inbox.js';
-import { MarketPublisher, renderDeliverable, realizedR, type PublishEvent } from './publisher.js';
+import { MarketPublisher, renderDeliverable, realizedR, serviceMessage, signalLine, type PublishEvent } from './publisher.js';
 import { MarketIdentity } from './identity.js';
 import { MarketAftersales } from './aftersales.js';
 import { MarketCatalog } from './catalog.js';
@@ -25,17 +27,67 @@ export function findJobId(v: unknown, depth = 0): string | null {
   for (const x of Object.values(v)) { const r = findJobId(x, depth + 1); if (r) return r; }
   return null;
 }
+/** 解析 `asp-claimable` 的人话输出:「claimable rewards (account=…)」+ 每行「SYMBOL amount (token=0x…)」+ 可选「(No pending rewards at this time)」。 */
+export function parseClaimableText(raw: string): { amount: string; currency: string; pending: boolean; rewards: { symbol: string; amount: string; token: string }[]; text: string } | null {
+  const text = raw.replace(/\x1b\[[0-9;]*m/g, '').trim();
+  if (!/claimable rewards|no pending rewards/i.test(text)) return null;
+  const rewards = [...text.matchAll(/^\s*([A-Za-z][A-Za-z0-9₮.]*)\s+(\d+(?:\.\d+)?)\s+\(token=(0x[0-9a-fA-F]+)\)/gm)].map((m) => ({ symbol: m[1]!, amount: m[2]!, token: m[3]! }));
+  const usdt = rewards.find((r) => /^USDT/i.test(r.symbol));
+  const pending = !/no pending rewards/i.test(text) && rewards.some((r) => Number(r.amount) > 0);
+  return { amount: usdt ? usdt.amount : pending ? rewards.find((r) => Number(r.amount) > 0)!.amount : '0', currency: usdt ? 'USDT' : rewards.find((r) => Number(r.amount) > 0)?.symbol ?? 'USDT', pending, rewards, text };
+}
+/** 「Trading Swarm 策略信号」服务的 serviceId:环境变量 > kv market.signal_service_id > 已上架默认值。 */
+export const DEFAULT_SIGNAL_SERVICE_ID = 'c7f0c55b-7374-4402-912f-020dd456c066';
+export function signalServiceId(store: { kvGet(key: string): string | null }): string {
+  return process.env['TG_ASP_SIGNAL_SERVICE_ID'] || store.kvGet('market.signal_service_id') || DEFAULT_SIGNAL_SERVICE_ID;
+}
 export class AspAgent {
   readonly wallet: MarketWallet; readonly cli: MarketCli; readonly identity: MarketIdentity; readonly inbox: MarketInbox; readonly publisher: MarketPublisher; readonly aftersales: MarketAftersales; readonly catalog: MarketCatalog;
+  /** ASP 侧唯一接单方(订阅/按次),见 provider-tasks.ts。 */
+  readonly providerTasks: ProviderTaskPoller;
+  /** 对外服务(市场情报 / 微观告警订阅 + 按次服务):处理器注册到 providerTasks,订阅按 serviceId 扇出。 */
+  readonly services: AspServices;
   constructor(private readonly rt: DemoRuntime, session: () => string) {
     this.cli = new MarketCli(rt.okxAspRunCli ?? undefined);
     this.wallet = new MarketWallet(this.cli);
     this.identity = new MarketIdentity(this.cli, rt.store);
     const emit = (name: string, payload: unknown) => rt.emit(name, payload);
     this.aftersales = new MarketAftersales({ store: rt.store, cli: this.cli, aspId: () => this.identity.aspId(), emit, activity: (title) => rt.activity('info_update', { title }) });
-    this.inbox = new MarketInbox({ store: rt.store, settings: () => ({ ...rt.followSettings, enabled: this.shouldCollect() }), session, fetchFile: async (d, job) => { const buyer = (await this.identity.mine()).buyer; const id = buyer?.['agentId']; if (!id) throw new Error('没有买方身份,无法解密文件投递'); return downloadFileDelivery(d, String(id), job); }, signalEnabled: () => rt.followSettings.enabled, ...(rt.okxAspReadQueue ? { readQueue: rt.okxAspReadQueue } : {}), system: (e, id) => this.aftersales.receive(e, id), emit, traderOf: (job) => rt.okxAspFeed().traderOf(job) });
+    this.inbox = new MarketInbox({ store: rt.store, settings: () => ({ ...rt.followSettings, enabled: this.shouldCollect() }), session, fetchFile: async (d, job) => { const buyer = (await this.identity.mine()).buyer; const id = buyer?.['agentId']; if (!id) throw new Error('没有买方身份,无法解密文件投递'); return downloadFileDelivery(d, String(id), job); }, signalEnabled: () => rt.followSettings.enabled, ...(rt.okxAspReadQueue ? { readQueue: rt.okxAspReadQueue } : {}), system: async (e, id) => { await this.aftersales.receive(e, id); if (/^(sub_open|job_asp_selected|sub_asp_selected)$/.test(String(e['event']))) void this.providerTasks.tick(); }, emit, traderOf: (job) => rt.okxAspFeed().traderOf(job) });
     this.catalog = new MarketCatalog({ store: rt.store, log: (level, message) => rt.log(level, 'asp_agent', message) });
     this.publisher = new MarketPublisher({ store: rt.store, cli: this.cli, settings: () => this.settings().publisher, aspId: () => this.identity.aspId(), emit });
+    this.providerTasks = new ProviderTaskPoller({
+      store: rt.store, cli: this.cli, emit, log: (level, message) => rt.log(level, 'asp_agent', message),
+      aspId: async () => { const asp = (await this.identity.mine()).asp; const id = asp?.['agentId'] ?? asp?.['aspAgentId'] ?? asp?.['id']; return id ? String(id) : null; },
+      ensureSession: (job, asp, buyer) => ensureBuyerSession(job, buyer, { asp_id: asp, ...(rt.okxAspRunCli ? { runner: rt.okxAspRunCli } : {}) }),
+    });
+    // 策略信号服务:接单后立即回一条规范化信号(有效期内的最新计划;没有就发「当前无信号 + 下次扫描时间」的服务消息)。
+    // 只挂在这条服务的 serviceId 上;其它服务(市场情报等)由各自处理器负责,没有处理器就不接单。
+    registerProviderHandler(`service:${signalServiceId(rt.store)}`, { produce: async () => ({ text: this.welcomeText() }) });
+    this.services = new AspServices(rt, {
+      cli: this.cli, aspId: () => this.identity.aspId(), register: registerProviderHandler,
+      // 会话建不起来必须抛错,扇出才不会 deliver
+      ensureSession: async (job, asp, buyer) => { if (!(await ensureBuyerSession(job, buyer, { asp_id: asp, ...(rt.okxAspRunCli ? { runner: rt.okxAspRunCli } : {}) }))) throw new Error('A2A 会话建立失败,本次不投递'); },
+    });
+    // 注入了 CLI 的环境(测试)不自动起轮询;生产可用 TG_ASP_PROVIDER_POLL=0 关。
+    if (!rt.okxAspRunCli && process.env['TG_ASP_PROVIDER_POLL'] !== '0' && !process.env['VITEST']) { this.providerTasks.start(); this.services.start(); }
+  }
+  /** 新订阅的第一条交付:有效期内(至少还剩 1 分钟)最近一条可执行信号按剩余有效期重发;否则发状态消息。 */
+  welcomeText(now = Date.now()): string {
+    const rows = this.rt.store.marketDb.prepare('SELECT event_json FROM okx_market_delivery_out WHERE refusal IS NULL ORDER BY created_at DESC LIMIT 50').all();
+    for (const r of rows) {
+      let e: PublishEvent; try { e = JSON.parse(String(r['event_json'])) as PublishEvent; } catch { continue; }
+      if (!['strategy_signal', 'entry_filled'].includes(e.kind) || e.direction === 'flat') continue;
+      if (!e.signal_only && (e.paper || e.backend === 'paper')) continue;
+      if ((e.valid_until ?? e.signal_time + 180_000) < now + 60_000) continue;
+      return signalLine(e, e.direction === 'short' ? 'SHORT' : 'LONG', now);
+    }
+    let runs: { strategy_name: string; timeframe: string; symbols: string[]; next_scan_at: number | null }[] = [];
+    try { runs = this.rt.strategyRuns().store.list().filter((r) => r.status === 'running' && r.publish_asp); } catch {}
+    const next = runs.map((r) => r.next_scan_at).filter((x): x is number => typeof x === 'number' && x > now).sort((a, b) => a - b)[0];
+    const run = runs[0];
+    const hhmm = (ms: number) => new Date(ms).toISOString().slice(5, 16).replace('T', ' ');
+    return serviceMessage(`订阅已开通 / Subscription active. 当前无有效信号 / No active signal now.${run ? ` 运行中 / Running: ${run.strategy_name} ${run.timeframe} ${run.symbols.slice(0, 3).join(',')}.` : ''}${next ? ` 下次扫描 / Next scan ${hhmm(next)} UTC.` : run ? ` 每根 ${run.timeframe} 收盘扫描 / Scans every ${run.timeframe} bar close.` : ''} 新信号收盘即推送 / New signals pushed on bar close.`);
   }
   shouldCollect(): boolean {
     if (this.rt.followSettings.enabled || this.settings().publisher.enabled) return true;
@@ -231,12 +283,31 @@ export class AspAgent {
   async asp() {
     const identities = await this.identity.mine(); if (!identities.asp) return { identity: null, services: null, active: null, subscriptions: null, claimable: null, aftersales: this.aftersales.rows() };
     const id = await this.identity.aspId();
-    const [services, active, subscriptions, claimable] = await Promise.all([this.cli.call('service-list', ['--agent-id', id]), this.cli.call('subscribe-active', ['--agent-id', id]), this.cli.call('my-subscriptions', ['--role', 'provider']), this.cli.call('asp-claimable', ['--agent-id', id])]);
-    return { identity: identities.asp, services: payload(services), active: payload(active), subscriptions: payload(subscriptions), claimable: payload(claimable), aftersales: this.aftersales.rows() };
+    // 收益查询是附属信息:onchainos 4.6.2 的 asp-claimable 只打人话表格(非 JSON),解析不了/失败也只降级这一格,不拖垮整个视图。
+    const claim = this.claimable(id);
+    const [services, active, subscriptions, claimable] = await Promise.all([this.cli.call('service-list', ['--agent-id', id]), this.cli.call('subscribe-active', ['--agent-id', id]), this.cli.call('my-subscriptions', ['--role', 'provider']), claim]);
+    return { identity: identities.asp, services: payload(services), active: payload(active), subscriptions: payload(subscriptions), claimable: claimable.value, ...(claimable.error ? { claimable_error: claimable.error } : {}), aftersales: this.aftersales.rows() };
+  }
+  private async claimable(id: string): Promise<{ value: unknown; error: string | null }> {
+    try { return { value: payload(await this.cli.call('asp-claimable', ['--agent-id', id])), error: null }; }
+    catch (e) {
+      const text = e instanceof CliError && e.code === 'cli_invalid_json' ? parseClaimableText(e.raw_message) : null;
+      if (text) return { value: text, error: null };
+      return { value: null, error: `收益查询暂不可用:${(e as Error).message.split('\n')[0]}` };
+    }
   }
   async claim() {
     const id = await this.identity.aspId(); const run = startAspRun(this.rt.store, 'asp_claim', { asp_id: id });
-    try { const result = data(await this.cli.call('asp-claim-rewards', ['--agent-id', id])); this.wallet.invalidate(); this.rt.store.bots.finishRun(run, { status: 'done', result }); return result; }
+    try {
+      let result: Record<string, unknown>;
+      try { result = data(await this.cli.call('asp-claim-rewards', ['--agent-id', id])); }
+      catch (e) {
+        // 没有待领收益时 CLI 同样只打人话;识别成「无可领」而不是格式错误,其余错误照抛。
+        const parsed = e instanceof CliError && e.code === 'cli_invalid_json' ? parseClaimableText(e.raw_message) : null;
+        if (!parsed || parsed.pending) throw e;
+        result = { claimed: false, ...parsed };
+      }
+      this.wallet.invalidate(); this.rt.store.bots.finishRun(run, { status: 'done', result }); return result; }
     catch (e) { this.rt.store.bots.finishRun(run, { status: 'failed', error: (e as Error).message }); throw e; }
   }
   async preview() {

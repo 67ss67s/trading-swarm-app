@@ -83,7 +83,7 @@ export function humanSignal(signal: Setup): SignalFn {
 
 export const HUMAN_SIGNAL_REGISTRY: Record<string, (event: Setup) => SignalFn> =
   {
-    human_shuqin: humanSignal,
-    human_sanma: humanSignal,
-    human_zhaoge: humanSignal,
+    human_trader_b: humanSignal,
+    human_trader_a: humanSignal,
+    human_trader_c: humanSignal,
   };

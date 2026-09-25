@@ -17,7 +17,7 @@
  */
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, Ban, Beaker, Braces, Bot, ChevronDown, ChevronRight, Database, Download, FlaskConical, History, LineChart, Play, RefreshCw, Send, ShieldCheck, Sparkles, Telescope, Wand2, X } from 'lucide-react';
+import { ArrowRight, Ban, Beaker, Braces, Bot, ChevronDown, ChevronRight, Database, Download, FlaskConical, Grid3x3, History, LineChart, Play, RefreshCw, Send, ShieldCheck, Sparkles, Telescope, Wand2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, researchApi } from '@/api/client';
 import type {
@@ -64,6 +64,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { MatrixStudyPanel } from '@/components/matrix-study/panel';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { fmtDateTime, fmtDuration } from '@/lib/format';
@@ -105,9 +106,9 @@ const TF_OPTIONS = ['15m', '1h', '4h', '1d'] as const;
 const PRECHECK_LABEL: Record<string, string> = tmap({ signal_frequency: '信号频率', min_trades: '最少笔数', stop_over_cost: '止损/成本倍数', order_gate_pass_rate: '过盈亏比门比例', stop_fit_rate: '止损放宽比例', holding_vs_timeframe: '预计持有根数', warmup_coverage: '预热覆盖', regime_coverage: '趋势过滤放行' });
 
 /** 右栏视图:结果(对话里选中的产物)/ 实验详情 / 策略构建 / 资产筛选。旧能力一个不少。 */
-type PanelView = 'artifact' | 'run' | 'builder' | 'screen' | 'pine';
-const PANEL_VIEWS: PanelView[] = ['artifact', 'run', 'builder', 'screen', 'pine'];
-const PANEL_VIEW_LABEL: Record<PanelView, string> = tmap({ artifact: '结果', run: '实验', builder: '策略构建', screen: '资产筛选', pine: 'Pine 目录' });
+type PanelView = 'artifact' | 'run' | 'builder' | 'screen' | 'pine' | 'matrix';
+const PANEL_VIEWS: PanelView[] = ['artifact', 'run', 'builder', 'screen', 'pine', 'matrix'];
+const PANEL_VIEW_LABEL: Record<PanelView, string> = tmap({ artifact: '结果', run: '实验', builder: '策略构建', screen: '资产筛选', pine: 'Pine 目录', matrix: '矩阵研究' });
 
 /** 当前会话 id 记在本机:刷新回来还是同一条会话(内容一律从 GET /sessions/:id 恢复)。 */
 const SESSION_STORE = 'tg.research.session';
@@ -495,6 +496,7 @@ export function ResearchPage() {
           onOpenLegacy={() => setLegacyOpen(true)}
           onOpenHistory={() => setHistoryOpen(true)}
           runCount={runs.length}
+          onOpenMatrix={() => openPanel('matrix')}
         />
       ) : null}
 
@@ -549,7 +551,7 @@ export function ResearchPage() {
         <div className="flex h-8 shrink-0 items-center gap-1 border-b bg-muted/40 px-2">
           {PANEL_VIEWS.map((v) => (
             <Button key={v} size="xs" variant={view === v ? 'secondary' : 'ghost'} onClick={() => setView(v)}>
-              {v === 'artifact' ? <LineChart /> : v === 'run' ? <FlaskConical /> : v === 'builder' ? <Wand2 /> : v === 'pine' ? <Braces /> : <Telescope />} {PANEL_VIEW_LABEL[v]}
+              {v === 'artifact' ? <LineChart /> : v === 'run' ? <FlaskConical /> : v === 'builder' ? <Wand2 /> : v === 'pine' ? <Braces /> : v === 'matrix' ? <Grid3x3 /> : <Telescope />} {PANEL_VIEW_LABEL[v]}
             </Button>
           ))}
           <div className="ml-auto flex items-center gap-1">
@@ -574,6 +576,8 @@ export function ResearchPage() {
                 }
               }}
             />
+          ) : view === 'matrix' ? (
+            <MatrixStudyPanel />
           ) : view === 'pine' ? (
             <PineCatalogPanel />
           ) : view === 'screen' ? (

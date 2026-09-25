@@ -34,9 +34,9 @@
     "ETHUSDT"
   ],
   "human_families": [
-    "human_shuqin",
-    "human_sanma",
-    "human_zhaoge"
+    "human_trader_b",
+    "human_trader_a",
+    "human_trader_c"
   ],
   "horizon_hours": 24,
   "folds": "anchored 60d/20d, full 24h purge, training effective n>=30, train-only choice",

@@ -1,25 +1,52 @@
 /**
  * #models「模型连接」页(docs/demo/v3-ui-contract.md §9.52,设计 chat-to-strategy-loop §3.7 / 验收 F1–F2)。
- * 上:连接列表(API key / 本机 CLI,测试 / 编辑 / 删除)+「添加连接」弹层;
- * 下:「角色底层」表,7 个角色各选连接 + 模型,改了立即 PUT 生效。
- * 未单独绑定的角色回退到旧的两个槽位(本页底部「默认」一节:回退主脑 / 副脑);绑定的连接失效时该角色直接报错,不静默回退。
- * 2026-09-25 ③-8:回退槽位从顶栏大脑弹层 / 设置页卡片收进本页,顶栏只留模型连接胶囊。
+ *
+ * 2026-09-25 重做(Jacky:「每个 agent 都分开来,都改成能选 cli 和 apikey,且带一个测试连接的功能」):
+ *   主体 = 7 张 agent 卡(components/models/role-card.tsx):每张自己选「本机 CLI | API key | 用默认」+ 模型,
+ *         保存即 PUT /api/models/bindings/:role,「测试连接」= POST /api/models/bindings/:role/test;
+ *   顶部一行说明没单独设置的 agent 用哪个默认(主脑 / 副脑);
+ *   折叠区「高级:未单独设置时用的默认」= 原回退主脑 / 副脑控件(BrainControls);
+ *   折叠区「已保存的连接」= 原连接列表(测试 / 编辑 / 删除)+「添加连接」弹层。
+ * 绑定的连接失效时该角色直接报错,不静默回退(卡片红点 + 顶部提示)。
  *
  * react-query:只读 ['models'](GET /api/models);SSE `models.changed` 由 App.tsx 直接写进这份缓存。
  */
-import { useState } from 'react';
-import { Plus, RefreshCw } from 'lucide-react';
-import type { ModelConnection } from '@/api/types';
+import { useState, type ReactNode } from 'react';
+import { ChevronRight, Plus, RefreshCw } from 'lucide-react';
+import type { ModelConnection, ModelsView } from '@/api/types';
 import { BrainControls } from '@/components/brain-controls';
 import { ConnectionDialog } from '@/components/models/connection-dialog';
 import { ConnectionList } from '@/components/models/connection-list';
-import { brokenRoles, MODEL_ROLE_LABEL, okConnectionCount } from '@/components/models/logic';
-import { RoleBindings } from '@/components/models/role-bindings';
+import { brokenRoles, MODEL_ROLES, okConnectionCount, roleCard } from '@/components/models/logic';
+import { RoleCard } from '@/components/models/role-card';
 import { useModels } from '@/components/models/use-models';
 import { Pane, Workspace } from '@/components/pane';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { t } from '@/lib/i18n';
+
+/** 当前默认主脑 / 副脑的名字:从回退到它的角色的 effective 里取(没有角色回退时不知道,显示 —) */
+function defaultNames(view: ModelsView): { main: string; cheap: string } {
+  const pick = (src: 'fallback_main' | 'fallback_cheap') => MODEL_ROLES.map((r) => view.effective[r]).find((e) => e?.source === src)?.name || '—';
+  return { main: pick('fallback_main'), cheap: pick('fallback_cheap') };
+}
+
+function Fold({ id, title, hint, actions, children, defaultOpen = false }: { id: string; title: string; hint?: string; actions?: ReactNode; children: ReactNode; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div id={id} className="shrink-0 rounded-lg border bg-card">
+      <div className="flex items-center gap-2 px-3 py-2">
+        <button type="button" className="flex min-w-0 flex-1 items-center gap-1.5 text-left" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+          <ChevronRight className={`size-3.5 shrink-0 text-muted-foreground transition-transform ${open ? 'rotate-90' : ''}`} />
+          <span className="text-[12.5px] font-semibold">{title}</span>
+          {hint ? <span className="min-w-0 truncate text-[11px] text-muted-foreground">{hint}</span> : null}
+        </button>
+        {open && actions ? <div className="flex shrink-0 items-center gap-1">{actions}</div> : null}
+      </div>
+      {open ? <div className="border-t">{children}</div> : null}
+    </div>
+  );
+}
 
 export function ModelsPage() {
   const q = useModels();
@@ -27,6 +54,7 @@ export function ModelsPage() {
   const [editing, setEditing] = useState<ModelConnection | null>(null);
   const view = q.data ?? null;
   const broken = brokenRoles(view);
+  const defaults = view ? defaultNames(view) : null;
 
   const openAdd = () => {
     setEditing(null);
@@ -38,23 +66,18 @@ export function ModelsPage() {
       <Workspace className="shrink-0">
         <Pane
           title={t('模型连接')}
-          hint={view ? t('{ok} / {n} 个可用', { ok: okConnectionCount(view), n: view.connections.length }) : undefined}
+          hint={t('每个 agent 单独选用本机 CLI 或 API key,保存即生效,卡上可以直接测试连接')}
           actions={
-            <>
-              <Button size="xs" variant="ghost" onClick={() => void q.refetch()} disabled={q.isFetching} title={t('刷新')}>
-                <RefreshCw className={q.isFetching ? 'animate-spin' : undefined} />
-              </Button>
-              <Button size="xs" onClick={openAdd} disabled={!view}>
-                <Plus />
-                {t('添加连接')}
-              </Button>
-            </>
+            <Button size="xs" variant="ghost" onClick={() => void q.refetch()} disabled={q.isFetching} title={t('刷新')}>
+              <RefreshCw className={q.isFetching ? 'animate-spin' : undefined} />
+            </Button>
           }
         >
           {q.isLoading ? (
-            <div className="space-y-2 p-3">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
+            <div className="grid gap-3 p-3 md:grid-cols-2 xl:grid-cols-3">
+              {[0, 1, 2].map((i) => (
+                <Skeleton key={i} className="h-56 w-full" />
+              ))}
             </div>
           ) : q.isError || !view ? (
             <p className="p-3 text-[12px] text-destructive">
@@ -62,45 +85,56 @@ export function ModelsPage() {
               <span className="ml-1 text-muted-foreground">{t('(网关可能还没接 /api/models)')}</span>
             </p>
           ) : (
-            <ConnectionList
-              view={view}
-              onEdit={(c) => {
-                setEditing(c);
-                setDialogOpen(true);
-              }}
-            />
+            <>
+              <div className="flex flex-wrap items-center gap-x-1 border-b px-3 py-1.5 text-[11px] text-muted-foreground" data-testid="models-defaults-line">
+                <span>{t('没单独设置的 agent 用默认:')}</span>
+                <span className="num text-foreground">{t('主脑 {name}', { name: defaults!.main })}</span>
+                <span>·</span>
+                <span className="num text-foreground">{t('副脑 {name}', { name: defaults!.cheap })}</span>
+                <button type="button" className="ml-1 text-primary hover:underline" onClick={() => document.getElementById('models-fallback')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+                  {t('改默认 ↓')}
+                </button>
+              </div>
+              {broken.length > 0 ? (
+                <div className="border-b border-destructive/30 bg-destructive/10 px-3 py-1.5 text-[11px] text-destructive">
+                  {t('这些 agent 的连接失效了,调用会直接报错(不会静默回退):{roles}', { roles: broken.map((r) => roleCard(r).title).join('、') })}
+                </div>
+              ) : null}
+              <div className="grid gap-3 p-3 md:grid-cols-2 xl:grid-cols-3" data-testid="role-cards">
+                {MODEL_ROLES.map((role) => (
+                  <RoleCard key={role} role={role} view={view} />
+                ))}
+              </div>
+            </>
           )}
         </Pane>
       </Workspace>
 
-      {view ? (
-        <Workspace className="shrink-0">
-          <Pane title={t('角色底层')} hint={t('每个角色单独选连接 + 模型,改了立即生效;不单独绑定的用下面「默认」一节的回退主脑 / 副脑')}>
-            {broken.length > 0 ? (
-              <div className="border-b border-destructive/30 bg-destructive/10 px-3 py-1.5 text-[11px] text-destructive">
-                {t('这些角色绑定的连接失效了,调用会直接报错(不会静默回退):{roles}', { roles: broken.map((r) => MODEL_ROLE_LABEL[r]).join('、') })}
-              </div>
-            ) : null}
-            <div className="overflow-x-auto">
-              <RoleBindings view={view} />
-            </div>
-            <div className="border-t px-3 py-1.5 text-[10.5px] leading-relaxed text-muted-foreground">
-              {t('判断要素(Jev)走 OpenRouter 的 Decisions API,只能绑 OpenRouter 连接;typesafe/ 开头的模型只给它用。')}
-              <button type="button" className="ml-1 text-primary hover:underline" onClick={() => document.getElementById('models-fallback')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
-                {t('改回退主脑 / 副脑 ↓')}
-              </button>
-            </div>
-          </Pane>
-        </Workspace>
-      ) : null}
+      <Fold id="models-fallback" title={t('高级:未单独设置时用的默认')} hint={t('对话 / 判断 / 研究回退主脑,策略过滤 / 复盘 / 信息员回退副脑')}>
+        <BrainControls idPrefix="models" />
+      </Fold>
 
-      <div id="models-fallback">
-        <Workspace className="shrink-0">
-          <Pane title={t('默认(回退主脑 / 副脑)')} hint={t('上面没单独绑定的角色用这里;老网关没有 /api/models 时,所有角色都用这里')}>
-            <BrainControls idPrefix="models" />
-          </Pane>
-        </Workspace>
-      </div>
+      {view ? (
+        <Fold
+          id="models-connections"
+          title={t('已保存的连接')}
+          hint={t('{ok} / {n} 个可用', { ok: okConnectionCount(view), n: view.connections.length })}
+          actions={
+            <Button size="xs" variant="outline" onClick={openAdd}>
+              <Plus />
+              {t('添加连接')}
+            </Button>
+          }
+        >
+          <ConnectionList
+            view={view}
+            onEdit={(c) => {
+              setEditing(c);
+              setDialogOpen(true);
+            }}
+          />
+        </Fold>
+      ) : null}
 
       <ConnectionDialog open={dialogOpen} onOpenChange={setDialogOpen} editing={editing} cliDetected={view?.cli_detected ?? []} />
     </div>

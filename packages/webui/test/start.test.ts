@@ -148,7 +148,7 @@ describe('navigation (IA ②)', () => {
   it('groups by user journey with a collapsed advanced group', () => {
     const ids = (g: string) => NAV.filter((n) => n.group === g).map((n) => n.id);
     expect(NAV_GROUP_ORDER).toEqual(['ops', 'pick', 'trade', 'review', 'settings', 'advanced']);
-    expect(ids('ops')).toEqual(['floor', 'floor-v4', 'agent']); // 楼层 v4(另一工作线)合并后与旧楼层并存,之后替换成默认
+    expect(ids('ops')).toEqual(['floor', 'floor-legacy', 'agent']); // 09-25 楼层 v4 成为默认 #floor,旧楼层留在 #floor-legacy
     expect(ids('pick')).toEqual(['screener', 'watch', 'research', 'matrix-study', 'my-strategies']);
     expect(ids('settings')).toEqual(['connect', 'models', 'settings']);
     expect(ids('advanced')).toEqual(['market', 'intel', 'events', 'logs', 'strategies']);

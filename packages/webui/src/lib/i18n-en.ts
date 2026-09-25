@@ -12,6 +12,7 @@ import { DEMO_EN } from './i18n-en-demo';
 import { MODELS_EN } from '@/components/models/i18n-en';
 import { STRATEGY_LOOP_EN } from '@/components/agent-strategy/i18n-en';
 import { START_EN } from '@/components/start/i18n-en';
+import { FLOOR_EN } from '@/components/floor-v4/i18n-en-floor';
 
 export const EN: Record<string, string> = {
   ...BACKTEST_REPORT_EN,
@@ -23,6 +24,7 @@ export const EN: Record<string, string> = {
   ...MODELS_EN,
   ...STRATEGY_LOOP_EN,
   ...START_EN,
+  ...FLOOR_EN,
   "Agent 开关": "Agent controls",
   "独立运行控制": "Independent run controls",
   "全部启用": "Enable all",
@@ -3251,4 +3253,6 @@ export const EN: Record<string, string> = {
   '夜间研究所': 'Night study',
   'Meme Lab': 'Meme Lab',
   '楼层(新)': 'Floor (new)',
+  '网关连接中断(多半在重启),恢复后页面会自动刷新,不用手动刷新': 'Gateway connection lost (probably restarting). The page refreshes itself once it is back.',
+  '网关暂时连不上(多半在重启),恢复后自动刷新': 'Gateway unreachable (probably restarting); will refresh automatically.',
 };

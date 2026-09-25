@@ -6,11 +6,12 @@
  * 画面:逻辑分辨率缓冲(~300 像素高)→ 整数倍放大到显示画布(image-rendering: pixelated)。
  * 镜头:聚焦某个房间时整数倍推进,过渡中允许非整数,停稳后对齐像素网格。
  */
+import { t, tmap } from '@/lib/i18n';
 import { computeLayout } from './layout';
 import { render, focusRect } from './render';
 import { ROLES, STATUS_LABEL } from './roles';
 import { THEMES } from './themes';
-import type { AgentSnap, EvoDay, EvoDayDetail, EvoRoleRow, FloorHandle, MountOptions, Role, Snapshot, ThemeId } from './types';
+import type { AgentSnap, EvoDay, EvoDayDetail, EvoRoleRow, FloorHandle, MountOptions, Role, SfxKind, Snapshot, ThemeId } from './types';
 import { evoHit, type EvoHit } from './evo';
 import { createNpc, NPC_CSS } from './npc';
 import { computeWeather, type Weather, type WeatherOverride } from './weather';
@@ -49,7 +50,13 @@ const CSS = `
 `;
 
 
-export function mount(canvas: HTMLCanvasElement, opts: MountOptions): FloorHandle {
+/** 布局 B 的挂载参数 = 共享 MountOptions + 音效钩子 */
+export interface MountOptionsB extends MountOptions {
+  /** 8-bit 音效触发点:信封送达 / 批准 / 进化 +1 / 击掌。引擎只喊,不放声音 */
+  onSfx?: (k: SfxKind) => void;
+}
+
+export function mount(canvas: HTMLCanvasElement, opts: MountOptionsB): FloorHandle {
   const host = canvas.parentElement!;
   if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
   if (!document.getElementById('flb-css')) {
@@ -101,6 +108,7 @@ export function mount(canvas: HTMLCanvasElement, opts: MountOptions): FloorHandl
     if (!world) {
       world = new World(L, reduced);
       world.onDelivered = (k) => opts.onHandoffDelivered?.(k);
+      world.onSfx = (k) => opts.onSfx?.(k);
       if (snapshot) world.apply(snapshot.agents, snapshot.handoffs, snapshot.meetings, snapshot.evolution);
     } else world.relayout(L);
     setCamTarget(true);
@@ -222,7 +230,7 @@ export function mount(canvas: HTMLCanvasElement, opts: MountOptions): FloorHandl
         if (statueHits >= 5) {
           statueHits = 0;
           world.coinShower(world.statueX + 7, world.L.groundY - 14);
-          opts.onToast?.('招财柴犬显灵了:撒了一地金币(彩蛋)');
+          opts.onToast?.(t('招财柴犬显灵了:撒了一地金币(彩蛋)'));
         }
         return;
       }
@@ -251,7 +259,7 @@ export function mount(canvas: HTMLCanvasElement, opts: MountOptions): FloorHandl
   const onDbl = (e: MouseEvent) => {
     const rect = canvas.getBoundingClientRect();
     const r = hit(e.clientX - rect.left, e.clientY - rect.top);
-    if (r && world) world.highFive(r);
+    if (r && world) world.highFive(r); // highFive 里触发 onSfx('highfive')
   };
   const onKey = (e: KeyboardEvent) => {
     if (npc.key(e)) { e.preventDefault(); return; }
@@ -282,7 +290,7 @@ export function mount(canvas: HTMLCanvasElement, opts: MountOptions): FloorHandl
   overlay.appendChild(drawerEl);
   let drawerAnchor = { x: 0, y: 0 };
 
-  const EVO_TXT: Record<string, string> = { good: '好', ok: '一般', bad: '差', none: '无数据' };
+  const EVO_TXT: Record<string, string> = tmap({ good: '好', ok: '一般', bad: '差', none: '无数据' });
   const evoColor = (d: EvoDay) => theme.evo[d.status];
 
   function closeDrawer(): void {
@@ -296,14 +304,14 @@ export function mount(canvas: HTMLCanvasElement, opts: MountOptions): FloorHandl
     drawer = { role, index };
     const info = ROLES[role];
     drawerEl.style.setProperty('--c', info.color);
-    const head = `<button class="x" data-act="x" title="关闭">×</button>
-      <div class="hd"><span class="sq" style="background:${evoColor(d)}"></span>${info.callsign} · ${d.date}${index === row.days.length - 1 ? ' · 今天' : ''}</div>
-      <div class="hl">${EVO_TXT[d.status]}${d.score != null ? ` · 分 ${d.score}` : ''}${d.headline ? ` —— ${escapeHtml(d.headline)}` : ''}${d.events ? `<br><span style="color:#ffe36b">★ 当天 ${d.events} 次进化事件</span>` : ''}</div>`;
+    const head = `<button class="x" data-act="x" title="${escapeHtml(t('关闭'))}">×</button>
+      <div class="hd"><span class="sq" style="background:${evoColor(d)}"></span>${info.callsign} · ${d.date}${index === row.days.length - 1 ? ` · ${escapeHtml(t('今天'))}` : ''}</div>
+      <div class="hl">${EVO_TXT[d.status]}${d.score != null ? ` · ${escapeHtml(t('分 {score}', { score: d.score }))}` : ''}${d.headline ? ` —— ${escapeHtml(d.headline)}` : ''}${d.events ? `<br><span style="color:#ffe36b">★ ${escapeHtml(t('当天 {n} 次进化事件', { n: d.events }))}</span>` : ''}</div>`;
     const fill = (det: EvoDayDetail | null) => {
       const ms = (det?.metrics ?? []).slice(0, 3);
       drawerEl.innerHTML = head + (ms.length ? `<div class="nums">${ms.map((m) => `<div class="num"><div class="v">${escapeHtml(m.value)}</div><div class="k">${escapeHtml(m.label)}</div></div>`).join('')}</div>` : '')
         + (det?.records?.length ? `<ul>${det.records.slice(0, 2).map((r) => `<li><b>${escapeHtml(r.title)}</b><span>${escapeHtml(r.detail)}</span></li>`).join('')}</ul>` : '')
-        + `<button class="go" data-act="go">去进化页看全部 →</button>`;
+        + `<button class="go" data-act="go">${escapeHtml(t('去进化页看全部 →'))}</button>`;
       drawerEl.querySelector<HTMLButtonElement>('[data-act=x]')!.onclick = () => closeDrawer();
       drawerEl.querySelector<HTMLButtonElement>('[data-act=go]')!.onclick = () => {
         if (opts.onOpenEvolution) opts.onOpenEvolution(role, d.date);
@@ -340,7 +348,7 @@ export function mount(canvas: HTMLCanvasElement, opts: MountOptions): FloorHandl
     outline: () => theme.outline,
     reduced,
     onChat: (r) => opts.onAgentAction?.(r, 'chat'),
-    onTask: (r, t) => opts.onAgentAction?.(r, 'task', t),
+    onTask: (r, task) => opts.onAgentAction?.(r, 'task', task),
     onWorkbench: (r) => {
       if (opts.onAgentAction) opts.onAgentAction(r, 'workbench');
       else if (opts.onOpenWorkbench) opts.onOpenWorkbench(r, ROLES[r].page);
@@ -390,7 +398,7 @@ export function mount(canvas: HTMLCanvasElement, opts: MountOptions): FloorHandl
       const info = ROLES[hover];
       tip.style.setProperty('--c', info.color);
       tip.style.whiteSpace = 'nowrap';
-      tip.innerHTML = `<b>${info.callsign}</b>${STATUS_LABEL[a.status] ?? ''} · ${escapeHtml(a.line)}${focusRole !== hover ? ' <span style="color:#888">· 点我说话,双击击掌</span>' : ''}`;
+      tip.innerHTML = `<b>${info.callsign}</b>${STATUS_LABEL[a.status] ?? ''} · ${escapeHtml(a.line)}${focusRole !== hover ? ` <span style="color:#888">· ${escapeHtml(t('点我说话,双击击掌'))}</span>` : ''}`;
       tip.style.display = 'block';
       tip.style.transform = `translate(${Math.round(s.x)}px, ${Math.round(s.y)}px) translate(-50%, calc(-100% - 30px))`;
       // 有气泡时让开
@@ -407,8 +415,8 @@ export function mount(canvas: HTMLCanvasElement, opts: MountOptions): FloorHandl
       tip.style.setProperty('--c', '#ffd23a');
       tip.style.whiteSpace = 'nowrap';
       tip.innerHTML = thing === 'mailbox'
-        ? (approvals() > 0 ? `<b>信箱</b>${approvals()} 封待批订单,点开审批` : '<b>信箱</b>没有待批的')
-        : thing === 'statue' ? '<b>招财柴犬</b>摸摸头?' : '<b>小家伙</b>睡得正香';
+        ? `<b>${escapeHtml(t('信箱'))}</b>${escapeHtml(approvals() > 0 ? t('{n} 封待批订单,点开审批', { n: approvals() }) : t('没有待批的'))}`
+        : thing === 'statue' ? `<b>${escapeHtml(t('招财柴犬'))}</b>${escapeHtml(t('摸摸头?'))}` : `<b>${escapeHtml(t('小家伙'))}</b>${escapeHtml(t('睡得正香'))}`;
       tip.style.display = 'block';
       tip.style.transform = `translate(${Math.round(s.x)}px, ${Math.round(s.y)}px) translate(-50%, calc(-100% - 14px))`;
     } else tip.style.display = 'none';
@@ -425,7 +433,7 @@ export function mount(canvas: HTMLCanvasElement, opts: MountOptions): FloorHandl
         evoTip.style.setProperty('--c', evoColor(d));
         evoTip.innerHTML = `<div class="d"><span class="sq" style="background:${evoColor(d)}"></span>${info.callsign} · ${d.date}</div>
           <div class="h">${EVO_TXT[d.status]}${d.score != null ? ` · ${d.score}` : ''}${d.headline ? ` · ${escapeHtml(d.headline)}` : ''}</div>
-          ${d.events ? `<div class="e">★ ${d.events} 次进化事件</div>` : ''}<div class="hint">点开看当天表现</div>`;
+          ${d.events ? `<div class="e">★ ${escapeHtml(t('{n} 次进化事件', { n: d.events }))}</div>` : ''}<div class="hint">${escapeHtml(t('点开看当天表现'))}</div>`;
         evoTip.style.display = 'block';
         const tw = evoTip.offsetWidth;
         const x = Math.max(8, Math.min(overlay.clientWidth - tw - 8, s.x - tw / 2));
@@ -434,7 +442,7 @@ export function mount(canvas: HTMLCanvasElement, opts: MountOptions): FloorHandl
     } else if (evoHover && evoHover.kind === 'title' && !drawer) {
       const s = toCss(evoHover.x, evoHover.y);
       evoTip.style.setProperty('--c', '#ffe36b');
-      evoTip.innerHTML = `<div class="d">EVO · ${ROLES[evoHover.role].callsign}</div><div class="h">最近 14 天进化方格</div><div class="hint">${evoExpanded === evoHover.role ? '点击收起' : '点击展开 30 天完整方格'}</div>`;
+      evoTip.innerHTML = `<div class="d">EVO · ${ROLES[evoHover.role].callsign}</div><div class="h">${escapeHtml(t('最近 14 天进化方格'))}</div><div class="hint">${escapeHtml(evoExpanded === evoHover.role ? t('点击收起') : t('点击展开 30 天完整方格'))}</div>`;
       evoTip.style.display = 'block';
       evoTip.style.transform = `translate(${Math.round(Math.max(8, s.x - 60))}px, ${Math.round(s.y + 14)}px)`;
     } else evoTip.style.display = 'none';

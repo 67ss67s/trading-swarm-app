@@ -144,7 +144,7 @@
 - **撤腿(trim)总闸**:`overcoverage_trim_allowed(mode)`——one-way 恒放行;hedge 受 `HEDGE_OVERCOVERAGE_TRIM_ENABLED=true`(2026 年已解除硬停用,实证③在 demo-fapi 证明"超量 reduceOnly 腿触发时最坏只是整单被拒、不会打穿到反向")—— `protection.rs:16-58`
 - **plan_overcoverage_trim 规则**(纯函数,输入=已确认全部归属本台的同向 SL 腿):完全重复腿(同触发价+数量+closePosition)优先撤,保留 orderId 最小的;其后按触发价从最远撤起;同触发价先撤**数量大**的(R59 修复,否则会把"尺寸正确的新腿"错撤、留下超配的旧腿);任何一撤都不得让剩余覆盖 < 仓位(不放 lot 容差);撤不动时保留最小超配,绝不撤穿仓位 —— `protection.rs:210-343`
 - **缩量换腿(resize)** 是"第二步":`plan_overcoverage_resize` 规划器**照常跑**(纯函数,算出该缩到多少,喂 `protection.overcovered` 告警的 `suggested_resize`),但**自动执行(`resize_overcovered_sl`)已写出但被总闸 `OVERCOVERAGE_RESIZE_ENABLED=false` 封存**,不真正执行 —— `protection.rs:34-54`;`core.rs:9295-9303`
-- **为什么默认关**:换腿必然有"新腿已挂、旧腿未撤"的中间态,场上没有原子替换(`replace_algo_order` 本身是先撤后发);"复读仓位确认没变→撤旧腿"之间隔着一次 `open_orders` 往返+撤单授权,窗口内的加仓/外部成交发现不了,会把覆盖撤穿。三轮 Codex 复审分别挑出 8/5 条确认缺陷,详见 §六"未修坑"清单 —— `protection.rs:31-53`;`docs/r59-overcoverage-resize-residuals.md`
+- **为什么默认关**:换腿必然有"新腿已挂、旧腿未撤"的中间态,场上没有原子替换(`replace_algo_order` 本身是先撤后发);"复读仓位确认没变→撤旧腿"之间隔着一次 `open_orders` 往返+撤单授权,窗口内的加仓/外部成交发现不了,会把覆盖撤穿。三轮 复审分别挑出 8/5 条确认缺陷,详见 §六"未修坑"清单 —— `protection.rs:31-53`;`docs/r59-overcoverage-resize-residuals.md`
 
 ### 4.3 误撤单防护
 

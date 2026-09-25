@@ -7,7 +7,7 @@ import { t, tmap } from '@/lib/i18n';
 // (值班/交易/团队/回顾/系统)改成「用户要做什么」:开始 → 值班 → 选币与策略 → 交易 → 回顾 → 设置,
 // 另设一个默认折叠的「高级」组(信号市场 / 信息员 / 事件区 / 日志 / 实盘部署台)。「团队」这个分组名去掉。
 
-export type Page = 'start' | 'connect' | 'trade' | 'agent' | 'watch' | 'floor' | 'floor-v4' | 'intel' | 'events' | 'screener' | 'market' | 'judgments' | 'evolution' | 'memory' | 'history' | 'strategies' | 'research' | 'matrix-study' | 'my-strategies' | 'models' | 'logs' | 'settings';
+export type Page = 'start' | 'connect' | 'trade' | 'agent' | 'watch' | 'floor' | 'floor-legacy' | 'intel' | 'events' | 'screener' | 'market' | 'judgments' | 'evolution' | 'memory' | 'history' | 'strategies' | 'research' | 'matrix-study' | 'my-strategies' | 'models' | 'logs' | 'settings';
 
 /** start 组不画组名:接入没完成时置顶一项「开始」,完成后收到侧栏底部一行 */
 export type NavGroup = 'start' | 'ops' | 'pick' | 'trade' | 'review' | 'settings' | 'advanced';
@@ -31,9 +31,10 @@ export const NAV: NavItem[] = [
   // 新手第一件事是接入:⑤ 的清单,每步读真实状态判完成
   { id: 'start', label: '开始', icon: ListTodo, group: 'start' },
   // 值班:完成接入后的日常首页 + 跟 agent 说话、批提议、切当前策略
-  { id: 'floor', label: '楼层', icon: LayoutGrid, group: 'ops' },
-  // 2026-09-25 楼层 v4(docs/design/floor-v4-2026-09-25.md):像素场景为主角,A 开放办公室 / B 大楼剖面可切换;另一工作线 合并前与旧楼层并存
-  { id: 'floor-v4', label: '楼层(新)', icon: Building2, group: 'ops' },
+  // 2026-09-25 楼层 v4(docs/design/floor-v4-2026-09-25.md)成为默认楼层:像素场景为主角,A 开放办公室 / B 大楼剖面可切换
+  { id: 'floor', label: '楼层', icon: Building2, group: 'ops' },
+  // 旧楼层(卡片式)暂留一段时间,#floor-legacy
+  { id: 'floor-legacy', label: '楼层(旧)', icon: LayoutGrid, group: 'ops' },
   { id: 'agent', label: 'Agent', icon: Bot, group: 'ops' },
   // 选币与策略:「今天该看什么币」→ 名单 → 找策略 → 设为 agent 当前策略(我的策略详情里的按钮)
   { id: 'screener', label: '筛选', icon: Crosshair, group: 'pick' },

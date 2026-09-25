@@ -61,7 +61,7 @@ export function list(v: unknown): Record<string, unknown>[] {
   const xs = o['list'] ?? o['subscriptions'] ?? o['agents'] ?? o['services'] ?? o['items'] ?? o['devices'];
   return Array.isArray(xs) ? xs.map(object) : [];
 }
-const WRITE_COMMANDS = new Set(['create-subscribe', 'subscribe-cancel', 'subscribe-reject', 'start-autorenew', 'refund-execute', 'refund-prepare', 'create', 'activate', 'deactivate', 'update', 'upload', 'deliver', 'claim', 'subscription-execution-config-set', 'device-set']);
+const WRITE_COMMANDS = new Set(['create-subscribe', 'subscribe-cancel', 'subscribe-reject', 'start-autorenew', 'refund-execute', 'refund-prepare', 'create', 'activate', 'deactivate', 'update', 'upload', 'deliver', 'claim', 'subscription-execution-config-set', 'device-set', 'accept-subscription', 'accept-job-by-provider', 'decline-subscription', 'decline-job-by-provider', 'subscribe-asp-claim', 'asp-claim-rewards']);
 const CONNECT_PHASE = /tls handshake|\(connect\)|connection refused|timed out connecting|dns/i;
 export const NETWORK_ATTEMPTS = 3;
 export let NETWORK_BACKOFF_MS = 1500;

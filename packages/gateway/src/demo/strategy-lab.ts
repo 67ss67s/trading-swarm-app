@@ -4,7 +4,7 @@
  * 实验 = 冻结 manifest(策略 id/version/content_hash 的清单 × 数据窗口 × 结算参数 × 代码版本)→ 对每个 symbol 用
  * funnel.ts 的机械前瞻期望(同一份 K 线缓存、同一套结算)算出每个策略版本的 setups / 胜率 / 期望 R →
  * 结果冻结进 bot_run.result,并交接 strategy_lab → gate_captain(kind result)。**不改任何策略、不晋升、不写 eval_stats**
- * (Codex 稿 §6.4:统计要绑确切版本,现行 updateEvalStats 写 head 会错配,先不写)。
+ * (评审稿 §6.4:统计要绑确切版本,现行 updateEvalStats 写 head 会错配,先不写)。
  *
  * 节奏:每 7 天,或累计 ≥ 10 笔新平仓;手动可触发;同一 manifest 哈希 24h 内不重复跑。
  * 这是「研究记录」,不是「策略已验证」——机械筛选的正期望 ≠ 含模型出入场的策略成绩(§6.3),summary 里写明。

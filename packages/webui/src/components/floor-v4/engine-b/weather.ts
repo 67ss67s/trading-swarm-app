@@ -6,6 +6,7 @@
  *   UTC 18:00–06:00 = 夜景,其余白天。
  * 悬停天空出一句解释。
  */
+import { t } from '@/lib/i18n';
 import type { Layout } from './layout';
 import type { MarketState } from './types';
 import { glow, line, rgba, R, type Ctx } from './sprites';
@@ -32,11 +33,13 @@ export function computeWeather(market: MarketState | undefined, pnlToday: string
   const alarm = market?.risk_level === 'high';
   const fireworks = !rain && pnl > 0;
   const reasons: string[] = [];
-  if (rain) reasons.push(`在下雨${thunder ? '还打雷' : ''}:BTC 1 小时波动 ${vol.toFixed(1)}%${ov.rain ? '(演示覆盖)' : ''}`);
-  else reasons.push(`天晴:BTC 1 小时波动只有 ${vol.toFixed(1)}%`);
-  if (fireworks) reasons.push(`偶尔放烟花:今天赚了 ${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)} USDT`);
-  if (alarm) reasons.push('屋顶红色警报灯在转:风控等级 high');
-  reasons.push(`${night ? '夜景' : '白天'}:现在 UTC ${String(h).padStart(2, '0')}:${mm}${ov.sky ? '(演示覆盖)' : ''}`);
+  const demo = t('(演示覆盖)');
+  const v = vol.toFixed(1);
+  if (rain) reasons.push(t('在下雨{thunder}:BTC 1 小时波动 {v}%{demo}', { thunder: thunder ? t('还打雷') : '', v, demo: ov.rain ? demo : '' }));
+  else reasons.push(t('天晴:BTC 1 小时波动只有 {v}%', { v }));
+  if (fireworks) reasons.push(t('偶尔放烟花:今天赚了 {pnl} USDT', { pnl: `${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}` }));
+  if (alarm) reasons.push(t('屋顶红色警报灯在转:风控等级 high'));
+  reasons.push(t('{sky}:现在 UTC {hh}:{mm}{demo}', { sky: night ? t('夜景') : t('白天'), hh: String(h).padStart(2, '0'), mm, demo: ov.sky ? demo : '' }));
   return { night, rain, thunder, fireworks, alarm, reasons };
 }
 

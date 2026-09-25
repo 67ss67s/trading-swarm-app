@@ -50,7 +50,7 @@ export function OkxConnectForm({ view, demo, onDone }: { view: ExecutionView | u
     onError: (e: Error) => toast.error(t('安装失败'), { description: e.message }),
   });
   // 凭证不进 TanStack 的 mutation 缓存(variables 会留到 reset/GC):自己管 pending,发送前就清空表单,
-  // 请求结束立刻丢掉 payload 引用(codex-review sol #3)。
+  // 请求结束立刻丢掉 payload 引用(review #3)。
   const [pending, setPending] = useState(false);
   const submit = async () => {
     if (!ready || pending) return;
@@ -219,7 +219,7 @@ export function WalletSection() {
     onError: (e: Error) => { void qc.invalidateQueries({ queryKey: ['wallet'] }); toast.error(t('断开失败'), { description: e.message }); },
   });
   // 登录页在别的标签页完成,网关那边一轮 poll 超时就再来一轮,直到连上或用户放弃。
-  // 每轮之间隔 2s,连续失败 5 次就停(codex-review sol #5:别把 onchainos 起成死循环)。
+  // 每轮之间隔 2s,连续失败 5 次就停(review #5:别把 onchainos 起成死循环)。
   const failures = useRef(0);
   useEffect(() => {
     if (!session || poll.isPending || w?.logged_in) return;

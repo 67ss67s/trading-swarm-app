@@ -1,4 +1,4 @@
-# 信息员页(#intel)重构 — 2026-09-06(Codex astra 方案 + 我的处置,待 Jacky 拍板)
+# 信息员页(#intel)重构 — 2026-09-06(外部评审 方案 + 我的处置,待 Jacky 拍板)
 
 来源:内部评审记录;现状 `packages/webui/src/pages/intel.tsx`(头部徽章 + 总览/历史两个 tab,新闻在总览里)。
 

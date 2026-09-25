@@ -1,25 +1,31 @@
 /**
- * Agent 页右栏顶部的入口条(docs/design/watch-screener-review-2026-09-24.md 二-5):
- * 研究工作台 / 我的策略 / 判断记录 / 信号市场 / 进化 —— 对话里聊到这些,一点就过去。
- * 放右栏不放状态条:状态条里有「盯盘参数」抽屉,另一条线在改。
+ * Agent 页右栏入口条(2026-09-25 改版):与新手旅程一致 —— 开始清单 → 矩阵研究 → 我的策略 → 复盘。
+ * 研究工作台 / 判断记录 / 信号市场 / 进化 在侧栏导航里,对话里的深链也会直接带过去。
  */
-import { ClipboardList, FlaskConical, Shapes, Sprout, Store } from 'lucide-react';
+import { FileClock, Grid3x3, ListTodo, Shapes } from 'lucide-react';
 import { t } from '@/lib/i18n';
 
 export const AGENT_QUICK_LINKS = [
-  { href: '#research', label: '研究工作台', icon: FlaskConical },
+  { href: '#start', label: '开始清单', icon: ListTodo },
+  { href: '#matrix-study', label: '矩阵研究', icon: Grid3x3 },
   { href: '#my-strategies', label: '我的策略', icon: Shapes },
-  { href: '#judgments', label: '判断记录', icon: ClipboardList },
-  { href: '#market', label: '信号市场', icon: Store },
-  { href: '#evolution', label: '进化', icon: Sprout },
+  { href: '#history', label: '复盘', icon: FileClock },
 ] as const;
 
 export function AgentQuickLinks() {
   return (
-    <nav aria-label={t('常用入口')} className="grid grid-cols-5 divide-x">
-      {AGENT_QUICK_LINKS.map((l) => (
-        <a key={l.href} href={l.href} className="flex flex-col items-center gap-0.5 px-1 py-1.5 text-[10.5px] text-muted-foreground hover:bg-muted/50 hover:text-foreground focus-visible:bg-muted/50 focus-visible:outline-none" title={t(l.label)}>
-          <l.icon className="size-3.5" />
+    <nav aria-label={t('常用入口')} className="grid grid-cols-4 divide-x">
+      {AGENT_QUICK_LINKS.map((l, i) => (
+        <a
+          key={l.href}
+          href={l.href}
+          className="group flex flex-col items-center gap-0.5 px-1 py-1.5 text-[10.5px] text-muted-foreground hover:bg-muted/50 hover:text-foreground focus-visible:bg-muted/50 focus-visible:outline-none"
+          title={t(l.label)}
+        >
+          <span className="flex items-center gap-1">
+            <span className="num text-[9px] text-muted-foreground/60 group-hover:text-primary">{i + 1}</span>
+            <l.icon className="size-3.5" />
+          </span>
           <span className="max-w-full truncate">{t(l.label)}</span>
         </a>
       ))}

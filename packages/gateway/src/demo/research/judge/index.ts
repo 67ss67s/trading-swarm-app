@@ -1,3 +1,5 @@
+import { needsMicrostructure, type MicrostructureSource } from './microstructure.js';
+import { DecisionError } from '../../decisions.js';
 import type { ResearchBar, StrategyIR } from '@trading-swarm/contracts';
 import { hash } from '../primitives.js';
 import { buildJudgeState, decisionQuestions, evaluateJudgeRule, normalizeAnswers, validateJudge, validateState } from './pure.js';
@@ -5,7 +7,7 @@ import { AtomicCallBudget, JudgeDecisionStore, decisionId, usdUnits } from './st
 import type { DecisionProvider, FrozenModelProfile, JudgeCandidateSnapshot, JudgeInput, JudgeResult, RecordedResponse } from './types.js';
 export * from './pure.js'; export * from './types.js'; export * from './store.js';
 export interface JudgeDeps { mode: 'recorded_only' | 'request_once'; provider?: DecisionProvider; store: JudgeDecisionStore; budget: AtomicCallBudget; signal?: AbortSignal; now?: () => number }
-export interface JudgeRuntime extends JudgeDeps { model_profile: FrozenModelProfile; execution_spec_hash: string; scope: string }
+export interface JudgeRuntime extends JudgeDeps { model_profile: FrozenModelProfile; execution_spec_hash: string; scope: string; microstructure?: MicrostructureSource }
 export function fromDecisionClient(client: import('../../decisions.js').DecisionClient, profile: FrozenModelProfile): DecisionProvider {
   if (profile.retry_policy !== 'none') throw Error('judge_retries_forbidden');
   return { profile: structuredClone(profile), decide: (r,o) => client.decide(r,o) };
@@ -13,7 +15,7 @@ export function fromDecisionClient(client: import('../../decisions.js').Decision
 export async function judgeCandidate(input: Readonly<JudgeInput>, deps: JudgeDeps): Promise<JudgeResult> {
   const x = structuredClone(input); validateJudge(x.spec); validateState(x.state,x.spec);
   if (x.state.as_of !== x.candidate.as_of || x.state.timeframe_ms !== x.candidate.timeframe_ms) throw Error('judge_state_candidate_mismatch');
-  if (x.spec.model_profile_ref !== x.model_profile.ref || !x.model_profile.model_revision || x.model_profile.parser_version !== 'judge_answers_v1' || x.model_profile.retry_policy !== 'none') throw Error('judge_profile_mismatch');
+  if (x.spec.model_profile_ref !== x.model_profile.ref || !x.model_profile.model_revision || !['judge_answers_v1','judge_answers_v2_rounding_001'].includes(x.model_profile.parser_version) || x.model_profile.retry_policy !== 'none') throw Error('judge_profile_mismatch');
   const maximum = usdUnits(x.model_profile.max_call_usd);
   if (maximum === 0n && x.model_profile.routing !== 'offline_stub') throw Error('judge_price_bound_required');
   const request = { state: x.state as unknown as Record<string, unknown>, questions: decisionQuestions(x.spec) };
@@ -50,7 +52,12 @@ export async function judgeCandidate(input: Readonly<JudgeInput>, deps: JudgeDep
         try {
           const timeout = new Promise<never>((_,reject) => { timer=setTimeout(() => { ac.abort(); reject(Error('judge_timeout')); },x.spec.timeout_ms); });
           response = await Promise.race([deps.provider.decide(request,{timeoutMs:x.spec.timeout_ms,signal:ac.signal}),timeout]);
-        } catch { error_code = ac.signal.aborted ? 'judge_timeout_or_cancelled' : 'provider_error'; }
+        } catch (e) {
+          response = e instanceof DecisionError ? e.recorded_response : null;
+          if (!response && e instanceof DecisionError && ['bad_request','decision_budget_exhausted'].includes(e.code)) response = {model:x.model_profile.model,answers:{},usage:{input_tokens:0,cost_usd:0},latency_ms:0,raw_response:{request_not_sent:true}};
+          error_code = ac.signal.aborted ? 'judge_timeout_or_cancelled' : e instanceof DecisionError ? `provider_${e.code}` : 'provider_error';
+          if (response) response = { ...response, response_error: error_code };
+        }
         finally { if (timer) clearTimeout(timer); deps.signal?.removeEventListener('abort',abort); }
         // 持久化失败保留 pending/预留并抛给调度，不能伪装成 provider 错误。
         deps.store.finish(request_hash,response,error_code);
@@ -77,7 +84,8 @@ export async function judgeCandidate(input: Readonly<JudgeInput>, deps: JudgeDep
     if (!Number.isSafeInteger(raw.latency_ms) || raw.latency_ms < 0) throw Error('provider_latency_invalid');
     if (raw.model !== x.model_profile.model) throw Error('model_revision_mismatch');
     if (usage?.status === 'overrun') throw Error('provider_cost_exceeds_reservation');
-    const answers = normalizeAnswers(x.spec,raw.answers), rule = evaluateJudgeRule(x.spec,answers);
+    if (raw.response_error) throw Error(raw.response_error);
+    const answers = normalizeAnswers(x.spec,raw.answers,x.model_profile.parser_version), rule = evaluateJudgeRule(x.spec,answers);
     result = {...base,status:rule.uncertain?'uncertain':'ok',action:rule.action,answers,predicates:rule.predicates,reason_codes:rule.uncertain?['margin_abstain']:rule.action==='skip'?['rule_skip']:[]};
   } catch (e) { result = {...base,reason_codes:[(e as Error).message]}; }
   // DB 失败不是模型解析失败；让调度恢复使用已经钉住的响应。
@@ -89,7 +97,7 @@ export async function judgeCandidate(input: Readonly<JudgeInput>, deps: JudgeDep
 export async function judgeWithBars(ir: StrategyIR, candidate: JudgeCandidateSnapshot, bars: readonly ResearchBar[], runtime: JudgeRuntime): Promise<JudgeResult> {
   if (!ir.judge) throw Error('judge_spec_missing');
   let state;
-  try { state = buildJudgeState(candidate,bars,ir.judge); }
+  try { state = buildJudgeState(candidate,bars,ir.judge,needsMicrostructure(ir.judge) ? await runtime.microstructure?.(candidate.symbol,candidate.as_of) : null); }
   catch (e) {
     const key = `${runtime.scope}:${candidate.id}:${hash(ir)}`, input = hash({candidate,ir,profile:runtime.model_profile});
     return runtime.store.put(key,input,{status:'error',action:'skip',decision_id:decisionId(key),state_hash:'',request_hash:'',raw_response_ref:null,answers:[],predicates:[],model_revision:null,latency_ms:0,cost_usd:'0',cost_status:'actual',reason_codes:[(e as Error).message]}, {candidate,ir,profile:runtime.model_profile});

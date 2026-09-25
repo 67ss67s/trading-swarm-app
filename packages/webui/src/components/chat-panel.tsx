@@ -7,12 +7,15 @@
  *   - 自动滚到底:自己管一个 overflow-y-auto 的 div(Radix ScrollArea 的滚动层拿不到 ref),
  *     用户往上翻了就不打扰,回到底部又恢复跟随。
  *   - 「问 agent 为什么」入口(src/lib/ask-agent.ts)会把问题预填进输入框。
+ *   - 09-25 Agent 页改版:空态 = 欢迎 + 五张建议提问卡(按「策略研究」流程);有对话后输入框上方一排建议胶囊 + 一行能力说明;
+ *     点一下只填进输入框不直接发。工具调用显示成「做了什么」一行(components/agent/logic.ts 的 toolAction,中文动作 + 参数摘要),
+ *     点开看原始参数与结果。建议与映射的纯逻辑有单测(test/agent-page.test.ts)。
  * 数据源:['chat-messages', kind](App.tsx 收到 SSE chat.message 时前缀失效),['overview'] 拿队列。
  * Agent 页整页用(compact=false),交易页右上角 tabs 里嵌一份小的(compact=true)。
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronRight, Eraser, Info, Send, Wrench } from 'lucide-react';
+import { ChevronDown, ChevronRight, CircleHelp, Compass, Eraser, FileClock, FlaskConical, Info, Repeat, Search, Send, Settings2, Sparkles, Zap, type LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
@@ -20,6 +23,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Markdown } from '@/components/markdown';
 import { RecommendationCard } from '@/components/chat/recommendation-card';
 import { recommendationIdOf } from '@/api/recommend';
+import { useAgentStrategy } from '@/api/agent-strategy';
+import { suggestedPrompts, toolAction, type PromptIcon, type SuggestedPrompt, type ToolGroup } from '@/components/agent/logic';
 import { ChatSessionBar, readSavedSession, SESSION_KEY } from '@/components/chat-session-bar';
 import { onAskAgent, takePendingQuestion } from '@/lib/ask-agent';
 import { fmtClock, useNow } from '@/lib/format';
@@ -66,27 +71,85 @@ function queueHint(queue: QueueView | null | undefined): string | null {
   return null;
 }
 
+const GROUP_ICON: Record<ToolGroup, LucideIcon> = { read: Search, research: FlaskConical, act: Zap, config: Settings2 };
+const GROUP_TONE: Record<ToolGroup, string> = {
+  read: 'bg-muted-foreground/15 text-muted-foreground',
+  research: 'bg-primary/15 text-primary',
+  act: 'bg-warn/15 text-warn',
+  config: 'bg-primary/10 text-primary',
+};
+const PROMPT_ICON: Record<PromptIcon, LucideIcon> = { recommend: Compass, research: FlaskConical, switch: Repeat, why: CircleHelp, review: FileClock };
+
+/** 工具调用 = 「做了什么」一行:中文动作 + 参数摘要;点开看原始参数与结果(对照日志用)。 */
 function ToolCallPill({ call }: { call: ChatToolCall }) {
   const [open, setOpen] = useState(false);
+  const a = toolAction(call);
+  const Icon = GROUP_ICON[a.group];
   return (
-    <div className="mt-1 inline-block max-w-full align-top">
+    <div className="max-w-full min-w-0">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className={cn(
-          'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] transition-colors',
-          call.ok ? 'border-primary/30 bg-primary/10 text-primary' : 'border-destructive/30 bg-destructive/10 text-destructive',
-        )}
+        aria-expanded={open}
+        title={open ? t('收起原始参数') : t('看原始参数与结果')}
+        className="group flex w-full min-w-0 items-center gap-1.5 rounded px-1 py-0.5 text-left text-[11.5px] transition-colors hover:bg-background/70"
       >
-        <Wrench className="size-3" />
-        {call.name}
-        <ChevronRight className={cn('size-3 transition-transform', open && 'rotate-90')} />
+        <span className={cn('grid size-4 shrink-0 place-items-center rounded-full', a.ok ? GROUP_TONE[a.group] : 'bg-destructive/15 text-destructive')}>
+          <Icon className="size-2.5" />
+        </span>
+        <span className={cn('shrink-0 font-medium', a.ok ? 'text-foreground/90' : 'text-destructive')}>{a.verb}</span>
+        {a.detail ? <span className="num min-w-0 truncate text-muted-foreground">{a.detail}</span> : null}
+        {!a.ok ? <span className="shrink-0 text-destructive">· {t('失败')}</span> : null}
+        <ChevronRight className={cn('ml-auto size-3 shrink-0 text-muted-foreground opacity-40 transition group-hover:opacity-100', open && 'rotate-90 opacity-100')} />
       </button>
       {open ? (
-        <pre className="num mt-1 max-h-56 overflow-auto rounded-md border bg-muted/40 p-2 text-[11px] leading-relaxed whitespace-pre-wrap">
-          {JSON.stringify({ args: call.args, result: call.result }, null, 2)}
-        </pre>
+        <div className="mt-0.5 mb-1 ml-5">
+          <div className="num text-[10px] text-muted-foreground">{a.raw}</div>
+          <pre className="num mt-0.5 max-h-56 overflow-auto rounded-md border bg-background/70 p-2 text-[11px] leading-relaxed whitespace-pre-wrap">
+            {JSON.stringify({ args: call.args, result: call.result }, null, 2)}
+          </pre>
+        </div>
       ) : null}
+    </div>
+  );
+}
+
+/** 空态:它是谁 + 能做什么 + 五张建议提问卡(点一下填进输入框)。 */
+function Welcome({ prompts, onPick }: { prompts: SuggestedPrompt[]; onPick: (text: string) => void }) {
+  return (
+    <div className="mx-auto w-full max-w-2xl py-4 animate-in fade-in duration-300">
+      <div className="mb-3 flex items-start gap-2.5">
+        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+          <Sparkles className="size-4" />
+        </span>
+        <div className="min-w-0">
+          <div className="text-[14px] font-semibold">{t('跟 agent 说你想做什么')}</div>
+          <div className="text-[12px] text-muted-foreground">{t('能看数据、能开研究、能切策略;下单要你确认')}</div>
+        </div>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {prompts.map((p) => {
+          const Icon = PROMPT_ICON[p.id];
+          return (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => onPick(p.text)}
+              className="group flex items-start gap-2.5 rounded-lg border bg-card p-2.5 text-left transition-colors hover:border-primary/50 hover:bg-primary/5 focus-visible:border-primary focus-visible:outline-none"
+            >
+              <span className="grid size-7 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground group-hover:bg-primary/15 group-hover:text-primary">
+                <Icon className="size-3.5" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[12.5px] font-medium text-foreground">{p.title}</span>
+                <span className="line-clamp-2 block text-[11.5px] text-muted-foreground">「{p.text}」</span>
+                <span className="mt-0.5 block text-[10.5px] text-muted-foreground/80">→ {p.hint}</span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <p className="mt-2 text-[10.5px] text-muted-foreground">{t('点一下填进输入框,改完再发')}</p>
     </div>
   );
 }
@@ -103,10 +166,14 @@ function Bubble({ message, optimistic = false }: { message: ChatMessage; optimis
           optimistic && 'opacity-70',
         )}
       >
+        {message.tool_calls.length ? (
+          <div className="mb-1 flex min-w-0 flex-col gap-0.5 border-l-2 border-primary/30 pl-1">
+            {message.tool_calls.map((call, i) => (
+              <ToolCallPill key={i} call={call} />
+            ))}
+          </div>
+        ) : null}
         {isUser ? <p className="whitespace-pre-wrap">{message.text}</p> : <Markdown text={message.text} />}
-        {message.tool_calls.map((call, i) => (
-          <ToolCallPill key={i} call={call} />
-        ))}
         {message.tool_calls.map((call) => recommendationIdOf(call)).filter((id): id is string => !!id).map((id) => (
           <RecommendationCard key={id} id={id} />
         ))}
@@ -167,6 +234,8 @@ export function ChatPanel({ compact = false }: { compact?: boolean }) {
   const feedQ = useQuery({ queryKey: ['chat-messages', 'narration'], queryFn: () => api.chatMessages(200, 'narration'), enabled: tab === 'feed' });
   const overviewQ = useQuery({ queryKey: ['overview'], queryFn: api.overview, staleTime: 5_000 });
   const watchlist = overviewQ.data?.workflow.watchlist ?? [];
+  const stratQ = useAgentStrategy();
+  const prompts = useMemo(() => suggestedPrompts({ watchlist, strategy: stratQ.data ?? null }), [watchlist, stratQ.data]);
   const queue = overviewQ.data?.queue ?? null;
 
   // 老网关不认 kind 参数会把旁白一起返回,这里再按 kind 过一遍,两边都对。
@@ -203,6 +272,19 @@ export function ChatPanel({ compact = false }: { compact?: boolean }) {
     consume();
     return onAskAgent(consume);
   }, []);
+
+  /** 建议提问:只填进输入框并聚焦,让用户改完再发 */
+  const fill = (q: string) => {
+    setText(q);
+    setTab('chat');
+    window.setTimeout(() => {
+      const el = inputWrapRef.current?.querySelector('textarea');
+      if (el) {
+        el.focus();
+        el.setSelectionRange(el.value.length, el.value.length);
+      }
+    }, 30);
+  };
 
   const send = useMutation({
     mutationFn: (raw: string) => api.sendChat(raw, session),
@@ -324,9 +406,11 @@ export function ChatPanel({ compact = false }: { compact?: boolean }) {
             <>
               {chatQ.isLoading ? <div className="py-10 text-center text-[12px] text-muted-foreground">{t('加载中…')}</div> : null}
               {!chatQ.isLoading && chatMessages.length === 0 && !optimistic ? (
-                <div className="py-10 text-center text-[12.5px] text-muted-foreground">
-                  {t('还没有对话。问问它现在为什么不开单,或者让它看看某个币。')}
-                </div>
+                compact ? (
+                  <div className="py-10 text-center text-[12.5px] text-muted-foreground">{t('还没有对话。问问它现在为什么不开单,或者让它看看某个币。')}</div>
+                ) : (
+                  <Welcome prompts={prompts} onPick={fill} />
+                )
               ) : null}
               {chatMessages.map((m) => (
                 <Bubble key={m.id} message={m} />
@@ -360,8 +444,29 @@ export function ChatPanel({ compact = false }: { compact?: boolean }) {
         </div>
       </div>
 
-      {/* 输入框 */}
-      <div ref={inputWrapRef} className="flex shrink-0 items-end gap-2 border-t p-2">
+      {/* 输入区:建议胶囊(有对话后)+ 输入框 + 能力说明 */}
+      <div className="shrink-0 border-t">
+      {!compact && tab === 'chat' && (chatMessages.length > 0 || optimistic) ? (
+        <div className="flex items-center gap-1.5 overflow-x-auto px-2 pt-1.5 [scrollbar-width:none]">
+          <span className="shrink-0 text-[10.5px] text-muted-foreground">{t('试试')}</span>
+          {prompts.map((p) => {
+            const Icon = PROMPT_ICON[p.id];
+            return (
+              <button
+                key={p.id}
+                type="button"
+                title={p.text}
+                onClick={() => fill(p.text)}
+                className="inline-flex shrink-0 items-center gap-1 rounded-full border bg-card px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+              >
+                <Icon className="size-3" />
+                {p.title}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+      <div ref={inputWrapRef} className="flex items-end gap-2 p-2">
         <Textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -379,6 +484,8 @@ export function ChatPanel({ compact = false }: { compact?: boolean }) {
           <Send data-slot="icon" />
           {t('发送')}
         </Button>
+      </div>
+      {!compact && (chatMessages.length > 0 || optimistic) ? <div className="-mt-1 px-2.5 pb-1.5 text-[10.5px] text-muted-foreground">{t('能看数据、能开研究、能切策略;下单要你确认')}</div> : null}
       </div>
     </div>
   );

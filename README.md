@@ -62,7 +62,11 @@ Suggested click path
 
 **Matrix research.** A study crosses assets × timeframe tier (short 15m, mid 4h, long 1d) × strategy family (breakout, MA trend, MA cross, pullback, mean reversion, SMC structure) × two arms: pure code, and code plus a Jev judgment step. Fees, slippage and funding are charged. Data is split into train / validation / held-out; the held-out segment is locked until the final candidates are frozen and is evaluated once. "Nothing passed" is a valid result and is reported with the reason (fees, sample size, underperforms buy-and-hold, drawdown).
 
+Rows of the matrix can be built-in families, your own saved strategies, or both: pick strategies from **My strategies** in the study form (or use "test this in matrix research" on a strategy page), and each selected version is run across the chosen assets and timeframes in the same two arms.
+
 ![Matrix research](docs/screenshots/04-matrix-research.png)
+
+**Order-book and liquidation features for the judgment step.** The Jev judgment can read short-horizon microstructure fields for BTC and ETH perpetuals: order-book imbalance within ±0.5% of mid, the largest near-price bid and ask walls, spread, and 5-minute long/short liquidation notional. Live runs and matrix studies read the same recorded frames (gzip JSONL under `TG_MICRO_DIR`), only frames already on disk at the decision time. These fields are marked live-only: without recordings for a period, the judgment reports them as unavailable instead of guessing. The recorder that produces the frames is not part of this repository.
 
 **Strategies run by role.** A saved strategy is an IR plus its judgment questions, asset pool and horizon. Setting it as the agent's current strategy splits it across roles (radar, judge, geometry, risk, holding, execution); each rule is marked as executed by code, by Jev, or by an LLM. "Free judgment" (no strategy) is an explicit option.
 
@@ -77,6 +81,20 @@ Suggested click path
 ![Connect](docs/screenshots/02-connect.png)
 
 **Signal market (OKX.AI ASP).** Browse and subscribe to OKX.AI Agent Service Provider signal services, see the inbound signal ledger, and publish this agent as a provider. Driven through the `onchainos` / `okx-a2a` CLIs; see `skills/asp-agent/SKILL.md`.
+
+As a provider, the gateway defines seven outward services (`packages/gateway/src/demo/asp-agent/services/`). Orders arrive through one job poller and are dispatched to the handler registered for each `serviceId`; subscription deliveries are fanned out per `serviceId`.
+
+- Market Intel (subscription): a 30-minute market brief plus the short / swing / weekly radar picks.
+- BTC/ETH Microstructure Alerts (subscription): liquidation spikes, near-price walls and order-book imbalance, with cooldowns.
+- Asset x Horizon Picks (per call): rule-based picks per horizon, with no LLM call.
+- Strategy Backtest Quick (per call): an idea compiled to rules and backtested over the full window with fees and slippage.
+- Strategy Matrix Research (per call): a matrix study with train / selection / held-out segments and multiple-testing control.
+- Trade Plan Check (per call): rule gates on a trade plan, then a Jev probability.
+- AI Probability Check (per call): Jev probabilities for a plan. This one is held back from listing until the model provider's resale terms are confirmed.
+
+Listing texts are generated for `onchainos agent update`, but listing and submission are done by a person. The two services that call Jev are off by default and are capped per call.
+
+![Signal market](docs/screenshots/09-signal-market.png)
 
 **Operations floor.** A live view of the team: which role is working on what, hand-offs between roles, and which slice of the current strategy each role holds.
 
@@ -140,9 +158,10 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for boundaries and conventions.
 
 - Paper and exchange demo trading are the supported modes. Live trading on OKX needs an explicit flag and has only been exercised with small canary orders.
 - Research results so far are mostly negative: the built-in strategies did not beat buy-and-hold after costs, and the batch studies found no family that survives multiple-testing correction. The tool reports this rather than forcing a winner.
-- Order-book and liquidation features for short timeframes are live-only; they cannot be backtested until enough samples are recorded.
-- The Binance MCP path depends on Binance's client allow-list; the gateway's own OAuth client is not on it, so that path runs through an agent CLI.
-- Known failing tests (also failing before this snapshot): one schema strict-mode check in `packages/contracts`, one gate-coverage case in `packages/eval-a`, and two HTTP tests in `packages/gateway` (`spot-http` basis, research routes attribution). A few long research tests can time out under full-suite load and pass when run alone.
+- Order-book and liquidation features are live-only and cover BTC and ETH perpetuals only. They need an external recorder writing to `TG_MICRO_DIR`, and they cannot be backtested over periods that were not recorded.
+- Research scripts under `scripts/trader-*` need the original channel messages and structured signals. These inputs are not distributed with this repository.
+- The Binance MCP path depends on Binance's client allow-list; the gateway's own OAuth client is not on it, so that path runs through an agent CLI. Zero-model account reads for that path need an external read bridge (`TG_DIRECT_READ_BIN`). Without it, account reads go through the agent CLI.
+- Known failing tests, also failing before this snapshot: in `packages/contracts`, the ajv strict-mode check for the `research-loop` schema; in `packages/eval-a`, one gate-coverage case; in `packages/gateway`, the research routes attribution test. Under full-suite load, a few long research and performance tests (and `generate --check`, which has a 5 s timeout) can time out. They pass when run alone.
 
 ## Documentation
 

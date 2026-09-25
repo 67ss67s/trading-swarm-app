@@ -37,6 +37,12 @@ import { DemoRuntime } from './runtime.js';
 import { DemoStore } from './store.js';
 import { startPineEngine, stopPineEngine } from './research/pine/engine-host.js';
 
+/** 零模型只读桥的可执行文件路径;未配置(或路径不存在)时返回 null,agent_mcp 读取退回 agent CLI。 */
+const directReadBin = (): string | null => {
+  const p = process.env['TG_DIRECT_READ_BIN']?.trim();
+  return p && existsSync(p) ? p : null;
+};
+
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, '..', '..', '..', '..');
 /** demo_kv row holding the PaperBackend snapshot. */
@@ -54,12 +60,12 @@ async function main(): Promise<void> {
   // 之前每次重启都退回 paper,用户切到 agent_mcp 后一刷新就「跳成了模拟」(2026-09-06)。mcp 直连不可自恢复(要 token+映射),不算。
   const persistedExec = loadWorkflow(store.loadWorkflowJson()).execution;
   // TG_EXCHANGE(默认 okx):通道清单按交易所裁(`backendsFor`),okx 模式下只有 paper/okx 两条,
-  // Binance 的四条连工厂都不注册;binance 模式下反过来,okx 工厂也不注册(codex-review #13)。
+  // Binance 的四条连工厂都不注册;binance 模式下反过来,okx 工厂也不注册(review #13)。
   const ex = exchange();
   // 每次探测/创建后端时重新解析配置；setup 会清空 availability 缓存。
   const okxGate = (): { available: boolean; note?: string } => okxAvailability();
   // 可恢复的通道按交易所分开,清单与 UI 同源(`backendsFor`):binance 模式下上次存的 `okx`
-  // 不能被恢复,否则行情走 Binance、交易却发去 OKX,而执行页连 OKX 这个选项都不显示(codex-review #13)。
+  // 不能被恢复,否则行情走 Binance、交易却发去 OKX,而执行页连 OKX 这个选项都不显示(review #13)。
   // `mcp` 单独排除:直连要 token + 人工确认过的工具映射,重启后不可自恢复。
   const resumable: Set<Backend> = new Set(backendsFor(ex).filter((k) => k !== 'mcp'));
   const autoKind = ex === 'okx'
@@ -101,7 +107,8 @@ async function main(): Promise<void> {
     cli: () => new CliBackend({ bin: defaultBinanceCliBin(REPO_ROOT), profile: process.env['TG_DEMO_CLI_PROFILE'] ?? 'tswarm-demo', env: 'demo', log: logFn }),
     agent_mcp: () =>
       new AgentMcpBackend({
-        reads: new DirectAgentReads(rustReadBridge(path.join(REPO_ROOT, 'target', 'debug', 'execd-mcp-read')), { get: k => store.kvGet(k), set: (k,v) => store.kvSet(k,v) }),
+        // 零模型只读桥:可选的外部二进制(TG_DIRECT_READ_BIN)。未配置或文件不存在 → 不挂,账户读取走 agent CLI(read_mode=model)。
+        reads: directReadBin() ? new DirectAgentReads(rustReadBridge(directReadBin()!), { get: k => store.kvGet(k), set: (k,v) => store.kvSet(k,v) }) : undefined,
         state: { get: k => store.kvGet(k), set: (k,v) => store.kvSet(k,v) },
         leanPrompt: true,
         accountTtlMs: 15_000,
@@ -127,7 +134,7 @@ async function main(): Promise<void> {
     },
   };
   // 工厂也按交易所裁:okx 模式下摘掉 Binance 的四条(UI 不列、切不过去、不会因为缺 key 在后台报错),
-  // binance 模式下摘掉 okx —— 光挡住 resumable 不够,显式 TG_DEMO_BACKEND=okx 也不能绕过去(codex-review #13)。
+  // binance 模式下摘掉 okx —— 光挡住 resumable 不够,显式 TG_DEMO_BACKEND=okx 也不能绕过去(review #13)。
   for (const k of Object.keys(backends) as Backend[]) if (!backendsFor(ex).includes(k)) delete backends[k];
   // Booting straight into `mcp` only works once a human confirmed the tool map; otherwise start() would
   // throw and the process would die on every restart, so fall back to paper and say why.
@@ -167,6 +174,8 @@ async function main(): Promise<void> {
   const server = createServer(rt, store, ex === 'okx' ? {} : { oauth, mcp: mcpHttp });
   server.listen(port, '127.0.0.1', () => console.error(`demo gateway listening on http://127.0.0.1:${port}  (backend=${backend.kind}, brain=${rt.workflow.brain}, db=${dbPath})`));
   await rt.start({ runOnStart: process.env['TG_DEMO_RUN_ON_START'] === '1' });
+  // 预热 OKX 三盏灯(钱包 / A2A / Trade Kit):重启后第一次打开页面不用等两个 CLI(accountLights 之后走 SWR)
+  if (ex === 'okx') void rt.okxAccountLights().catch(() => undefined);
 
   const shutdown = async (): Promise<void> => {
     console.error('shutting down');

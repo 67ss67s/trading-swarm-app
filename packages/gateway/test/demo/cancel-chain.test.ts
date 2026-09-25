@@ -97,7 +97,7 @@ describe('cancel entry facts, real holding plan and persisted intent', () => {
     expect((await rt.closeThread(t.id)).status).toBe('pending_entry');
     expect(store.intent('open-intent')!.status).toBe('unknown');
   });
-  // codex-review #7:`swap close` 已经发出去了、20 秒没回来 —— 这是未知,不是失败。
+  // review #7:`swap close` 已经发出去了、20 秒没回来 —— 这是未知,不是失败。
   // 把意图写成 failed 等于宣称「没平掉」,而仓位可能已经平了。
   for (const [label, extra, want] of [['ambiguous', { ambiguous: true }, 'unknown'], ['definite', {}, 'failed']] as const) {
     it(`close ${label} transport error → intent ${want}`, async () => {

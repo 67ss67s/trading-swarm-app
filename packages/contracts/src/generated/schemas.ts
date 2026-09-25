@@ -11,7 +11,7 @@ export const schemas = {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "https://trading-swarm.dev/schema/account_snapshot.json",
     "title": "AccountSnapshot",
-    "description": "账户真相(设计 §6.2 account.truth / Codex review #6):每个组件各自 observed_at、取数区间、completeness;经济组件哈希 = account_version;组件缺失或跨度过大 → inconsistent(gate 拒开仓);不可得 → unavailable。",
+    "description": "账户真相(设计 §6.2 account.truth / external review #6):每个组件各自 observed_at、取数区间、completeness;经济组件哈希 = account_version;组件缺失或跨度过大 → inconsistent(gate 拒开仓);不可得 → unavailable。",
     "type": "object",
     "additionalProperties": false,
     "required": [
@@ -2872,7 +2872,7 @@ export const schemas = {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "https://trading-swarm.dev/schema/policy.json",
     "title": "ExecPolicy",
-    "description": "execd 持有的 policy 子集(设计 §10):模式、authority、上限。gateway 的 gate v2 与 execd 的重闸读同一份;改动需 policy.set + confirm 回填。金丝雀期默认值取 Codex 保守值(§17.2),向导里显式输入。",
+    "description": "execd 持有的 policy 子集(设计 §10):模式、authority、上限。gateway 的 gate v2 与 execd 的重闸读同一份;改动需 policy.set + confirm 回填。金丝雀期默认值取评审建议的保守值(§17.2),向导里显式输入。",
     "type": "object",
     "additionalProperties": false,
     "required": [
@@ -4893,7 +4893,7 @@ export const schemas = {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "https://trading-swarm.local/schema/research-binding.json",
     "title": "ResearchStrategyBinding",
-    "description": "§9.47 StrategyBinding:研究台策略版本(StrategyIR,唯一真源)编译出来的实盘绑定(只读编译产物)。字段对齐 docs/design/strategy-apply-spec-2026-09-23.md §3 与 Codex 复审修订;实盘侧(radar / 候选生成 / holding-policy / gates)按这些字段消费,字段名保持稳定。部署模式、仓位 cap 不在这里(属于部署,由实盘注册表管)。",
+    "description": "§9.47 StrategyBinding:研究台策略版本(StrategyIR,唯一真源)编译出来的实盘绑定(只读编译产物)。字段对齐 docs/design/strategy-apply-spec-2026-09-23.md §3 与 复审修订;实盘侧(radar / 候选生成 / holding-policy / gates)按这些字段消费,字段名保持稳定。部署模式、仓位 cap 不在这里(属于部署,由实盘注册表管)。",
     "anyOf": [
       {
         "$ref": "#/$defs/StrategyBindingResponse"
@@ -5495,7 +5495,7 @@ export const schemas = {
             ]
           },
           "model": {
-            "description": "模型在这条策略里的角色(Codex 复审:agent_mode 拆成 entry_filter / exit_discretion)。缺省 entry_filter=on、exit_discretion=off:模型只决定做/不做,不改任何价位,持仓期零模型调用;最终取值由 A/C 臂配对证据定,属于部署决定",
+            "description": "模型在这条策略里的角色(复审:agent_mode 拆成 entry_filter / exit_discretion)。缺省 entry_filter=on、exit_discretion=off:模型只决定做/不做,不改任何价位,持仓期零模型调用;最终取值由 A/C 臂配对证据定,属于部署决定",
             "type": "object",
             "additionalProperties": false,
             "properties": {
@@ -17835,7 +17835,18 @@ export const schemas = {
           "features.volatility",
           "features.volume_ratio",
           "features.funding",
-          "features.market_regime"
+          "features.market_regime",
+          "features.ob_imbalance_05",
+          "features.ob_wall_up",
+          "features.ob_wall_down",
+          "features.spread_bps",
+          "features.liq_long_5m",
+          "features.liq_short_5m",
+          "candidate.reference",
+          "candidate.support",
+          "candidate.resistance",
+          "candidate.stop",
+          "candidate.target"
         ]
       },
       "JudgeQuestion": {
@@ -17874,7 +17885,7 @@ export const schemas = {
               "$ref": "#/$defs/JudgeStateField"
             },
             "minItems": 1,
-            "maxItems": 8,
+            "maxItems": 19,
             "uniqueItems": true
           },
           "labels": {
@@ -18068,7 +18079,11 @@ export const schemas = {
             "maxLength": 160
           },
           "parser_version": {
-            "const": "judge_answers_v1"
+            "enum": [
+              "judge_answers_v1",
+              "judge_answers_v2_rounding_001"
+            ],
+            "description": "v1: sum tolerance 1e-6 unchanged. v2: |sum-1| <= 0.01 (+1e-12 numeric epsilon), normalize by sum; explicit opt-in only after raw diagnostics."
           },
           "max_call_usd": {
             "type": "string",
@@ -18194,6 +18209,26 @@ export const schemas = {
               "reward_risk": {
                 "type": "number",
                 "minimum": 0
+              },
+              "reference": {
+                "type": "string",
+                "pattern": "^(0|[1-9]\\d*)(\\.\\d{1,12})?$"
+              },
+              "support": {
+                "type": "string",
+                "pattern": "^(0|[1-9]\\d*)(\\.\\d{1,12})?$"
+              },
+              "resistance": {
+                "type": "string",
+                "pattern": "^(0|[1-9]\\d*)(\\.\\d{1,12})?$"
+              },
+              "stop": {
+                "type": "string",
+                "pattern": "^(0|[1-9]\\d*)(\\.\\d{1,12})?$"
+              },
+              "target": {
+                "type": "string",
+                "pattern": "^(0|[1-9]\\d*)(\\.\\d{1,12})?$"
               }
             },
             "required": []
@@ -18225,6 +18260,65 @@ export const schemas = {
                   "down",
                   "volatile"
                 ]
+              },
+              "ob_imbalance_05": {
+                "type": "number",
+                "minimum": -1,
+                "maximum": 1,
+                "description": "live_only: requires as-of recorded coverage; unavailable is not zero."
+              },
+              "ob_wall_up": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "price": {
+                    "type": "string",
+                    "pattern": "^(0|[1-9]\\d*)(\\.\\d{1,12})?$"
+                  },
+                  "notional": {
+                    "type": "string",
+                    "pattern": "^(0|[1-9]\\d*)(\\.\\d{1,12})?$"
+                  }
+                },
+                "required": [
+                  "price",
+                  "notional"
+                ],
+                "description": "live_only: requires as-of recorded coverage; unavailable is not zero."
+              },
+              "ob_wall_down": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "price": {
+                    "type": "string",
+                    "pattern": "^(0|[1-9]\\d*)(\\.\\d{1,12})?$"
+                  },
+                  "notional": {
+                    "type": "string",
+                    "pattern": "^(0|[1-9]\\d*)(\\.\\d{1,12})?$"
+                  }
+                },
+                "required": [
+                  "price",
+                  "notional"
+                ],
+                "description": "live_only: requires as-of recorded coverage; unavailable is not zero."
+              },
+              "spread_bps": {
+                "type": "number",
+                "minimum": 0,
+                "description": "live_only: requires as-of recorded coverage; unavailable is not zero."
+              },
+              "liq_long_5m": {
+                "type": "string",
+                "pattern": "^(0|[1-9]\\d*)(\\.\\d{1,12})?$",
+                "description": "live_only: requires as-of recorded coverage; unavailable is not zero."
+              },
+              "liq_short_5m": {
+                "type": "string",
+                "pattern": "^(0|[1-9]\\d*)(\\.\\d{1,12})?$",
+                "description": "live_only: requires as-of recorded coverage; unavailable is not zero."
               }
             },
             "required": []

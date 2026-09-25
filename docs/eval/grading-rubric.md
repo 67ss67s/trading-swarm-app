@@ -1,6 +1,6 @@
 # Eval 实现打分表(给第三方 agent 用)
 
-对 `packages/eval-a`(Fable)与 `packages/eval-b`(Codex)各打一遍,每项 0-5 分并写一句依据(引用文件:行或命令输出),最后给总分与「建议采用哪套 / 合并哪些部分」。
+对 `packages/eval-a`(实现 A)与 `packages/eval-b`(实现 B)各打一遍,每项 0-5 分并写一句依据(引用文件:行或命令输出),最后给总分与「建议采用哪套 / 合并哪些部分」。
 
 1. **规格覆盖**:`docs/eval/README.md` §4 的 16 项指标各自实现了没有(NOT_IMPLEMENTED 也算诚实但扣分)。
 2. **硬不变量的检测力**:向 case 里故意注入未来 K 线数值 / 伪造 evidence_refs / 在 review case 里让桩输出 PROPOSE,能否被抓住(实际动手注入,不看文档)。

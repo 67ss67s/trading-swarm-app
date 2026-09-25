@@ -71,7 +71,7 @@ export const THEMES: Record<ThemeId, Theme> = {
     outline: '#140c08',
     street: { walk: '#4a4038', road: '#23201e', line: '#8c7a55', lamp: '#ffcf7a' },
     pet: 'cat',
-    evo: { good: '#8fd45a', ok: '#f0c24a', bad: '#e0553f', none: '#4a3b2e', plate: '#1a120c' },
+    evo: { good: '#8fd45a', ok: '#f0c24a', bad: '#e0553f', none: '#6e5a45', plate: '#1a120c' },
     ui: {
       '--bg': '#120d0a', '--panel': '#1b1410', '--panel-2': '#241a14', '--line': '#3b2b1f', '--ink': '#f3e9d8', '--dim': '#a8987f',
       '--faint': '#6b5d4a', '--accent': '#ffb454', '--good': '#9be15d', '--bad': '#ff6b6b', '--warn': '#ffd166',
@@ -105,7 +105,7 @@ export const THEMES: Record<ThemeId, Theme> = {
     outline: '#02060d',
     street: { walk: '#1a2538', road: '#0a101c', line: '#39c6ff', lamp: '#8fe8ff' },
     pet: 'robodog',
-    evo: { good: '#3dffb4', ok: '#ffd04a', bad: '#ff4f7a', none: '#1f3150', plate: '#050b16' },
+    evo: { good: '#3dffb4', ok: '#ffd04a', bad: '#ff4f7a', none: '#3a5078', plate: '#050b16' },
     ui: {
       '--bg': '#050a14', '--panel': '#0a1322', '--panel-2': '#0f1a2e', '--line': '#1c2c46', '--ink': '#e6f1ff', '--dim': '#8aa0bf',
       '--faint': '#4c6080', '--accent': '#39e0ff', '--good': '#4fffc8', '--bad': '#ff5d8f', '--warn': '#ffcf5a',
@@ -139,7 +139,7 @@ export const THEMES: Record<ThemeId, Theme> = {
     outline: '#0c0418',
     street: { walk: '#2a1845', road: '#120822', line: '#ff4fd8', lamp: '#ff9af0' },
     pet: 'shiba',
-    evo: { good: '#7dffb0', ok: '#ffd166', bad: '#ff4fa0', none: '#3a2458', plate: '#0e0620' },
+    evo: { good: '#7dffb0', ok: '#ffd166', bad: '#ff4fa0', none: '#5a3d80', plate: '#0e0620' },
     ui: {
       '--bg': '#0c0518', '--panel': '#150a28', '--panel-2': '#1d0f36', '--line': '#3a1f60', '--ink': '#f6ecff', '--dim': '#b39bd6',
       '--faint': '#6e5694', '--accent': '#ff4fd8', '--good': '#7dffb0', '--bad': '#ff5d8f', '--warn': '#ffd166',

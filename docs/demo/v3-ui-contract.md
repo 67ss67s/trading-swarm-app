@@ -539,7 +539,7 @@ Jacky 的问题「多少资金进去还能放止损 / 还有几条新策略的�
 
 ### 9.19 人批 = 一次性确认 token;对话改设置只到提议(v3.10,2026-09-06 傍晚)
 
-背景:Codex 派单设计稿 §A/§C.3——「会话开关 + 模型一句话」不等于人批。**自动交易路径不受影响**(PROPOSE → 代码闸 → intent → 执行,从不经过这里);这里只管本来就要人点的东西。
+背景:设计稿 §A/§C.3——「会话开关 + 模型一句话」不等于人批。**自动交易路径不受影响**(PROPOSE → 代码闸 → intent → 执行,从不经过这里);这里只管本来就要人点的东西。
 
 - **模型工具里不再有 approve_intent / reject_intent**(`EXECUTE_TOOLS` 为空;模型调了返回 ok:false)。新工具 `request_execution{id}`:不下单,只推一张确认卡(activity `chat_action`,`data.intent_id` + `data.confirm:'ui'`,并重发 SSE `intent.changed`)。`ChatSession.can_execute` 字段保留,语义降为「这个会话的意图卡是否显示执行按钮」的前端偏好,后端不再据它放行任何东西;UI 文案「开了 agent 就会执行」必须删掉。
 - **批准意图两步**:①`POST /api/intents/:id/confirm-token` → `{ nonce, expires_at, fingerprint, intent:{id,kind,symbol,direction,quantity,entry,limit_price|null,stop_price|null,take_profit_price|null,backend} }`(意图必须是 pending_approval,否则 409);②`POST /api/intents/:id/approve {nonce}` → 原响应。缺 nonce → **428** `confirm_required`;nonce 用过/不存在 → 409 `confirm_unknown`;超 120 秒 → 409 `confirm_expired`;意图内容在取 token 后变了 → 409 `confirm_mismatch`(重新取)。**token 一次性**。`reject` 不需要 token。建议 UI:点「执行」先取 token 并展示四项(symbol/方向/数量/止损)+ 倒计时,再点一次「确认执行」才发 approve;两次点击都在同一张卡上。
@@ -811,7 +811,7 @@ Jacky 拍板:议会的策略表态只回答**方向是否成立**(突破有效 /
 
 ### 9.31 保护腿凭证:有期限,按「通道 × 交易对」(2026-09-12)
 
-背景(Codex 复审):v3.11 的 `protection_verified:<backend>` 是**声明**不是**证明**——一次性标记、没有效期,一个月前验过的通道和昨天验过的在闸眼里一样;而且「从来没验证过」和「验过但最近一次真挂止损失败」是同一个处理(都降成 warn 不挡开仓)。现在它是一张**有期限的凭证**,按通道 × 交易对存。
+背景(复审):v3.11 的 `protection_verified:<backend>` 是**声明**不是**证明**——一次性标记、没有效期,一个月前验过的通道和昨天验过的在闸眼里一样;而且「从来没验证过」和「验过但最近一次真挂止损失败」是同一个处理(都降成 warn 不挡开仓)。现在它是一张**有期限的凭证**,按通道 × 交易对存。
 
 - **凭证**(demo_kv 一行 `protection_credentials`,JSON 数组):`{ channel, symbol: string|null, verified_at, expires_at, last_probe_at, last_probe_ok, last_error, last_auto_at }`。`symbol=null` 是 v3.11 迁移来的**通道级兜底**凭证,给还没有自己凭证的交易对用。判定用的过期时刻按**当前** `protection_ttl_days` 从 `verified_at` 现算(把 ttl 改小,旧凭证立刻过期)。
 - **新 workflow 字段** `protection_ttl_days`(整数 1–30,默认 **7**,`GET/POST /api/workflow` 一起出入)。只有人能改:对话里的 `set_workflow` 把它归到拒绝档。
@@ -1046,7 +1046,7 @@ lab_stats: {
 
 ### 9.35 策略自动轮换 allocator + `active_mode`(2026-09-12)
 
-设计 `docs/design/strategy-research-v3-and-event-research-2026-09-12.md` §4;Codex 复审 内部评审记录 §4 第 7 条
+设计 `docs/design/strategy-research-v3-and-event-research-2026-09-12.md` §4;复审 内部评审记录 §4 第 7 条
 (「自动晋到 paper **不会**自动添加 active;这条缺失不能靠把模型直接接 setWorkflow 弥补」)。
 
 **`workflow.active_mode: 'manual' | 'auto'`,默认 `manual`。**
@@ -1110,7 +1110,7 @@ POST /api/strategies/allocator/rollback  {}              → { active, previous,
 
 ### 9.36 议会票池冻结与 min_bars 聚合(P1-06,2026-09-12)
 
-Codex 内部评审记录 P1-06 四条,逐条口径:
+内部评审记录 P1-06 四条,逐条口径:
 
 1. **K 线深度按 tf 聚合取 max**:`klinePlan()`(strategy-council.ts)把「票池全集(active ∪ shadow ∪ Radar 候选)各自的 `checklist.min_bars`」
    与「evidence plan 里每个周期请求的指标」合成 `Record<tf, bars>`,**同一 tf 取 max**。runtime 按这张表拉,不再用
@@ -1398,7 +1398,7 @@ TS 进程里不得出现 API key/secret,写进 gateway 自己的库就是在 TS 
 ```jsonc
 {
   "id": "tsig_<signal_id>", "signal_id": "sig_123", "record_id": 1204,
-  "trader": "三马", "symbol": "BTCUSDT", "side": "long",        // side 可为 null(管理动作可能没方向)
+  "trader": "交易员A", "symbol": "BTCUSDT", "side": "long",        // side 可为 null(管理动作可能没方向)
   "action": "open",            // open|add|reduce|close|cancel|stop_loss_update|take_profit_update|stopped_out|analysis_only|unknown
   "entry_kind": "limit",       // market|limit|zone|ladder|unknown(zone=区间按方向取一侧挂一张;ladder=多档,本实现执行不了 → review_only 转人工)
   "entry_prices": ["77000"], "stop": "76000", "tps": [{ "price": "79000", "pct": null }],
@@ -1818,7 +1818,7 @@ v1 工具(名字固定,前端按名字翻步骤标题):
 
 ### 9.47 StrategyBinding 编译 + 内置策略导入 + 策略库并进「我的策略」(2026-09-23)
 
-契约源:`packages/contracts/schema/research-binding.json`(StrategyBinding、BindingRoleSlice、BindingRule、BindingUnmapped、StrategyBindingResponse、BuiltinImportResult)。规范依据:`docs/design/strategy-apply-spec-2026-09-23.md` §3(含 Codex 复审修订);合并计划:`docs/research/strategy-merge-plan-2026-09-23.md`。**字段名定稿后保持稳定**,实盘侧(radar 唤醒、候选生成、holding-policy、gates)按这里消费。本节只有只读编译与研究台内导入,**没有**写实盘注册表的 apply 接口(等 Jacky 放行后由实盘侧做)。
+契约源:`packages/contracts/schema/research-binding.json`(StrategyBinding、BindingRoleSlice、BindingRule、BindingUnmapped、StrategyBindingResponse、BuiltinImportResult)。规范依据:`docs/design/strategy-apply-spec-2026-09-23.md` §3(含 复审修订);合并计划:`docs/research/strategy-merge-plan-2026-09-23.md`。**字段名定稿后保持稳定**,实盘侧(radar 唤醒、候选生成、holding-policy、gates)按这里消费。本节只有只读编译与研究台内导入,**没有**写实盘注册表的 apply 接口(等 Jacky 放行后由实盘侧做)。
 
 **接口**(前缀 `/api/research/strategies`):
 - `GET /:id/binding[?version=]` → `StrategyBindingResponse {strategy_id, version, lab_strategy_id, binding: StrategyBinding|null, unmapped}`。缺省当前版本;没有 IR(规则未编码的导入草稿)时 `binding=null`、`version=null`,`unmapped` 说明缺什么。版本不存在 404,version 非正整数 400。不落库、不下发。
@@ -2082,6 +2082,7 @@ interface ModelsView {
 - `GET /api/models` → `ModelsView`。
 - `POST /api/models/connections` `{kind, label?, base_url?, cli?, api_key?}` → `ModelConnection`(api_key 只进服务端)。`PATCH /api/models/connections/:id` 同字段(`api_key` 缺省 = 不改);`DELETE` 同 id(有角色绑定时 409 `connection_in_use`,body 列出角色)。
 - `POST /api/models/connections/:id/test` `{model?}` → `last_test`。LLM 连接发一次「只回复 ok」;decision 连接发一个 1 问 noul 请求;cli 走现有 `testBrain`。
+- `POST /api/models/bindings/:role/test` → `RoleTestResult = last_test & {role, source: EffectiveSource, name}`(2026-09-25 补):用该角色**当前生效**的底层测一次。绑定 → 等同 `connections/:id/test` 带绑定的模型(结果写回连接);回退 → 直接调主脑 / 副脑一次(不改连接);decision 未绑定 → `ok:false`。未知角色 404。
 - `PUT /api/models/bindings/:role` `{connection_id|null, model|null}` → `ModelsView`。`decision` 只能绑 openrouter(Decisions API)或 null;其余角色不能绑 decision-only 模型(model id 以 `typesafe/` 或 `~typesafe/` 开头即 decision-only)。
 - SSE `models.changed`(data=ModelsView)。
 
@@ -2110,6 +2111,7 @@ interface ModelsView {
   `POST https://openrouter.ai/api/alpha/decisions {model, state, questions}`;并发闸(缺省 8)、429 退避、日花费闸 `workflow.decision_daily_usd_cap`(缺省 2 美元,超了抛 `decision_budget_exhausted`)。`runtime.decisionClient()` 返回绑定的 client,未绑定返回 null。
 
 前端:
+- **2026-09-25 重做**:`#models` 主体改为 7 张 agent 卡(对话 / 判断 / 研究 / 策略过滤 / 复盘 / 信息员·筛选 / 判断要素),每张卡分段选「本机 CLI | API key | 用默认」(decision 只有 API key(OpenRouter)| 不启用);CLI 保存时复用或自动建 `kind='cli'` 连接;API key 可选已有连接或卡内新建(POST connections);保存即 PUT 绑定;卡上「测试连接」走 `bindings/:role/test`。回退主脑 / 副脑收成顶部一行说明 + 折叠的「高级」,连接列表收进折叠的「已保存的连接」。下面一条是初版描述。
 - 新页 `#models`「模型连接」:连接列表(类型图标、名字、掩码 key、状态点、上次测试、测试/编辑/删除),「添加连接」弹层(选类型 → 填 key 或选本机 CLI → 保存并测试);下方「角色底层」表,7 行,每行选连接 + 模型(模型下拉取 `models_hint`,可手输),显示当前生效来源(绑定 / 回退主脑 / 回退副脑)。
 - **首页(楼层)**:顶栏加「模型连接 · n 个可用」胶囊,点开到 `#models`;没有任何可用连接且旧槽位也测不通时,楼层顶部一条引导横幅。楼层角色卡的「用什么模型」改读 `effective`(替换 `lib/role-brain.ts` 的两槽推断)。
 - 设置页原「大脑」控件保留为「回退主脑 / 副脑」,文案说明「未单独绑定的角色用这里」。
@@ -2239,6 +2241,8 @@ interface MatrixStudyView {
 
 **2026-09-25 matrix study 修订**(与原稿差异):对象改名 matrix study,前缀 `/api/research/matrix-studies`,SSE `research.matrix_study`;状态机改为 queued/running/ready_to_finalize/finalizing/completed(+cancelled/failed/interrupted),阶段另列 stage;`no_winner` 并入 `completed` + `conclusion.kind='no_candidate'`;周期首版只 15m/4h/1d 可评估(3m/5m research_only,1h/12h 不在首版);`trials_counted` 拆成 ledger(attempt_count / trial_count / effective_trials / dsr_sensitivity);原 `validation` 更名 `selection`(不再当独立样本外证据);结论主因改为 cost_dominated / insufficient_evidence / unsupported_execution / underperform_hold;新增 estimate 返回格子可研究性、finalize(一次释放 + Holm)、resume、events 续传、adopt 预检与 horizon/source 标签、账户级回放 portfolio、spec.origin / auto_finalize / portfolio / protocol;金额 `max_judge_usd`、`judge_usd` 改十进制字符串。
 
+**2026-09-25 自选策略行(「我的策略」作矩阵的行)**:spec 新增 `strategies: {strategy_id, version}[]`(请求可省 `version` = 当前版本;规格里总是具体版本;最多 6 条;策略不存在 / 已归档 / 版本不存在 → 400 `strategy_not_found:<id>[@v<n>]`),与 `families` 并存,两者合计至少一项(否则 `families_or_strategies_required`);只给 `strategies` 时 `families` 缺省为空,不再自动铺满内置族。manifest 冻结时解析快照 `my_strategies: {strategy_id, version, name, symbol, timeframe, ir, ir_hash}[]`(之后策略再改不影响本研究);详情 / 列表视图带 `my_strategies`(不含 IR)给前端显示名字。展开规则:资产 × 周期 × 该策略 × 方向 × 臂,格子 `family = "my:<strategy_id>@v<version>"`,variants = 该版 IR 一个(param `v<n>`)。周期:IR 不带周期、参数按根数解释,按格子周期跑,策略登记周期不同时 reason 追加 `timeframe_override:<原>→<格>`;IR 在格子周期上过不了结构检查 → not_applicable `my_strategy_incompatible:<检查名>`。方向:`order.direction`(无 order 块 = long)只进同向格;`both` 只在 long 格评估一次,short 格 `my_strategy_direction:both_evaluated_in_long_cell`;不符 → `my_strategy_direction:<dir>`。市场:IR `order.market` ≠ 研究市场时改成研究市场并写 `market_override:<原>→<新>`;永续 IR 进现货研究只允许做多且无杠杆,否则 `my_strategy_market:perp`。臂:code 臂去掉 judge(回到 v1);code_judge 臂 IR 自带 judge 就用它自己的问题与规则(`model_profile_ref` 钉到本次冻结 profile,reason `own_judge` / `own_judge:model_profile_rebound`),没有就附研究 spec 的 judge。有界持仓、每格空档、迭代环(diagnosis / neighborhood / swap 在该 IR 上改参;子代只拦新引入的规范阻断,父 IR 原有的不拦)、试验计数(同一研究谱系)、留出隔离与 Holm 全部沿用。adopt 这类 finalist 得到的是**该策略的新版本**(同 IR 哈希不重复建版本;`AdoptResult.strategy_id` = 原策略,`version` = 新版本;资产 / 周期与原登记不同时改成 finalist 的并写事件;策略已归档 → 409 `strategy_archived_conflict`),结论文案显示「名称」v<n>。前端:表单「策略」一行两组(我的策略多选 + 内置族),`#matrix-study?strategy=<id>` 预选;研究台内嵌矩阵研究的新建与最近列表;「我的策略」详情「在矩阵研究里测这条」跳该链接。
+
 #### C. IR 判断要素 `judge` 块
 
 唯一契约源为 `packages/contracts/schema/research.json`，按仓库 generate 流程生成类型。`StrategyIR.version=1` 禁止 `judge`，既有 JSON 不注入缺省字段、既有哈希不变；`version=2` 必须同时有 `order` 和 `judge`。两版共用既有 StrategyIR 根类型；纯代码策略仍用 v1。
@@ -2301,7 +2305,17 @@ judgeFilter(ir: StrategyIR, runtime: JudgeRuntime):
 
 `BEGIN IMMEDIATE` 内同时预留最大费用/调用数并 claim；响应和实际费用同事务落库。未知费用保留预留；供应商实际超过上界时照实记账并封锁后续调用。决策中的运营成本必须由上层账户评测计入，不能把累计查询费用当作单笔成交费。§9.52 最小接口只有解析后的 DecisionResult，因此此时钉住的是 **client 首次响应**；可选 `raw_response/provider_request_id` 扩展才提供供应商原文/对账 ID，缺少记 null，不伪造。judge 首版不新增 HTTP 路由，沿用策略 IR 保存/运行接口并供 matrix 服务内部调用；matrix 路由见 B。
 
-**2026-09-25 astra 修订（仅 C）**：改为显式 IR v2 保持 v1 哈希；问题数组/字段白名单/概率谓词替代自由 features 与 score 数值比较；删除 fail-open 与未校准 DEFAULT_JUDGE；新增 immutable profile、灰区、首次响应与决策双层去重、原子预算四表、recorded_only/request_once；统一所有运行模式而非仅 agent；明确原始响应、重试、funding 与模型版本的首版限制。A 推荐资产及 B matrix 由对应实现者维护。
+**2026-09-25 外部评审修订（仅 C）**：改为显式 IR v2 保持 v1 哈希；问题数组/字段白名单/概率谓词替代自由 features 与 score 数值比较；删除 fail-open 与未校准 DEFAULT_JUDGE；新增 immutable profile、灰区、首次响应与决策双层去重、原子预算四表、recorded_only/request_once；统一所有运行模式而非仅 agent；明确原始响应、重试、funding 与模型版本的首版限制。A 推荐资产及 B matrix 由对应实现者维护。
+
+##### 2026-09-25 Jev 适配 v2
+
+- **解析版本显式冻结**：`FrozenModelProfile.parser_version` 增加 `judge_answers_v2_rounding_001`。v1 的 `1e-6` 不变；v2 对完整、有限、每项在[0,1]的 choice/score 分布要求 `abs(sum-1) <= 0.01 + 1e-12`，随后逐项除以sum。0.99/1.01可接受，更大偏差拒绝；noul语义不变。新profile/ref进入请求哈希，不重写旧结果或暗中升级。E2E的51条原始分布尚未取得，默认仍v1；先脱敏统计再选择v2。
+- **原始回答与费用**：客户端传`raw_response/provider_request_id`，解析失败与HTTP错误也保留已知usage并结算，cost支持十进制字符串，费用不依赖input_tokens合法。非JSON回答保存脱敏body_text；无响应的超时/断网无法伪造原文。已知未发送的请求拒绝记0，真实未知费用保留最大预留；错误分类可离线统计，不为追费用重抽。研究provider必须0重试。
+- **live_only白名单**：`features.ob_imbalance_05`（midpoint±0.5%内所录档位名义额不平衡，[-1,1]）、`ob_wall_up/ob_wall_down`（`{price,notional}`十进制字符串，近价最大单档卖/买墙，price表达位置）、`spread_bps`、`liq_long_5m/liq_short_5m`（被清算long/short名义额十进制字符串）。盘口≤120秒且事件/可用时刻≤as_of；清算窗口(as_of−5m,as_of]必须有成功采集覆盖证明并去重。200档外不推断；OKX合约张数须乘冻结基础币ctVal。缺覆盖不填0。
+- `buildJudgeState`第四参数可带`MicrostructureSnapshot`；`JudgeRuntime.microstructure`与`StrategyRunDeps.microstructure(symbol,as_of)`注入同一源。matrix可接录制器来源；依赖字段缺数据返回`judge_live_only_data_unavailable`，评估归为`DATA_MISSING`/insufficient_evidence（数据不可评）。gzip允许未结束流的完整前缀；旧录制缺接收时间与清算心跳，需可靠延迟上界/外部coverage证据，当前现拉结果不能回填历史候选。
+- **价位与问题库**：新增`candidate.reference/support/resistance/stop/target`价格白名单，支撑阻力是最近两侧各2根已收盘bar确认的摆动点。`research/judge/templates.ts`含take、quality、support_holds、resistance_breaks、retreat_risk、regime_fit，价位事件固定未来15分钟；缺摆动或目标不可伪造。默认仍take+quality。matrix的`judge_templates:[{templates,rule?,microstructure?}]`每组合独立trial，训练段先评分选胜者再冻结进入选择/留出；迭代不重调模板/阈值，失败训练组合也计trial。不是已校准盈利概率。
+- **G3四臂v2**：独立CLI `packages/gateway/scripts/research-study-eval/jev-g3.mjs`，≤3冻结候选，code/1h+4h便宜趋势/Jev/DeepSeek；同状态与问题语义、候选/资金/执行约束。DeepSeek直连`api.deepseek.com`/`deepseek-chat`；两key仅从运行环境读取。`--max-usd`强制≤2、`--approved-by Jacky`才允许真实采集；首次响应账本、独占锁、冻结manifest与预算、恢复不重复收费。真实预算以上界成立为前提，超上界实际照记并阻断。DeepSeek缺usage.cost时按冻结token单价保守估算并标来源，非账单核验。
+- 分析需同冻结执行器导出的全部候选条件成交/每日净盯市路径，统一资金/风险/同资产冲突，扣调用日模型费；未成交候选显式记录not_filled，保留费用但不计实际开仓follow；UTC日配对差、10000次连续块bootstrap、块长≥持仓、跨finalist/两主要声明Bonferroni CI。6000候选、365天、100跟随、20有效块不足，桩、未知费用均报证据不足；DeepSeek探索性。旧六臂协议保留，四臂v2不伪造cash/matched_random。操作命令、runtime片段与限制见 `docs/research/jev-adapt-v2-2026-09-25.md`。
 
 ### 9.54 Agent 当前策略(一个策略概念)(2026-09-25)
 

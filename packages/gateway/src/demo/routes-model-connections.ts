@@ -37,4 +37,8 @@ export const modelConnectionRoutes: RouteModule = (ctx: RouteContext) => {
   route('PUT', '/api/models/bindings/:role', guarded(async (req, res, _url, p) => {
     json(res, 200, rt.modelConnections().setBinding(p['role']!, await readBody(req)));
   }));
+  // 按角色测试:用该角色当前生效的底层(绑定 / 回退主脑副脑)发一次最短往返 → RoleTestResult。
+  route('POST', '/api/models/bindings/:role/test', guarded(async (_req, res, _url, p) => {
+    json(res, 200, await rt.modelConnections().testRole(p['role']!));
+  }));
 };

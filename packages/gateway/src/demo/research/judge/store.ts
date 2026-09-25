@@ -57,7 +57,7 @@ export class JudgeDecisionStore {
       const a = this.db.prepare('SELECT * FROM research_call_attempts WHERE request_hash=?').get(request_hash)!;
       const budget = new AtomicCallBudget(this.db,row.budget_id), b = budget.view();
       let cost: string | null = null;
-      if (response?.usage && Number.isSafeInteger(response.usage.input_tokens) && response.usage.input_tokens >= 0 && response.usage.cost_usd !== null) {
+      if (response?.usage && response.usage.cost_usd !== null) {
         try { cost = actualUsd(response.usage.cost_usd); } catch { /* unknown 保留预留 */ }
       }
       let blocked = b.blocked;

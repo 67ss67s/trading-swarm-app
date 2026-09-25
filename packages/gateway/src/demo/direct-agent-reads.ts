@@ -12,13 +12,13 @@ export function rustReadBridge(binary: string): ReadBridge {
       if (error) reject(error); else resolve(value!);
     };
     const timer = setTimeout(() => { child.kill(); finish(new Error('只读 MCP 超时；未调用模型')); }, 120_000);
-    child.on('error', () => finish(new Error('零模型读取组件不可用，请构建 execd-mcp-read；不会回退到 Claude')));
+    child.on('error', () => finish(new Error('零模型读取组件不可用（TG_DIRECT_READ_BIN 未配置或不可执行）；不会回退到模型')));
     child.stdout.on('data', (b) => { out += String(b); if (out.length > 16_000_000) { child.kill(); finish(new Error('只读响应过大')); } });
     child.stdin.on('error', () => {});
     child.on('close', () => {
       try {
         const v = JSON.parse(out);
-        if (!v.ok || !v.result?.namespace) return finish(new Error(`只读 MCP 失败：${String(v.error ?? 'invalid_response')}；请检查原客户端的币安登录`));
+        if (!v.ok || !v.result?.namespace) return finish(new Error(`只读 MCP 失败：${String(v.error ?? 'invalid_response')}；请检查只读桥的币安登录`));
         finish(undefined, v.result);
       } catch { finish(new Error('只读 MCP 响应格式错误；未调用模型')); }
     });

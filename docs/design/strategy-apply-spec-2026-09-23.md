@@ -1,6 +1,6 @@
 # 策略接入规范(Strategy → Swarm Apply Spec)与研究台/策略合并方案(2026-09-23)
 
-> 给两个人看:正在做策略对象生命周期的 jacky-f5(Opus 5.5)和之后接 swarm 侧的实现者。字段名以 jacky-f5 09-23 给的契约为准:`ResearchStrategy{id: rs_xxx, current_version, status ∈ draft|backtested|paper|live|published|archived, lab_strategy_id, published_listing_id}`、`ResearchStrategyVersion{strategy_id, version, ir_hash, strategy_ir, report_ids, run_ids?}`、`StrategyIR{signal[], entry, risk:{stop, sizing}, exit[], regime?, order?{direction, market, leverage, entry{type,price?,expiry_bars?}, take_profits?[{source,size_pct}], min_rr?, on_new_signal{unfilled,filled}, max_adds?, max_holding_bars?, breakeven_after_tp?, short_signal?, short_regime?}}`,转移接口 `POST /api/research/strategies/:id/transition {to, confirm?}`(paper→live 要 `confirm:'LIVE'`)。
+> 给两个人看:正在做策略对象生命周期的 jacky-f5(主线)和之后接 swarm 侧的实现者。字段名以 jacky-f5 09-23 给的契约为准:`ResearchStrategy{id: rs_xxx, current_version, status ∈ draft|backtested|paper|live|published|archived, lab_strategy_id, published_listing_id}`、`ResearchStrategyVersion{strategy_id, version, ir_hash, strategy_ir, report_ids, run_ids?}`、`StrategyIR{signal[], entry, risk:{stop, sizing}, exit[], regime?, order?{direction, market, leverage, entry{type,price?,expiry_bars?}, take_profits?[{source,size_pct}], min_rr?, on_new_signal{unfilled,filled}, max_adds?, max_holding_bars?, breakeven_after_tp?, short_signal?, short_regime?}}`,转移接口 `POST /api/research/strategies/:id/transition {to, confirm?}`(paper→live 要 `confirm:'LIVE'`)。
 > 背景批评见 `judgment-exit-redesign-2026-09-23.md` §3 D4/D7。
 
 ## 0. 一句话
@@ -24,7 +24,7 @@
 ## 2. 合并原则
 
 1. **一个对象、两个视图**:`ResearchStrategy` 是对象;`StrategySpec` 只是它在实盘的编译视图,字段 `source: 'research'|'builtin'`、`research_strategy_id`、`research_version`、`ir_hash`。`lab_strategy_id` 反向指回 `StrategySpec.id`。
-2. **三个正交轴,不是一个状态机**(Codex 复审后修订):研究成熟度 `ResearchStrategyStatus`(draft→backtested→paper→live→archived,jacky-f5 的枚举不变)、部署模式(swarm 侧 binding 上的 `deployment.mode ∈ off|shadow_only|paper|live` + 仓位 cap + effective_at + 回滚目标)、发布状态(`published_listing_id`,与部署无关)。实盘旧词表映射:shadow→deployment.shadow_only、live_capped→deployment.live + cap、retired→archived。这样「published 但已停用」「paper 既下单又不下单」都表达不出来。
+2. **三个正交轴,不是一个状态机**(复审后修订):研究成熟度 `ResearchStrategyStatus`(draft→backtested→paper→live→archived,jacky-f5 的枚举不变)、部署模式(swarm 侧 binding 上的 `deployment.mode ∈ off|shadow_only|paper|live` + 仓位 cap + effective_at + 回滚目标)、发布状态(`published_listing_id`,与部署无关)。实盘旧词表映射:shadow→deployment.shadow_only、live_capped→deployment.live + cap、retired→archived。这样「published 但已停用」「paper 既下单又不下单」都表达不出来。
 3. **一个指标库**:研究台表驱动库为准;实盘 `indicators.ts` 逐个加交叉测试(`engine-crosscheck` 已有脚本),口径不一致的以研究台为准改实盘,回放哈希受影响的 run 标 `indicator_lib_version`。
 4. **一个回放核**:研究台 `orders/` 执行核(永续/做空/资金费)是目标;`outcome.ts` 和 `SpotLedger` 收敛到它。`backtest.ts` 保留为「生产 harness 臂」(见 self-evolution §4.3)。
 5. **模型的角色是策略的属性**:`agent_mode ∈ mechanical | filter | manage`,由 A/C 臂 alpha 决定,不是全局开关。
@@ -53,7 +53,7 @@ StrategyBinding {
 
 **编译器**(`research/compile-binding.ts`,归研究台;或 gateway 侧 `strategy-binding.ts` 读 IR,归 swarm——建议前者,因为它要用原语注册表):输入 `ResearchStrategyVersion`,输出 `StrategyBinding` + `unmapped[]`(IR 里 swarm 不支持的原语要显式列出,不能静默丢)。编译失败 = 不能 apply。
 
-**Codex 复审后的字段修订**:(1)上面 `trigger/entry/stop/targets/trail/signal_exits` 是 IR 的规范化编译结果(normalized AST + reason code),不是可独立编辑字段;研究回放与线上候选生成必须调用**同一个函数、同一组 fixture**逐字节对拍,否则同一 `ir_hash` 会在研究与生产产出不同订单。(2)binding 要加 `schema_version`、指标库/原语库/数据 adapter/成本模型版本、能力清单、市场/产品/tick/lot/手续费/滑点/资金费假设;`compiled_at` 不进内容哈希。(3)`evidence.*` 会变,不嵌进不可变 binding,改存报告 id + 评估快照 hash。(4)`sizing` cap 与 `agent_mode` 属于部署策略(deployment),不是策略语义。(5)`agent_mode` 拆成 `entry_filter: on|off` 与 `exit_discretion: on|off`;判定统计要存配对样本数、独立簇数、CI、功效、模型与 prompt hash,不能只存 n 与点估计;A/C 按「每个候选机会」配对、skip 记 0R;`exit_discretion` 不能由 C−A 推出,要单独做持仓期配对实验。(6)**当前研究 IR 候选是 long-only**(research/strategy.ts:172-184 止损硬编码在收盘下方、追踪只接受上移),`direction: short|both` 在 orders/ 执行核接入前不能兑现,编译器遇到要判 unmapped。
+**复审后的字段修订**:(1)上面 `trigger/entry/stop/targets/trail/signal_exits` 是 IR 的规范化编译结果(normalized AST + reason code),不是可独立编辑字段;研究回放与线上候选生成必须调用**同一个函数、同一组 fixture**逐字节对拍,否则同一 `ir_hash` 会在研究与生产产出不同订单。(2)binding 要加 `schema_version`、指标库/原语库/数据 adapter/成本模型版本、能力清单、市场/产品/tick/lot/手续费/滑点/资金费假设;`compiled_at` 不进内容哈希。(3)`evidence.*` 会变,不嵌进不可变 binding,改存报告 id + 评估快照 hash。(4)`sizing` cap 与 `agent_mode` 属于部署策略(deployment),不是策略语义。(5)`agent_mode` 拆成 `entry_filter: on|off` 与 `exit_discretion: on|off`;判定统计要存配对样本数、独立簇数、CI、功效、模型与 prompt hash,不能只存 n 与点估计;A/C 按「每个候选机会」配对、skip 记 0R;`exit_discretion` 不能由 C−A 推出,要单独做持仓期配对实验。(6)**当前研究 IR 候选是 long-only**(research/strategy.ts:172-184 止损硬编码在收盘下方、追踪只接受上移),`direction: short|both` 在 orders/ 执行核接入前不能兑现,编译器遇到要判 unmapped。
 
 ## 4. 运行时怎么消费
 
@@ -108,6 +108,6 @@ StrategyBinding {
 - swarm(下一位):`strategy-binding.ts` 消费、`StrategyCandidate` 生成、holding-policy 读 binding 的 trail/breakeven/signal_exits、radar 用 binding.trigger、`POST /api/strategies/apply`、`fitOrderGate` 接 gates。
 - 契约:`v3-ui-contract.md` 新节(建议 §9.47)先写字段再动代码。
 
-## 10. Codex 复审后的最短路径(2026-09-23)
+## 10. 复审后的最短路径(2026-09-23)
 
 不先做通用几何规则、不先合并状态机。第一步是 **CandidateV0 纵切**:挑一条 long-only 策略(建议 breakout_retest 译成 IR),线上 shadow 同时记录「IR 候选 / 现有模型提案 / 最终闸结果」三者,量覆盖率与语义一致性;通过后才让这一条策略的几何由 IR 接管,再逐条扩展。能力子集先钉死为 `spot|perp-long / market / 单目标 / 机械退出`,不支持的原语编译失败,不能近似。

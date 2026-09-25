@@ -267,7 +267,7 @@ describe('toClOrdId', () => {
   });
 });
 
-// codex-review #12:结算的手续费/资金费用十进制字符串算,不走浮点。
+// review #12:结算的手续费/资金费用十进制字符串算,不走浮点。
 describe('十进制加法与取负', () => {
   it('addDec 不引入浮点噪声', () => {
     expect(addDec('0.1', '0.2')).toBe('0.3');

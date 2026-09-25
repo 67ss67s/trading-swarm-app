@@ -44,7 +44,7 @@ const raw: RawMessage = {
   source_message_id: "x",
   raw_text: "BTC 方向：做多 入场100 止损95",
   received_at: "2026-07-01 00:00:00.000000",
-  trader: "舒琴",
+  trader: "交易员B",
 };
 const signal: BridgeSignal = {
   id: 1,
@@ -229,7 +229,7 @@ describe("交易员特征时间与语料审计", () => {
 });
 describe("同harness保守分档成交", () => {
   it("人肉基线使用已登记trial计数，空样本不伪造可用起点", () => {
-    const x = replayHumans([], 0, 180 * 24 * HOUR, { human_shuqin: 7 })[0]!;
+    const x = replayHumans([], 0, 180 * 24 * HOUR, { human_trader_b: 7 })[0]!;
     expect(x.stats.trial_count).toBe(7);
     expect(x.common_crypto_stats.trial_count).toBe(7);
     expect(x.available_from).toBeNull();

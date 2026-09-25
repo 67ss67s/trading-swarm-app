@@ -85,7 +85,7 @@ export const EVIDENCE_PLAN_VERSION = 'ep-v2';
 /**
  * §9.36(P1-11)**公共最小集**:不管启用哪条策略都会装的那一批证据,**显式固定下来**。
  *
- * Codex 的原话是「context 开头仍无条件装每个 features 周期的 EMA20/50、ATR、极值、量比……
+ * 评审的原话是「context 开头仍无条件装每个 features 周期的 EMA20/50、ATR、极值、量比……
  * 这不是『没有策略要的指标不进 prompt』。如确有公共最小集例外,需显式固定范围和契约」。
  * 这里就是那个范围:它是判断的**地板**(没有它模型连「现在什么价、什么结构」都说不出),
  * 但它**不随 evidence 请求膨胀** —— evidence 点名带进来的额外周期不再自动获得结构行,
@@ -204,7 +204,7 @@ export function buildContext(inp: EpisodeInputs): BuiltContext {
   // 09-12 §5 减黑盒:边装证据边记一行明细(要了没装上的也记),最后连同 hash 一起落进 episode。
   const planItems: EvidencePlanItem[] = [];
   // §9.36 公共最小集:结构行只给主周期 + 1h/4h(+ 持仓线程自己的论点/确认周期)。
-  // evidence 请求带进来的额外周期**不再**顺带拿到一整行结构 —— 那正是 Codex 说的「无条件装」。
+  // evidence 请求带进来的额外周期**不再**顺带拿到一整行结构 —— 那正是评审指出的「无条件装」。
   const structureTfs = new Set(
     publicStructureTfs(inp.features[0]?.tf ?? '15m', inp.thread
       ? inp.thread.holding_plan

@@ -95,7 +95,7 @@ export function addDec(a: string, b: string): string {
 
 /**
  * 十进制取负,**保留符号**。OKX 的 `fee` 负数 = 扣费、正数 = 返佣,内部口径
- * `realized - commission + funding` 要的是 `commission = -fee`(codex-review #12)。
+ * `realized - commission + funding` 要的是 `commission = -fee`(review #12)。
  */
 export function negDec(a: string): string {
   const x = scaled(a);

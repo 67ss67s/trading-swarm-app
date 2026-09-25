@@ -1,7 +1,7 @@
 # Trading Swarm 设计方案 v1 —— 以 Binance MCP Agentic 子账户为底座的 agent-first 交易网关
 
 > 2026-09-02。状态:**设计稿 v1.2。Jacky 已拍板:人工下单走 REST 直连、架构改混合(TS 网关 + Rust 执行服务 + React UI)、主账户/Agentic 子账户双账户联动(§3.5)。新 session(effort max)按 §15 实施。** 上一版的 TradeIntent 单状态机、快照差分对账、进程内单飞锁、三面共用 execute 等已按 review 重写。
-> 输入:Jacky 的需求(agent 为主、OpenClaw 式 gate+WebUI+K线、agent 能调 gate 里一切、可接 CLI 也可接模型 API、初始化向导、参考 pi/Hermes 的自动化、借 8794 做得好的部分、**跟单不接入**)+ 调研笔记 `docs/research/*.md`(Binance MCP 探测、OpenClaw/Hermes/pi 机制、8794 功能盘点)+ 前作 `agentic-console-design-v3`(Rust sidecar 设计,工程合同大量继承)+ Codex 独立设计稿(`docs/research/codex-design-proposal-2026-09-02.md`,分歧见 §17)。
+> 输入:Jacky 的需求(agent 为主、OpenClaw 式 gate+WebUI+K线、agent 能调 gate 里一切、可接 CLI 也可接模型 API、初始化向导、参考 pi/Hermes 的自动化、借 8794 做得好的部分、**跟单不接入**)+ 调研笔记 `docs/research/*.md`(Binance MCP 探测、OpenClaw/Hermes/pi 机制、8794 功能盘点)+ 前作 `agentic-console-design-v3`(Rust sidecar 设计,工程合同大量继承)+ 独立设计稿(内部评审记录,分歧见 §17)。
 > 工作名 **trading-swarm**,CLI `tswarm`,可改。
 
 ---
@@ -41,7 +41,7 @@
 ## 2. 架构决策:TypeScript,不是 Rust
 **结论(v1.2,Jacky 拍板):混合架构。TypeScript 做网关、agent harness、调度与控制面;Rust 做唯一的执行服务(所有交易所凭证与账户效果);React 做 UI。** 单仓、两套工具链、一条本机 IPC 边界。
 
-为什么不是纯 TS(v1.1 的结论被推翻的原因):Jacky 决定**人工下单走 REST 直连**(API key 签名,主账户),这条路径恰好是 8794 里被实盘打磨过的东西——`console-core/exchanges/binance.rs`(4574 行:HMAC 签名、服务器时间偏移、进程内令牌桶与 `RestGate::{Ready,Wait,Banned}`)、用户数据流 WS(`account_stream.rs`,断流即 stale)、持仓模式实查 fail-closed、保护腿引擎、多写者检测、`SingleFlightLease` 引擎链。Codex review 最硬的一条反驳正是"别在没有 testnet 的情况下用未经实战的 TS executor 重写这些"。既然 REST 路径要进来,Rust 执行服务从第一天就值得,而且可以直接从 console-core 抠代码。
+为什么不是纯 TS(v1.1 的结论被推翻的原因):Jacky 决定**人工下单走 REST 直连**(API key 签名,主账户),这条路径恰好是 8794 里被实盘打磨过的东西——`console-core/exchanges/binance.rs`(4574 行:HMAC 签名、服务器时间偏移、进程内令牌桶与 `RestGate::{Ready,Wait,Banned}`)、用户数据流 WS(`account_stream.rs`,断流即 stale)、持仓模式实查 fail-closed、保护腿引擎、多写者检测、`SingleFlightLease` 引擎链。external review 最硬的一条反驳正是"别在没有 testnet 的情况下用未经实战的 TS executor 重写这些"。既然 REST 路径要进来,Rust 执行服务从第一天就值得,而且可以直接从 console-core 抠代码。
 
 为什么不是纯 Rust:产品重心仍是 agent harness——pi-agent-core/pi-ai(OpenClaw 内核,本机已装)、官方 MCP TS SDK(1.30 已支持 Binance 要求的 CIMD OAuth)、WS 控制面、React + lightweight-charts(8794 的 shadcn 前端就是 React)。这些在 Rust 里要重写 pi 三层。
 
@@ -149,7 +149,7 @@ HTTP:`/`(WebUI)、`/api/health`(免鉴权)、`/api/events`(SSE,给不便 WS 的�
 全局原则(继承 v3):**模型只在 JUDGMENT/PROPOSE 节点选边;闸、执行、对账全部 deterministic。** 交互式聊天里模型可以自由调用只读工具和"安全写"工具,但一切动钱都收敛到同一个 TradeIntent 图。
 
 ### 5.1 TradeIntent(动钱的唯一图)
-Codex review 指出旧版把授权、派发、订单状态、经济完成揉进一个状态机(部分成交不是终态、`LOST` 不是终态、`REGATED` 不是状态)。v1.1 拆成 **六种记录**,intent 状态保持很小:
+external review 指出旧版把授权、派发、订单状态、经济完成揉进一个状态机(部分成交不是终态、`LOST` 不是终态、`REGATED` 不是状态)。v1.1 拆成 **六种记录**,intent 状态保持很小:
 
 | 记录 | 内容 | 谁写 |
 |---|---|---|
@@ -200,7 +200,7 @@ IDLE → PREPARE(build context, evidence registry, tool set 固定) → TURN{mod
 ### 5.4 Position Management(W2,零模型)
 Exit DSL(JSON,版本号):`{stop:{kind:"structure"|"atr"|"fixed", ref, trigger:"mark"|"last"}, trail:{...}, tp:[{pct, at}], time_stop, invalidation:[...]}`;由 L-tick 解释执行;每个动作都是 Intent(reduce-only)走 §5.1;LLM 只在 `attention` 产生时被叫来写一句解释(cheap 模型)。
 
-**保护腿协议(live 前置条件,Codex review #4/#5)**:每个 live 持仓必须有**交易所原生**止损单(不是本地触发);开仓 plan 自带 stop/tp legs,executor 在入场首笔成交后立即下保护腿;`max_naked_seconds`(默认 20s)内未确认保护腿在交易所 → 立即 reduce-only 市价平掉已成交部分(补偿平仓)并 attention `PROTECTION_MISSING`(不可静音);OAuth 临近过期(<10 min)、refresh 健康度降级、MCP 会话不稳时**禁止新开仓**;OAuth/MCP 失效且有持仓时,交易所原生止损仍在生效,这是唯一不依赖 gate 存活的保护——所以它是强制项。
+**保护腿协议(live 前置条件,external review #4/#5)**:每个 live 持仓必须有**交易所原生**止损单(不是本地触发);开仓 plan 自带 stop/tp legs,executor 在入场首笔成交后立即下保护腿;`max_naked_seconds`(默认 20s)内未确认保护腿在交易所 → 立即 reduce-only 市价平掉已成交部分(补偿平仓)并 attention `PROTECTION_MISSING`(不可静音);OAuth 临近过期(<10 min)、refresh 健康度降级、MCP 会话不稳时**禁止新开仓**;OAuth/MCP 失效且有持仓时,交易所原生止损仍在生效,这是唯一不依赖 gate 存活的保护——所以它是强制项。
 
 ### 5.5 Strategy Research(W7,新)
 
@@ -276,7 +276,7 @@ Binance MCP 的原始工具**不直接给模型**(与 OpenClaw"把 MCP servers �
 每条 read 结果携带 `observed_at`、`source`、`staleness`,并注册为 evidence(§7.3);`content` 是给模型的紧凑文本(行/字节双限),`details` 是全量 JSON 给 UI/日志;错误码固定集合 `STALE / UNAVAILABLE / NOT_FOUND / INVALID_SYMBOL / RATE_LIMITED / UNAUTHORIZED`;工具内部只对超时做 1 次重试,业务拒绝不重试;每次调用落 `tool_calls` 行,和结果解耦(失败也记)。
 
 ### 6.4 gate 作为 MCP server(让 CLI 大脑与外部客户端调 gate 里的一切)
-`tswarm mcp serve`(stdio)与 `GET/POST /mcp`(Streamable HTTP,需 token)暴露注册表里 `surfaces` 含 `mcp` 的工具,同一 policy、同一审计。用途:①`CliBrain` 启动 `claude -p --mcp-config <gate>` / `codex exec` 时,大脑通过 MCP 调 gate 工具,无需为每个 CLI 写工具桥;②Jacky 在自己的 Claude Code 里 `claude mcp add trading-swarm` 直接查持仓/建监控;③将来 8794 的 chat agent 也能挂它(反向只读)。**v1 的 mcp 面只读**(Codex review #8):CLI 大脑在 v1 只做研究/分析(读工具),它们提议交易走 P3 的独立 token 与授权测试之后。
+`tswarm mcp serve`(stdio)与 `GET/POST /mcp`(Streamable HTTP,需 token)暴露注册表里 `surfaces` 含 `mcp` 的工具,同一 policy、同一审计。用途:①`CliBrain` 启动 `claude -p --mcp-config <gate>` / `codex exec` 时,大脑通过 MCP 调 gate 工具,无需为每个 CLI 写工具桥;②Jacky 在自己的 Claude Code 里 `claude mcp add trading-swarm` 直接查持仓/建监控;③将来 8794 的 chat agent 也能挂它(反向只读)。**v1 的 mcp 面只读**(external review #8):CLI 大脑在 v1 只做研究/分析(读工具),它们提议交易走 P3 的独立 token 与授权测试之后。
 
 ---
 
@@ -337,8 +337,8 @@ invokeBrain(recipe: RecipeId, ctx: JudgmentContext, brain: Brain): Promise<Judgm
 
 ### 8.4 并发与写者
 - **Lane = symbol 互斥**:同 symbol 的研判/intent 串行,lane 间并行;
-- **账户级写者围栏(Codex review #2)**:向导必须拿到稳定的 Agentic 子账户标识(WP1 验证 MCP 是否暴露;否则用 OAuth 授权主体 + 子账户名);**主机级锁按该标识**放在 profile 目录之外(`~/.trading-swarm/locks/<account_id>.lock`),多 profile 也不能对同一子账户双写;每次执行操作持久化 `writer_instance_id / lease_epoch / fencing_token`,epoch 落后的写入被拒;跨机器不提供租约服务,**运营上禁止**(向导与文档明示:同一子账户只允许一个 gate、live 期间不在 Binance UI 手动交易、不接其他 MCP 客户端);每次开仓前做**外部订单/持仓检测**(按 clientOrderId 前缀分本机/外部,借 8794 的 `detect_order_origins` 口径),发现外部活动 → 强制对账后才允许继续;
-- **执行权只在 execd 的 durable 执行队列**(Codex review #7;两条交易所通道都在 execd 内,主账户与子账户各一条效果 lane):操作带唯一 key 事务性领取(SQLite),持久化 lease owner/epoch/deadline/attempt/last checkpoint;**优先级**:紧急平仓 > 保护腿缺失修复 > 撤单 > 对账 unknown > Exit DSL > 新开仓;每个 MCP 调用与每个阶段有截止时间;存在任何 `execution_unknown`、账户快照不一致或保护缺口时禁止新开仓;LLM/CLI 工作永远不在执行队列里;
+- **账户级写者围栏(external review #2)**:向导必须拿到稳定的 Agentic 子账户标识(WP1 验证 MCP 是否暴露;否则用 OAuth 授权主体 + 子账户名);**主机级锁按该标识**放在 profile 目录之外(`~/.trading-swarm/locks/<account_id>.lock`),多 profile 也不能对同一子账户双写;每次执行操作持久化 `writer_instance_id / lease_epoch / fencing_token`,epoch 落后的写入被拒;跨机器不提供租约服务,**运营上禁止**(向导与文档明示:同一子账户只允许一个 gate、live 期间不在 Binance UI 手动交易、不接其他 MCP 客户端);每次开仓前做**外部订单/持仓检测**(按 clientOrderId 前缀分本机/外部,借 8794 的 `detect_order_origins` 口径),发现外部活动 → 强制对账后才允许继续;
+- **执行权只在 execd 的 durable 执行队列**(external review #7;两条交易所通道都在 execd 内,主账户与子账户各一条效果 lane):操作带唯一 key 事务性领取(SQLite),持久化 lease owner/epoch/deadline/attempt/last checkpoint;**优先级**:紧急平仓 > 保护腿缺失修复 > 撤单 > 对账 unknown > Exit DSL > 新开仓;每个 MCP 调用与每个阶段有截止时间;存在任何 `execution_unknown`、账户快照不一致或保护缺口时禁止新开仓;LLM/CLI 工作永远不在执行队列里;
 - MonitorSpec 由调度器执行(价格穿越/K 线收盘/funding 阈值/时间),触发即新 operation,不是长会话;
 - 故障测试不只 crash hook:进程 kill、事件循环卡死(同步阻塞注入)、unhandled rejection 都要有用例。
 
@@ -372,7 +372,7 @@ interface Brain {
 | `CliBrain.codex` | `codex exec --json -m <model> -c mcp_servers.trading-swarm=... -o last.md`;`codex exec resume` | 对抗 review、第二意见 | 同上 |
 | `CliBrain.pi` | pi `RpcClient({cliPath:"pi", args:["--mode","rpc","--no-tools","-e",gateExtension]})`;扩展里 `pi.registerTool` 注册 gate 工具(进程内 RPC 回调 gate) | 想要 pi 会话树/compaction 但用 pi 已登录的订阅模型时 | `agent_settled` 才是空闲信号 |
 
-路由表(`config.brains.routing`):`cheap`(摘要/journal/heartbeat)→ DeepSeek V4-Flash 或 Qwen-Flash;`normal`(W4 研判/chat)→ TAB 横评定(v3 已跑:DeepSeek ¥0.004/判断、GLM ¥0.017);`strong`(周复盘/W7 研究/参数提案)→ `CliBrain.claude`(订阅,零边际成本)或 Sonnet 5 经代理;`judge`(离线 eval)→ Opus 5 + Codex 双判。每类都可在 UI 里换;cron 作业可钉模型,钉住的不受全局切换影响(drift guard)。
+路由表(`config.brains.routing`):`cheap`(摘要/journal/heartbeat)→ DeepSeek V4-Flash 或 Qwen-Flash;`normal`(W4 研判/chat)→ TAB 横评定(v3 已跑:DeepSeek ¥0.004/判断、GLM ¥0.017);`strong`(周复盘/W7 研究/参数提案)→ `CliBrain.claude`(订阅,零边际成本)或 Sonnet 5 经代理;`judge`(离线 eval)→ 主线 + 外部评审双判。每类都可在 UI 里换;cron 作业可钉模型,钉住的不受全局切换影响(drift guard)。
 
 ---
 
@@ -447,8 +447,8 @@ durable 对象:`ops`(幂等键 `(kind, subject_id, recipe_version)`)、`intents`
 ## 13. Eval 与 Observability
 
 **Deterministic(不调模型,100% 通过)**:gate 逐条、sizing、状态派生(借 8794 的用例形状)、intent 状态机非法转移、kill tests 四边界、toolCall/result 配对、length 拒、evidence 越界、OAuth refresh 状态机(用假 AS)、工具漂移守卫、paper 撮合(费用/资金费/滑点)、Exit DSL 解释器、cron drift guard、去重。
-**Behavioral(调模型)**:①recipe TAB:从 v3 的 40 case 剥离 lead/persona 字段得 W4 种子 + 新增 MCP 情境 case(UNAUTHORIZED 时是否仍提议、STALE 时是否 NO_TRADE、注入抵抗、多空镜像);②**工具使用 eval**(chat 模式):给定任务是否先读再提、是否引用证据、是否越权尝试 admin 工具、是否在 NO_TRADE 场景保持沉默;③双 judge(Opus 5 + Codex)按 rubric。
-**两种就绪分开(Codex review #9)**:①**策略就绪** = 下列 TAB/工具 eval 门槛;②**执行就绪** = MCP 一致性套件全绿 + 故障注入全绿 + 金丝雀清单全部完成(开仓/部分成交/撤单/平仓/重启/撤销授权各至少 1 次,且每次保护腿确认);paper PnL 或模型 eval 通过**不能**单独解锁 LiveCapped。
+**Behavioral(调模型)**:①recipe TAB:从 v3 的 40 case 剥离 lead/persona 字段得 W4 种子 + 新增 MCP 情境 case(UNAUTHORIZED 时是否仍提议、STALE 时是否 NO_TRADE、注入抵抗、多空镜像);②**工具使用 eval**(chat 模式):给定任务是否先读再提、是否引用证据、是否越权尝试 admin 工具、是否在 NO_TRADE 场景保持沉默;③双 judge(主线 + 外部评审)按 rubric。
+**两种就绪分开(external review #9)**:①**策略就绪** = 下列 TAB/工具 eval 门槛;②**执行就绪** = MCP 一致性套件全绿 + 故障注入全绿 + 金丝雀清单全部完成(开仓/部分成交/撤单/平仓/重启/撤销授权各至少 1 次,且每次保护腿确认);paper PnL 或模型 eval 通过**不能**单独解锁 LiveCapped。
 **策略就绪门槛**(进 Draft/Paper 的条件):schema ≥99%,evidence ≥98%,stale-state 100%,注入抵抗 100%,越权尝试 0,NO_TRADE ≥90%,p95 <15s,成本/判断 <0.02 RMB,cache 命中 ≥70%(recipe)。
 **Paper 期 ≥4 周**:agent 的 would-be 与 paper 成交同口径算 R/pnl%;对照:纯规则策略;结论只回答"没做蠢事+成本对不对"。
 
@@ -480,7 +480,7 @@ durable 对象:`ops`(幂等键 `(kind, subject_id, recipe_version)`)、`intents`
 ---
 
 ## 15. 工作包与顺序(实施 session 用)
-Codex review 的核心意见:**先把动钱竖切打穿,再铺面**。v1.1 把顺序改为 A(竖切)→ B(铺面)。
+external review 的核心意见:**先把动钱竖切打穿,再铺面**。v1.1 把顺序改为 A(竖切)→ B(铺面)。
 
 ### 15.1 A 阶段:第一条竖切(其余一切都为它让路)
 ```
@@ -506,18 +506,18 @@ OAuth → tools/list 快照钉版 → account.truth(AccountSnapshot)→ 不可�
 | **B6 WebUI 铺面** | Dashboard/Chart(绘图层复制)/Strategies 工作台/Automations/Usage/Logs/Brains/Settings | 6 |
 | **B7 memory/skills/W7** | 分层记忆+pending 审批、skills 渐进披露与自创(write_approval)、策略研究流程+回测器 | P3 |
 
-**顺序**:A0 → A1(**第一天就开始 OAuth 与主账户 key 两条实测**)→ A2 → A3 → A4 → B1 ∥ B2 → B3 → B5 → B4/B6 → B7。Rust 侧(A1/A2)与 TS 侧(A0 契约、A2 控制面、A3 UI)可由不同子代理并行,以 `packages/contracts` 为唯一接口。每包:tester 子代理 + Codex 对抗 review;动钱路径前读 8794 的 `docs/incident-log.md`;分支开发,不 `git add -A`。
+**顺序**:A0 → A1(**第一天就开始 OAuth 与主账户 key 两条实测**)→ A2 → A3 → A4 → B1 ∥ B2 → B3 → B5 → B4/B6 → B7。Rust 侧(A1/A2)与 TS 侧(A0 契约、A2 控制面、A3 UI)可由不同工作线并行,以 `packages/contracts` 为唯一接口。每包:tester 工作线 + 对抗评审;动钱路径前读 8794 的 `docs/incident-log.md`;分支开发,不 `git add -A`。
 
 ## 16. 待拍板 / 已采用的默认(不阻塞实施)
 
-**Codex review 提出的五个只有 Jacky 能答的问题(拍板优先级最高)**:
+**external review 提出的五个只有 Jacky 能答的问题(拍板优先级最高)**:
 - Q1 若 Binance MCP 不能接受/回显/查询调用方给的 clientOrderId,是否接受"live 执行延后,先只读 + 本地 paper,等有可靠订单身份方案再开"?(默认接受;不是放弃 live,是把 live 排在身份问题之后)
 - Q2 监督金丝雀期的最大亏损、最大名义、杠杆上限、子账户注资额各是多少?
 - Q3 live 期间是否承诺:该 Agentic 子账户只由一个 trading-swarm 实例控制,不在 Binance UI 手动交易、不接其他 MCP 客户端?
 - Q4 审批之后数量/止损/价格约束/杠杆/名义的任何变化,是必须重新审批,还是允许 gate 在命名容差内调整?(默认:**必须重新审批**)
 - Q5 OAuth/MCP 失效且有持仓时,是把"已确认的交易所原生保护腿"作为 live 前置条件(默认 yes),还是明确接受人工干预风险?
 - Q7(§3.5)主账户 API key 是否勾提币权限?默认**不勾**,提币走 Binance UI(execd 只做 sub→main 回收 + 打开提币页深链);若要一键提币,必须 IP 白名单 + WebUI 二次确认。
-- Q6(Codex 稿提出)Binance 文档要求 agent "复述订单并等你说 yes"——LiveCapped 的自动确认是否被 Binance 视为合规的 standing authorization?在拿到 Binance 书面口径前,风险增加型的 live 自治默认**关闭**(只允许风险降低动作自动)。需要你去问 Binance,或接受 v1 只做确认式 live。
+- Q6(评审稿提出)Binance 文档要求 agent "复述订单并等你说 yes"——LiveCapped 的自动确认是否被 Binance 视为合规的 standing authorization?在拿到 Binance 书面口径前,风险增加型的 live 自治默认**关闭**(只允许风险降低动作自动)。需要你去问 Binance,或接受 v1 只做确认式 live。
 
 其余默认:
 
@@ -532,8 +532,8 @@ OAuth → tools/list 快照钉版 → account.truth(AccountSnapshot)→ 不可�
 9. 通知渠道 v1 只做 Telegram(复用 bridge 的 bot 思路)—— 默认 yes。
 10. 8794 的 chat agent 将来是否挂 gate 的 MCP —— 后移。
 
-## 17. 与 Codex 独立稿的分歧对照
-### 17.1 Codex 对抗 review(`docs/research/codex-review-of-design-v1-2026-09-02.md`,341 行)
+## 17. 与 独立稿的分歧对照
+### 17.1 对抗评审(`内部评审记录`,341 行)
 总判:**live 执行 NO-GO,先做 OAuth/MCP 只读 spike**;同意 TS,但反对"纪律不靠语言"的说法——最强反驳是"扔掉 8794 已被实盘打磨过的执行/对账行为、在无 testnet 下用未经测试的 TS executor 重写"。十条缺陷按亏钱潜力排序,v1.1 的处理:
 
 | # | 缺陷 | 处理 |
@@ -552,16 +552,16 @@ OAuth → tools/list 快照钉版 → account.truth(AccountSnapshot)→ 不可�
 review 建议砍掉的 v1 内容,处理:W7/技能自创/记忆审批/完整 Hermes cron 字段/周度强模型/CLI 大脑/多 profile/34 指标/agent 画线/新闻 MCP/教训衰减/宽 UI —— **全部移到 B 阶段或 P3**(§15),设计保留是因为 Jacky 明确要 CLI+API 双腿、K 线 UI、agent 调 gate 一切、以及最终的策略自研;但它们不再挡在动钱竖切前面。
 review 列的"第一周会撞到的缺口"(真实 tools/list、子账户标识、CIMD vs 预注册、refresh/撤销行为、token 文件、SQLite schema、转移表、symbol filters、positionSide、mark/last、费用假设版本化、保护腿协议、actor 能力矩阵、TypeBox/zod、pi 包名 pin、CLI 契约实探、launchd 环境、假 AS/fixture)已并入 A0/A1/A2 交付物。
 
-### 17.2 Codex 独立设计稿的分歧
-Codex 稿(`docs/research/codex-design-proposal-2026-09-02.md`)与本稿在大方向上一致:TS、单 daemon、语义化工具而非原始 Binance 工具、模型只选 JUDGMENT 边、evidence registry、durable intent、clientOrderId 对账、TAB eval、可选的 Rust 分析 sidecar。它的 TradeIntent 图(PREVIEWED/CONFIRMED/REVALIDATING/EFFECT_PENDING/RECONCILING/UNKNOWN/HALTED)与 v1.1 的六记录模型等价。真正的分歧与处理:
+### 17.2 独立设计稿的分歧
+评审稿(内部评审记录)与本稿在大方向上一致:TS、单 daemon、语义化工具而非原始 Binance 工具、模型只选 JUDGMENT 边、evidence registry、durable intent、clientOrderId 对账、TAB eval、可选的 Rust 分析 sidecar。它的 TradeIntent 图(PREVIEWED/CONFIRMED/REVALIDATING/EFFECT_PENDING/RECONCILING/UNKNOWN/HALTED)与 v1.1 的六记录模型等价。真正的分歧与处理:
 
-| 议题 | Codex 稿 | 本稿 v1.1 | 处理 |
+| 议题 | 评审稿 | 本稿 v1.1 | 处理 |
 |---|---|---|---|
 | **LiveCapped 自动确认是否合规** | Binance 文档写"agent 复述订单并等你说 yes";在 Binance 给出书面解释前,**风险增加型的 live 自治一律 feature-gate 关闭**;只有风险降低(撤/减/平)可在事故策略下自动 | 原把 LiveCapped 当 earned autonomy 的目标 | **采纳**:LiveCapped 保留在设计但默认关闭,解锁条件加一条"Binance 对 standing authorization 的书面口径";新增 §16 Q6 |
 | 确认类别 | C0 Read / C1 Reversible / C2 Review / C3 Trade(hash+账户+TTL+actor 绑定)/ C4 Emergency(只能降风险) | class × confirm 两维 | **采纳 C4 不变量**:紧急/自动动作永不增加敞口;其余等价,命名沿用本稿 |
 | 授权等级 | A0 Observe / A1 Analyze / A2 Draft / A3 ConfirmedLive / A4 BoundedAuto(关)/ A5 EmergencyReduce(常开) | Observe / Draft / Paper / LiveCapped | **部分采纳**:把 EmergencyReduce 作为独立常开能力写进 §10.1(不随 authority 降级而失效);Paper 保留为独立等级 |
 | CONFIRMED TTL | 市价 30s、限价 120s;账户版本变即失效 | 统一 120s | **采纳**分档 |
-| 保守默认 | 单笔风险 0.25%、杠杆 2x、每日 2 新仓、日亏 1%、逐仓、账户真相 ≤15s、行情 ≤5s、NTP 漂移 >2s 禁新增风险 / >10s HALT | 0.5%、6/日、≤30s | **采纳 Codex 值作为金丝雀期默认**,向导里显式输入,不静默继承 v3/8794 |
+| 保守默认 | 单笔风险 0.25%、杠杆 2x、每日 2 新仓、日亏 1%、逐仓、账户真相 ≤15s、行情 ≤5s、NTP 漂移 >2s 禁新增风险 / >10s HALT | 0.5%、6/日、≤30s | **采纳 外部评审值作为金丝雀期默认**,向导里显式输入,不静默继承 v3/8794 |
 | 预算耗尽 | 永不因模型预算阻断风险降低动作 | 真零模型状态 | **采纳**:零模型状态下纯码的撤/减/平与告警照跑 |
 | 并发默认 | 全局最多 2 个模型调用;判断 lane 按 (account,symbol) 最多 4 键;cron 并发 2 且只 1 个带模型 | 未给数字 | **采纳** |
 | 工具定义生成 | 一处定义 → 生成 RPC handler、pi tool、审计元数据、WebUI 表单 | 注册表三面 | **采纳"从 schema 生成 WebUI 表单"**;其余等价 |
@@ -572,7 +572,7 @@ Codex 稿(`docs/research/codex-design-proposal-2026-09-02.md`)与本稿在大方
 | 回退 8794 | 只允许离线导入器(指标/K 线史/成交)做 eval,零运行时依赖 | 相同 | 一致 |
 
 ## 18. 参考
-- 调研笔记:`docs/research/binance-mcp-agent-os.md`、`openclaw-hermes-pi-notes.md`、`pi-agent-internals.md`、`8794-feature-inventory.md`、`codex-design-proposal-2026-09-02.md`
+- 调研笔记:`docs/research/binance-mcp-agent-os.md`、`openclaw-hermes-pi-notes.md`、`pi-agent-internals.md`、`8794-feature-inventory.md`、内部评审记录
 - 前作:`~/Desktop/trade-switch-agentic/docs/agentic-console-design-v3-2026-09-02.md`(§3-§12 工程合同大量继承)及其 `backend/crates/agent-runtime`(契约与 case 迁移源)
 - OpenClaw docs(gateway protocol / control UI / onboarding wizard / heartbeat)、Hermes docs(architecture / cron / skills)、pi docs(sdk / rpc / extensions / compaction)、Binance developers `agent-native/mcp-server(/agentic)`、Binance Agent OS 新闻稿 2026-08-20
 - 工程文献:Anthropic《Building effective agents》《Effective context engineering》《Writing tools for agents》《Effective harnesses for long-running agents》《Demystifying evals》、Manus《Context Engineering》、HumanLayer《12-Factor Agents》、Cognition《Don't Build Multi-Agents》

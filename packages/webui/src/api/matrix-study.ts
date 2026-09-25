@@ -25,8 +25,14 @@ export interface SlimScore {
 export interface GateRow { name: string; ok: boolean; value: number | null }
 export interface MatrixSpecLite {
   symbols: string[]; timeframes: MatrixTimeframe[]; families: string[]; market: 'spot' | 'perp'; sides: ('long' | 'short')[]; arms: MatrixArm[];
-  recommendation_id: string | null; [k: string]: unknown;
+  recommendation_id: string | null;
+  /** 「我的策略」做矩阵的行(与 families 并存,至少一项);version 缺省 = 该策略当前版本 */
+  strategies?: MatrixStrategyRef[];
+  [k: string]: unknown;
 }
+export interface MatrixStrategyRef { strategy_id: string; version?: number }
+/** 详情视图里 manifest 解析好的「我的策略」(格子 family = `my:<strategy_id>@v<version>`) */
+export interface MatrixMyStrategy { strategy_id: string; version: number; name: string; timeframe: string; symbol: string }
 export interface MatrixCellDef { id: string; symbol: string; timeframe: MatrixTimeframe; family: string; side: 'long' | 'short'; arm: MatrixArm; applicability: 'applicable' | 'not_applicable' | 'research_only'; reason: string | null }
 export interface CellResult {
   cell_id: string; verdict: 'pass' | 'near' | 'fail' | 'ineligible'; cause: FailureCause | null;
@@ -57,6 +63,7 @@ export interface MatrixStudyView {
   /** 已存成我的策略的 finalist(后端 detail.adoptions);刷新后据此恢复「已存」状态 */
   adoptions: Record<string, { strategy_id: string; version: number }>;
   auto_finalize: boolean;
+  my_strategies: MatrixMyStrategy[];
 }
 export interface MatrixEstimate {
   cells: { total: number; applicable: number; not_applicable: number; research_only: number };
@@ -101,6 +108,7 @@ function unwrap(raw: unknown): MatrixStudyView {
     ledger: (v['ledger'] as MatrixStudyView['ledger']) ?? null,
     adoptions: Object.fromEntries(((v['adoptions'] as { finalist_id: string; adopted: { strategy_id: string; version: number } }[] | undefined) ?? []).map((a) => [a.finalist_id, a.adopted])),
     auto_finalize: (v['spec'] as { auto_finalize?: boolean } | undefined)?.auto_finalize !== false,
+    my_strategies: (v['my_strategies'] as MatrixMyStrategy[] | undefined) ?? [],
   };
 }
 

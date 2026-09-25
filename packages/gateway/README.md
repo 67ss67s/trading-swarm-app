@@ -118,7 +118,7 @@ P9 离线预注册研究：根目录 `npm run lab -- fill` 以当前 workflow �
 
 仓库根执行 `npm run lab -- --study traders`：从公开行情缓存生成原文审计、逐条特征、同时间段随机对照、两类确定性策略与人肉初始计划回放；自动重建 `docs/research/trader-study-2026-09-12.md`。首次补数加 `--fill`，可用 `--cache-root /path` 指定独立目录。取数脚本继承环境代理，按秒限速、重试并原子续写；不读运行 `state.sqlite`。价格与原始输入为十进制字符串，内部纯研究数值运算使用 JS number。
 
-`TRADER_SIGNAL_REGISTRY` / `HUMAN_SIGNAL_REGISTRY` 独立于生产 `SIGNAL_REGISTRY`；没有生产 family、active 或晋升写入。参数、观察窗口、执行规则与源文件 hash 进入试验登记。预注册与实际网格不一致即拒绝执行。公开信号数据、修正表、所有剔除原因和数据 hash 位于 `docs/research/data/traders-0912/`。输入含频道原文，提交仅为本地研究归档，不自动发布。
+`TRADER_SIGNAL_REGISTRY` / `HUMAN_SIGNAL_REGISTRY` 独立于生产 `SIGNAL_REGISTRY`；没有生产 family、active 或晋升写入。参数、观察窗口、执行规则与源文件 hash 进入试验登记。预注册与实际网格不一致即拒绝执行。修正表、剔除原因、逐条特征与统计结果位于 `docs/research/data/traders-0912/`;原始频道消息与结构化信号(raw_messages.json / structured_signals.json)不随仓库分发,`scripts/trader-study.mjs` 重跑需要自备这两份输入。
 
 定向测试：`npm exec --workspace packages/gateway -- vitest run src/demo/trader-study.test.ts`（从仓库根执行）；覆盖时区、去重、原文覆盖、前视、缺口、限价、分档止盈、保本及成本。完整验证仍使用根目录 `npm test` 与 `npm run typecheck`。
 

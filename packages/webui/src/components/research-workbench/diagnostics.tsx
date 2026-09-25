@@ -315,7 +315,7 @@ export function AttributionCard({ run }: { run: ResearchRunSummary }) {
   return (
     <Card title={t('改善来自哪里')} hint={t('父 {p} → 子 {c}', { p: parentId.slice(0, 8), c: run.id.slice(0, 8) })} foot={a?.note ?? t('逐段消融是探索性归因,段间有交互;不是因果证明。')}>
       {q.isLoading ? <div className="px-3 py-3 text-[11.5px] text-muted-foreground">{t('逐段回放中(纯规则,零模型调用)…')}</div> : null}
-      {q.error ? <div className="px-3 py-3 text-[11.5px] text-muted-foreground">{/404|not_found|不存在/.test((q.error as Error).message) ? t('后端还没有归因接口(第二轮 astra 交付中)') : (q.error as Error).message}</div> : null}
+      {q.error ? <div className="px-3 py-3 text-[11.5px] text-muted-foreground">{/404|not_found|不存在/.test((q.error as Error).message) ? t('后端还没有归因接口(后端交付中)') : (q.error as Error).message}</div> : null}
       {a ? (
         <div className="px-3 py-2">
           <div className="mb-2 flex items-center gap-4 text-[11.5px]">

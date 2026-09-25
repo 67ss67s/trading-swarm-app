@@ -1,5 +1,5 @@
 /**
- * 研究 loop 的数据层接口(§9.44)。Claude 负责实现 okx.ts / analyses.ts;loop 核心(astra)只依赖这里的类型与签名,
+ * 研究 loop 的数据层接口(§9.44)。数据层实现 okx.ts / analyses.ts;loop 核心只依赖这里的类型与签名,
  * 测试用假的 MarketData 注入。快照是不可变的:同一请求参数 + 同一 method_version 得到同一 checksum。
  */
 export type SnapshotKind = 'price' | 'funding' | 'open_interest' | 'liquidations';

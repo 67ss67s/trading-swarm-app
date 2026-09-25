@@ -5,7 +5,7 @@ import { riskSummary } from './risk.js';
  *   - 每日简报 = 代码从账本拼一张卡(过去 24h:各角色 run 数与花费、待阅交接、开放告警、平仓结果、账户快照),
  *     bot_run(routine daily_brief)+ 活动流一条;每个数字都能在证据里找到(测试对着 store 逐项核)。
  *   - 路由:EVENT_ROUTES 仍是唯一目录;这版不新增模型路由,对话仍走 chat.ts。
- * 议会(Proposal Council)的扇出/扇入与 hash 审批是单列的 L 级安全前置(Codex 稿 §7),这版不做。
+ * 议会(Proposal Council)的扇出/扇入与 hash 审批是单列的 L 级安全前置(评审稿 §7),这版不做。
  */
 import type { BotRegistry, BotRun } from './bots.js';
 import type { RiskAlertRow } from './team-store.js';

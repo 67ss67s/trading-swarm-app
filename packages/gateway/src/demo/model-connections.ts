@@ -46,6 +46,8 @@ export interface ModelConnection {
 export type ModelRole = 'chat' | 'judge' | 'research' | 'filter' | 'reviewer' | 'utility' | 'decision';
 export interface RoleBinding { role: ModelRole; connection_id: string | null; model: string | null }
 export type EffectiveSource = 'binding' | 'fallback_main' | 'fallback_cheap' | 'unset';
+/** POST /api/models/bindings/:role/test 的响应:按角色当前生效底层测一次。 */
+export interface RoleTestResult extends ConnectionTest { role: ModelRole; source: EffectiveSource; name: string }
 export interface ModelsView {
   connections: ModelConnection[];
   bindings: RoleBinding[];
@@ -596,7 +598,7 @@ export class ModelRouter {
   /**
    * 判断要素(IR judge,§9.53 C)用的「钉住」决策连接:固定模型版本 + 不重试的客户端 + 不可变配置引用。
    * 回测与运行器都按 profile.ref 找它;ref 不含连接修改时间(改连接名称不让在跑的策略失效),
-   * 别名 ~typesafe/jev-latest 钉到当前版本(astra:别名不是不可变版本)。未绑定 / 连接失效 → null。
+   * 别名 ~typesafe/jev-latest 钉到当前版本(复审:别名不是不可变版本)。未绑定 / 连接失效 → null。
    */
   frozenDecision(): { profile: FrozenModelProfile; client: DecisionClient } | null {
     const b = this.store.binding('decision');
@@ -721,6 +723,40 @@ export class ModelRouter {
     this.deps.log(result.ok ? 'info' : 'warn', `测试模型连接 ${conn.label}${model ? ` · ${model}` : ''}:${result.ok ? '通过' : '失败'} ${result.detail}`);
     this.changed();
     return result;
+  }
+
+  /**
+   * 按角色测试(#models 页每张 agent 卡的「测试连接」):用该角色**当前生效**的底层发一次最短往返。
+   * 绑定 → 走 testConnection(连接 id + 绑定的模型),结果写回连接;回退 → 直接调旧槽位大脑一次(不改连接);
+   * decision 未设置 → ok:false「未设置」。返回 ConnectionTest + 角色 / 来源 / 生效名,错误文本已脱敏。
+   */
+  async testRole(roleRaw: string): Promise<RoleTestResult> {
+    if (!(MODEL_ROLES as string[]).includes(roleRaw)) throw httpError(404, 'not_found', `角色只能是 ${MODEL_ROLES.join('/')}`);
+    const role = roleRaw as ModelRole;
+    const b = this.store.binding(role);
+    if (b?.connection_id) {
+      const conn = this.store.get(b.connection_id);
+      const name = role === 'decision' ? `openrouter:${b.model ?? DEFAULT_DECISION_MODEL}` : this.brainForRole(role).name;
+      if (!conn) return { role, source: 'binding', name, at: Date.now(), ok: false, latency_ms: null, detail: `绑定的连接 ${b.connection_id} 已不存在` };
+      const model = role === 'decision' ? (b.model ?? DEFAULT_DECISION_MODEL) : b.model;
+      const r = await this.testConnection(conn.id, model ? { model } : {});
+      return { role, source: 'binding', name, ...r };
+    }
+    if (role === 'decision') return { role, source: 'unset', name: '', at: Date.now(), ok: false, latency_ms: null, detail: '判断要素还没绑定(需要一条 OpenRouter 连接)' };
+    const slot = ROLE_FALLBACK[role];
+    const brain = slot === 'main' ? this.deps.mainBrain() : this.deps.cheapBrain();
+    const source: EffectiveSource = slot === 'main' ? 'fallback_main' : 'fallback_cheap';
+    const started = Date.now();
+    let result: ConnectionTest;
+    try {
+      const r = await brain.complete('你是连通性测试。只回复一个词:ok', 'ping', { timeoutMs: 90_000 });
+      const ok = r.text.trim().length > 0;
+      result = { at: Date.now(), ok, latency_ms: Date.now() - started, detail: this.redact(ok ? `${brain.name} 回复:${r.text.slice(0, 60)}` : `${brain.name}:无输出`) };
+    } catch (e) {
+      result = { at: Date.now(), ok: false, latency_ms: Date.now() - started, detail: this.redact(`${brain.name}:${(e as Error).message.slice(0, 400)}`) };
+    }
+    this.deps.log(result.ok ? 'info' : 'warn', `测试角色 ${role}(${source === 'fallback_main' ? '回退主脑' : '回退副脑'} ${brain.name}):${result.ok ? '通过' : '失败'} ${result.detail}`);
+    return { role, source, name: brain.name, ...result };
   }
 
   /** OpenRouter /models 过滤出常用家族(免费的公开列表,不计费);Jev 与缺省始终在前。 */

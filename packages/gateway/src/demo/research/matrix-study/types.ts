@@ -16,6 +16,14 @@ export const RUNNABLE_TIMEFRAMES: readonly MatrixTimeframe[] = ['15m', '4h', '1d
 export const SINGLE_ASSET_FAMILIES: readonly FamilyKey[] = ['breakout', 'ma_trend', 'ema_cross', 'pullback', 'mean_reversion', 'smc'];
 export const ALL_FAMILIES: readonly FamilyKey[] = [...SINGLE_ASSET_FAMILIES, 'xsmom', 'carry'];
 export type MatrixArm = 'code' | 'code_judge';
+/** 矩阵的行:内置族,或「我的策略」某版本(`my:<strategy_id>@v<version>`) */
+export type MatrixFamily = FamilyKey | `my:${string}`;
+export const myFamilyKey = (strategy_id: string, version: number): `my:${string}` => `my:${strategy_id}@v${version}`;
+export const isMyFamily = (f: string): f is `my:${string}` => f.startsWith('my:');
+/** spec 里的自选策略引用(请求可省 version = 当前版本;规格里总是解析成具体版本) */
+export interface MatrixStrategyRef { strategy_id: string; version: number }
+/** manifest 冻结时解析出的自选策略快照(IR 就是这一版的 IR,之后不随策略变动) */
+export interface MyStrategySnapshot { strategy_id: string; version: number; name: string; symbol: string; timeframe: string; ir: StrategyIR; ir_hash: string }
 export type MatrixSide = 'long' | 'short';
 export type Applicability = 'applicable' | 'not_applicable' | 'research_only';
 /** 不合格主因(验收 B3/B4 + 评审第三节) */
@@ -59,10 +67,14 @@ export interface MatrixStudySpec {
   symbols: string[];
   timeframes: MatrixTimeframe[];
   families: FamilyKey[];
+  /** 「我的策略」行(与 families 并存,两者合计至少一项) */
+  strategies: MatrixStrategyRef[];
   market: 'spot' | 'perp';
   sides: MatrixSide[];
   arms: MatrixArm[];
   judge: StrategyJudge | null;
+  /** 每个组合单独计试验，只在训练段选择，再冻结进入 selection/holdout。 */
+  judge_templates?: StrategyJudge[];
   model_profile: FrozenModelProfile | null;
   /** 各周期的窗口天数(缺省 15m 180 / 4h 730 / 1d 1460) */
   window_days: Partial<Record<MatrixTimeframe, number>>;
@@ -87,9 +99,9 @@ export const HORIZON_OF: Record<MatrixTimeframe, MatrixHorizon> = { '3m': 'short
 /** 信息来源:推荐卡 / 雷达档位(short|swing|weekly)/ 全市场扫描时间 */
 export interface MatrixSource { recommendation_id: string | null; radar_tier: 'short' | 'swing' | 'weekly' | null; universe_scan_at: number | null }
 
-export interface MatrixVariantRef { id: string; param: string; ir: StrategyIR; vol_target?: { annual: number; days: number } }
+export interface MatrixVariantRef { template_group?: string; id: string; param: string; ir: StrategyIR; vol_target?: { annual: number; days: number } }
 export interface MatrixCell {
-  id: string; symbol: string; timeframe: MatrixTimeframe; family: FamilyKey; side: MatrixSide; arm: MatrixArm;
+  id: string; symbol: string; timeframe: MatrixTimeframe; family: MatrixFamily; side: MatrixSide; arm: MatrixArm;
   applicability: Applicability; reason: string | null; variants: MatrixVariantRef[];
   /** 本格实际三段:边界与周期外层相同,段间空档按本格变体最大持仓 + 挂单等待 + 下根执行(×1.25 余量)取,不少于 spec.purge_bars */
   segments: TimeframeSegments | null;
@@ -99,6 +111,8 @@ export interface MatrixCell {
 export interface MatrixManifest {
   version: 'matrix_manifest_v1';
   spec: MatrixStudySpec;
+  /** spec.strategies 解析出的快照(旧 manifest 没有这个字段) */
+  my_strategies?: MyStrategySnapshot[];
   segments: Partial<Record<MatrixTimeframe, TimeframeSegments>>;
   cells: MatrixCell[];
   /** 开发视图取数请求(资产 × 周期 × 截止到选择段末);实际数据指纹在 data 阶段写入 state.data_lock 且只写一次 */
@@ -144,7 +158,7 @@ export interface MatrixGeneration {
 }
 export interface HoldoutTest { days: number; blocks: number; mean_daily: number | null; p_value: number | null; holm_threshold: number | null; rejected: boolean }
 export interface MatrixFinalist {
-  id: string; trial_id: string; cell_id: string; arm: MatrixArm; symbol: string; timeframe: MatrixTimeframe; family: FamilyKey; side: MatrixSide;
+  id: string; trial_id: string; cell_id: string; arm: MatrixArm; symbol: string; timeframe: MatrixTimeframe; family: MatrixFamily; side: MatrixSide;
   ir: StrategyIR; ir_hash: string; selection: SlimScore; dsr: number | null;
   holdout: SlimScore | null; holdout_gross: number | null; test: HoldoutTest | null; passed: boolean | null; cause: FailureCause | null;
   horizon: MatrixHorizon; source: MatrixSource;

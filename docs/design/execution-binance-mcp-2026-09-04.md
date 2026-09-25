@@ -12,7 +12,7 @@
 | `codex mcp add … --url` 成功,但 `codex mcp login` 报 "Dynamic client registration not supported" | 本机 codex | **codex 路径目前走不通**(等 Codex 支持 CIMD 或 bearer 环境变量拿到 token) |
 | 本机没有 grok CLI;币安文档里的 "Grok Bot" 是 Grok 应用自己的连接器,不是可 spawn 的进程 | which / 文档 | **grok 没有可接的接口**;若 xAI 出 CLI 再说 |
 | 工具清单(名称/参数)文档没写,页面是 JS 渲染,拉不到;要 tools/list 必须先有 token | WebFetch / llms-full.txt | 执行映射只能在授权后再定 |
-| 从钥匙串读 Claude 的 token 复用被本会话的权限层拦下 | 本会话 | 也不该这么做:另一个应用的凭证、无 refresh、脆弱 |
+| 从钥匙串读 Claude 的 token 复用 | 评估 | 也不该这么做:另一个应用的凭证、无 refresh、脆弱 |
 | **(2026-09-05)带着网关自己的 client_id 打开币安同意页,币安直接拒:「The AI Agent you are using is not currently supported (**3346001**)」** | 真机点了一次 | 币安**按 client_id 白名单**放行 agent,不是 PKCE/CIMD 哪里写错了。Claude Code 在白名单里,网关不在 → **A 路(gate 自己做 OAuth 客户端)今天走不通**,直到币安把网关加进名单 |
 
 ## 1. 三条路,选两条

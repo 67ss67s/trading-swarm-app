@@ -3,6 +3,7 @@
  * 数据形状贴近真实网关:agents / handoffs / money / inbox;金额一律十进制字符串,时间戳 unix 毫秒。
  * 渲染引擎只认这些类型,不认 mock —— 以后 React 包一层直接喂真数据。
  */
+import type { SfxKind } from '../engine-b/types';
 
 export type RoleId =
   | 'gate_captain'
@@ -165,6 +166,8 @@ export interface MountOptions {
   onFocusChange?: (role: string | null) => void;
   /** 不传则跟随 prefers-reduced-motion */
   reducedMotion?: boolean;
+  /** 8-bit 音效触发点:信封被接住 / 金信封(批准)飞出 / +1 进化 / 击掌。引擎只喊,不放声音 */
+  onSfx?: (k: SfxKind) => void;
 }
 
 export interface FloorHandle {

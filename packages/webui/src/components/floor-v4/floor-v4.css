@@ -21,6 +21,16 @@
 .fv4 .coin:hover{border-color:var(--accent)}
 .fv4 .coin b{font:700 12px var(--mono)}
 .fv4 .coin span{font:11px var(--mono);color:var(--dim)}
+.fv4 .coin{position:relative}
+.fv4 .coin .x{position:absolute;top:1px;right:1px;width:15px;height:15px;padding:0;border:2px solid var(--line);background:var(--panel);color:var(--dim);font:700 10px/10px var(--mono);cursor:pointer;display:none;align-items:center;justify-content:center}
+.fv4 .coin:hover .x{display:flex}
+.fv4 .coin .x:hover{color:#ff8a9a;border-color:#ff8a9a}
+.fv4 .coin.add{flex:none;align-self:center;height:36px;margin-left:-10px;align-items:center;justify-content:center;min-width:34px;cursor:pointer;font:700 16px var(--mono);color:var(--dim);border-style:dashed}
+.fv4 .coin.add:hover{color:var(--accent)}
+.fv4 .sfx{flex:none;font-size:12px;padding:5px 9px;border:2px solid var(--line);background:transparent;color:var(--dim);cursor:pointer;white-space:nowrap}
+.fv4 .sfx.on{border-color:var(--accent);color:var(--accent)}
+.fv4 .fv4-chip{flex:none;max-width:220px;border-radius:0;border-width:2px;border-color:var(--line);background:var(--panel-2);color:var(--ink)}
+.fv4 .strat.static{cursor:default;border-style:solid}
 .fv4 .spacer{flex:1}
 .fv4 .seg{display:flex;border:2px solid var(--line);flex:none}
 .fv4 .seg button{font-size:12px;padding:5px 10px;background:transparent;color:var(--dim);border:0;cursor:pointer;white-space:nowrap}
@@ -143,6 +153,6 @@
 .fa-tip{position:fixed;z-index:90;pointer-events:none;max-width:260px;padding:7px 9px;background:#fffaf0;color:#1a1410;border:2px solid #1a1410;box-shadow:3px 3px 0 rgba(0,0,0,.5);font-size:12px;line-height:1.45}
 .fa-tip b{font:700 12px ui-monospace,monospace}
 .fa-tip .sw{display:inline-block;width:9px;height:9px;border:1px solid #1a1410;margin-right:5px;vertical-align:-1px}
-@media (max-width:1560px){.fv4 .coin:nth-child(n+4){display:none}}
-@media (max-width:1400px){.fv4 .kpis{gap:12px}.fv4 .brand small{display:none}.fv4 .stage{grid-template-columns:minmax(0,1fr) 288px}.fv4 .coins{display:none}}
+@media (max-width:1560px){.fv4 .coin[data-sym]:nth-child(n+4){display:none}.fv4 .sfx span{display:none}}
+@media (max-width:1400px){.fv4 .kpis{gap:12px}.fv4 .brand small{display:none}.fv4 .stage{grid-template-columns:minmax(0,1fr) 288px}.fv4 .coins{display:none}.fv4 .coin.add{display:none}}
 @media (prefers-reduced-motion: reduce){.fv4 .feed li,.fv4 .inbox .dot,.fv4 .npc .say::after{animation:none}.fv4 .estop .lid{transition:none}}

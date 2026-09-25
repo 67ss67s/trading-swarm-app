@@ -109,7 +109,7 @@ Owner 已确认：spot 不要求止损。无止损的现货线程、手工订单
 
 ## 02:45 追加:现货止损可选 + 永续不可用时的无缝切换
 
-- 现货不强制止损(Jacky 拍板):spot 从保护闸 / never_verified / 缺止损告警 / PROTECTION_MISSING 巡检全部豁免,带止损的现货线程照旧守;提案与手工单在 spot 下止损可空。后端由 Codex astra 落地(内部评审记录,1898 测绿);前端接管对话框对现货把止损改可选、无主现货不再标「没有止损」。
+- 现货不强制止损(Jacky 拍板):spot 从保护闸 / never_verified / 缺止损告警 / PROTECTION_MISSING 巡检全部豁免,带止损的现货线程照旧守;提案与手工单在 spot 下止损可空。后端由 外部评审落地(内部评审记录,1898 测绿);前端接管对话框对现货把止损改可选、无主现货不再标「没有止损」。
 - 永续在简单模式下的处理:交易页「永续」不是死按钮,点了弹框讲清 51010 原因 + 「去 OKX 切换」按钮(打开 OKX 交易页,右上角账户模式),同时每 5 秒 `POST /api/execution/okx/account-level/refresh`(网关重读 `account config` 的 acctLv,只读),模式一变永续自动亮起并切过去。CDP 实测:弹框出现、轮询按 5 秒打到网关。
 - 真正一键切换(网关自己打 `set-account-level`)取决于 OKX 是否允许 API 切:`scripts/okx-set-account-level.py` 由 Jacky 自己跑一次确认(工具层拦签名请求);允许则加 `POST /api/execution/okx/account-level {acctLv}`,前提是没有持仓/挂单/借币;首次切出简单模式很可能被要求先做 App 测评,那就只能走上面的链接+轮询路。
 - 18811/5191 已重启到含这些改动的代码;整包仍未提交。

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://trading-swarm.dev/schema/account_snapshot.json",
   "title": "AccountSnapshot",
-  "description": "账户真相(设计 §6.2 account.truth / Codex review #6):每个组件各自 observed_at、取数区间、completeness;经济组件哈希 = account_version;组件缺失或跨度过大 → inconsistent(gate 拒开仓);不可得 → unavailable。",
+  "description": "账户真相(设计 §6.2 account.truth / external review #6):每个组件各自 observed_at、取数区间、completeness;经济组件哈希 = account_version;组件缺失或跨度过大 → inconsistent(gate 拒开仓);不可得 → unavailable。",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "account", "channel", "computed_at", "consistency", "components"],

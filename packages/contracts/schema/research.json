@@ -7013,7 +7013,18 @@
         "features.volatility",
         "features.volume_ratio",
         "features.funding",
-        "features.market_regime"
+        "features.market_regime",
+        "features.ob_imbalance_05",
+        "features.ob_wall_up",
+        "features.ob_wall_down",
+        "features.spread_bps",
+        "features.liq_long_5m",
+        "features.liq_short_5m",
+        "candidate.reference",
+        "candidate.support",
+        "candidate.resistance",
+        "candidate.stop",
+        "candidate.target"
       ]
     },
     "JudgeQuestion": {
@@ -7052,7 +7063,7 @@
             "$ref": "#/$defs/JudgeStateField"
           },
           "minItems": 1,
-          "maxItems": 8,
+          "maxItems": 19,
           "uniqueItems": true
         },
         "labels": {
@@ -7246,7 +7257,11 @@
           "maxLength": 160
         },
         "parser_version": {
-          "const": "judge_answers_v1"
+          "enum": [
+            "judge_answers_v1",
+            "judge_answers_v2_rounding_001"
+          ],
+          "description": "v1: sum tolerance 1e-6 unchanged. v2: |sum-1| <= 0.01 (+1e-12 numeric epsilon), normalize by sum; explicit opt-in only after raw diagnostics."
         },
         "max_call_usd": {
           "type": "string",
@@ -7372,6 +7387,26 @@
             "reward_risk": {
               "type": "number",
               "minimum": 0
+            },
+            "reference": {
+              "type": "string",
+              "pattern": "^(0|[1-9]\\d*)(\\.\\d{1,12})?$"
+            },
+            "support": {
+              "type": "string",
+              "pattern": "^(0|[1-9]\\d*)(\\.\\d{1,12})?$"
+            },
+            "resistance": {
+              "type": "string",
+              "pattern": "^(0|[1-9]\\d*)(\\.\\d{1,12})?$"
+            },
+            "stop": {
+              "type": "string",
+              "pattern": "^(0|[1-9]\\d*)(\\.\\d{1,12})?$"
+            },
+            "target": {
+              "type": "string",
+              "pattern": "^(0|[1-9]\\d*)(\\.\\d{1,12})?$"
             }
           },
           "required": []
@@ -7403,6 +7438,65 @@
                 "down",
                 "volatile"
               ]
+            },
+            "ob_imbalance_05": {
+              "type": "number",
+              "minimum": -1,
+              "maximum": 1,
+              "description": "live_only: requires as-of recorded coverage; unavailable is not zero."
+            },
+            "ob_wall_up": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "price": {
+                  "type": "string",
+                  "pattern": "^(0|[1-9]\\d*)(\\.\\d{1,12})?$"
+                },
+                "notional": {
+                  "type": "string",
+                  "pattern": "^(0|[1-9]\\d*)(\\.\\d{1,12})?$"
+                }
+              },
+              "required": [
+                "price",
+                "notional"
+              ],
+              "description": "live_only: requires as-of recorded coverage; unavailable is not zero."
+            },
+            "ob_wall_down": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "price": {
+                  "type": "string",
+                  "pattern": "^(0|[1-9]\\d*)(\\.\\d{1,12})?$"
+                },
+                "notional": {
+                  "type": "string",
+                  "pattern": "^(0|[1-9]\\d*)(\\.\\d{1,12})?$"
+                }
+              },
+              "required": [
+                "price",
+                "notional"
+              ],
+              "description": "live_only: requires as-of recorded coverage; unavailable is not zero."
+            },
+            "spread_bps": {
+              "type": "number",
+              "minimum": 0,
+              "description": "live_only: requires as-of recorded coverage; unavailable is not zero."
+            },
+            "liq_long_5m": {
+              "type": "string",
+              "pattern": "^(0|[1-9]\\d*)(\\.\\d{1,12})?$",
+              "description": "live_only: requires as-of recorded coverage; unavailable is not zero."
+            },
+            "liq_short_5m": {
+              "type": "string",
+              "pattern": "^(0|[1-9]\\d*)(\\.\\d{1,12})?$",
+              "description": "live_only: requires as-of recorded coverage; unavailable is not zero."
             }
           },
           "required": []

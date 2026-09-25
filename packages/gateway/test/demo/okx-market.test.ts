@@ -65,7 +65,7 @@ describe('K 线', () => {
     expect(okx.tfToBar('4h')).toBe('4H');
     expect(okx.tfToBar('1d')).toBe('1Dutc');
     expect(okx.tfToBar('1w')).toBe('1Wutc');
-    // codex-review #15:OKX 的 `6H`/`12H` 按 UTC+8 分桶,UTC 版要带后缀。
+    // review #15:OKX 的 `6H`/`12H` 按 UTC+8 分桶,UTC 版要带后缀。
     expect(okx.tfToBar('6h')).toBe('6Hutc');
     expect(okx.tfToBar('12h')).toBe('12Hutc');
     expect(okx.tfToBar('3d')).toBe('3Dutc');

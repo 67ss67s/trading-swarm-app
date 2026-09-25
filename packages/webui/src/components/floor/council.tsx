@@ -2,7 +2,7 @@
  * 楼层右栏:Agent Council(8 角色 tile + AI/CODE/EXEC 徽章)+ Live Handoffs 流。
  * 交接流里真 bot_handoffs 行(实线左边)与 activity 映射行(点线左边)视觉区分(设计稿 §4);
  * 待阅的真交接可以 ack(= 已阅);subject.type='screen' 且带 watchlist 提案的,只预览 before → after
- * diff,应用去筛选页确认(楼层只读,Codex 评审 §8)。
+ * diff,应用去筛选页确认(楼层只读,评审 §8)。
  */
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';

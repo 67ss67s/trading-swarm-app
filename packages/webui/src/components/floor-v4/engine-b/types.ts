@@ -36,7 +36,29 @@ export interface AgentSnap {
   task?: { id: string; label: string } | null;
   /** 「你今天干了啥」的一句话小结 */
   today?: string;
+  /** 这个角色用的模型(/api/models effective,roleBrainDisplay);broken = 绑定的连接失效(红点)。null = 不用模型 */
+  brain?: { name: string; sourceLabel: string; broken: boolean } | null;
+  /** 当前策略分给这张桌的规则片(§9.54 DESK_SLICES);null = 这张桌不吃策略片 */
+  desk?: DeskInfo | null;
 }
+
+export type RoleEngine = 'code' | 'decision' | 'llm';
+export interface DeskSlice {
+  title: string;
+  summary: string;
+  /** 谁在执行这片规则:代码 / 决策模型 / LLM */
+  engine: RoleEngine;
+  rules: string[];
+}
+export interface DeskInfo {
+  /** free = 自由判断(playbook);strategy = 跑某条策略 */
+  kind: 'free' | 'strategy';
+  strategy: string | null;
+  slices: DeskSlice[];
+}
+
+/** 8-bit 音效触发点(引擎只喊,React 外壳决定响不响) */
+export type SfxKind = 'envelope' | 'approval' | 'evolve' | 'highfive';
 
 export interface HandoffSnap {
   /** 可选;缺省时引擎用 at|from|to 做键 */

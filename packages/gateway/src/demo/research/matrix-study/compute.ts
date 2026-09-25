@@ -85,8 +85,9 @@ export function conclusionOf(m: MatrixManifest, cells: Record<string, CellResult
   const passed = finalists.filter((f) => f.passed === true), applicable = m.cells.length - na - ro;
   const dist = FAILURE_CAUSES.filter((c) => causes[c]).map((c) => `${CAUSE_TEXT[c]} ${causes[c]}`).join('、') || '无';
   const mode = m.spec.protocol.evidence_mode === 'historical_replay' ? '(历史回放:这段历史已被人看过,只能算回放证据,进实盘前还要前向验证)' : '';
+  const famText = (fam: string) => { const my = (m.my_strategies ?? []).find((x) => `my:${x.strategy_id}@v${x.version}` === fam); return my ? `「${my.name}」v${my.version}` : fam; };
   const text = passed.length
-    ? `${passed.length} 条策略在留出段通过 Holm 校正检验:${passed.map((f) => `${f.symbol} ${f.timeframe} ${f.family}/${f.side}/${f.arm}`).join(';')}。其余不合格主因:${dist}${mode}`
+    ? `${passed.length} 条策略在留出段通过 Holm 校正检验:${passed.map((f) => `${f.symbol} ${f.timeframe} ${famText(f.family)}/${f.side}/${f.arm}`).join(';')}。其余不合格主因:${dist}${mode}`
     : `没有找到通过门槛的策略。${applicable} 个可评估格子${finalists.length ? `、${finalists.length} 个 finalist 在留出段未通过` : ''};主因分布:${dist};另有 ${na} 格不适用、${ro} 格仅研究(3m/5m)${mode}`;
   return { kind: passed.length ? 'passed' : 'no_candidate', finalist_ids: passed.map((f) => f.id), causes, not_applicable: na, research_only: ro, text };
 }

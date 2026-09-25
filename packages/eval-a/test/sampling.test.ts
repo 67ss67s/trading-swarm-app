@@ -1,4 +1,4 @@
-// Multi-sample runs (docs/eval/denoise-plan-2026-09-04.md, merged with the Codex review): mode selection,
+// Multi-sample runs (docs/eval/denoise-plan-2026-09-04.md, merged with the external review): mode selection,
 // pairwise-disagreement noise floor, 4/5 stability rule, per-sample hard invariants vs stable-only action metrics,
 // and --resume redoing single-sample episodes.
 

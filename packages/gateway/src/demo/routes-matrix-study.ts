@@ -19,12 +19,15 @@
 import type { RouteContext, RouteHandler } from './http-extra.js';
 import { RecommendationStore } from './recommend.js';
 import type { DecisionProvider, FrozenModelProfile } from './research/judge/types.js';
+import type { MicrostructureSource } from './research/judge/microstructure.js';
 import { MatrixStudyService, type AdoptResult, type PreflightLike } from './research/matrix-study/service.js';
 import type { MatrixConclusion, MatrixStudyRow } from './research/matrix-study/types.js';
 
 export interface MatrixStudyHooks {
   judgeProvider?(): DecisionProvider | null;
   modelProfile?(): FrozenModelProfile | null;
+  /** 盘口 / 清算 live_only 特征的录制数据源;没有时依赖它的判断臂标数据不可评 */
+  microstructure?(): MicrostructureSource | null;
   onConclusion?(row: MatrixStudyRow, conclusion: MatrixConclusion): void;
   onAdopted?(row: MatrixStudyRow, adopted: AdoptResult & { finalist_id: string }): void;
 }
@@ -37,7 +40,7 @@ export function matrixStudyRoutes(ctx: RouteContext): void {
   const hooks = () => rt.matrixStudyHooks ?? {};
   const svc = new MatrixStudyService({
     db: ctx.store.marketDb,
-    judge: () => { const provider = hooks().judgeProvider?.() ?? null; return provider ? { provider } : undefined; },
+    judge: () => { const provider = hooks().judgeProvider?.() ?? null; const microstructure = hooks().microstructure?.() ?? null; return provider ? { provider, ...(microstructure ? { microstructure } : {}) } : undefined; },
     modelProfile: () => hooks().modelProfile?.() ?? null,
     recommendation: (id) => new RecommendationStore(ctx.store.marketDb).get(id),
     ...(typeof rt.strategyRuns === 'function' ? { preflight: (id: string, v: number) => rt.strategyRuns!().preflight(id, v) } : {}),

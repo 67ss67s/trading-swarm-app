@@ -157,6 +157,7 @@ import type {
   ModelConnectionTest,
   ModelRole,
   ModelsView,
+  RoleTestResult,
 } from './types';
 
 import { adaptAsp, adaptAspDetail, adaptDelivery, adaptFundingNotice, adaptInbox, adaptInboxStatus, adaptRegister, adaptSearch, adaptSettings, adaptStatus, adaptSubscriptions, composeOverview, list, obj, publisherToWire } from './market-adapt';
@@ -174,18 +175,46 @@ class ApiRequestError extends Error {
   }
 }
 
+const GATEWAY_DOWN_MESSAGE = '网关暂时连不上(多半在重启),恢复后自动刷新';
+
+/** 网关没起来 / 正在重启 / 代理连不上:这类错误要自动重试,不该当成业务错误摆给用户。 */
+export function isGatewayUnavailable(err: unknown): boolean {
+  return err instanceof ApiRequestError && err.code === 'gateway_unavailable';
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, {
-    // FormData(多部分上传)要让浏览器自己带 boundary,不能手写 content-type。
-    headers: init?.body && !(init.body instanceof FormData) ? { 'content-type': 'application/json' } : undefined,
-    ...init,
-  });
-  const text = await res.text();
-  const body: unknown = text ? JSON.parse(text) : null;
-  if (!res.ok) {
-    const err = body as ApiError | null;
-    throw new ApiRequestError(res.status, err?.error?.code ?? 'unknown', err?.error?.message ?? res.statusText, body);
+  let res: Response;
+  try {
+    res = await fetch(path, {
+      // FormData(多部分上传)要让浏览器自己带 boundary,不能手写 content-type。
+      headers: init?.body && !(init.body instanceof FormData) ? { 'content-type': 'application/json' } : undefined,
+      ...init,
+    });
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') throw e;
+    throw new ApiRequestError(0, 'gateway_unavailable', GATEWAY_DOWN_MESSAGE);
   }
+  const text = await res.text();
+  let body: unknown = null;
+  if (text) {
+    try {
+      body = JSON.parse(text);
+    } catch {
+      body = text;
+    }
+  }
+  if (!res.ok) {
+    const err = body && typeof body === 'object' ? (body as ApiError) : null;
+    // 代理层的 502/504(网关自己不会回这两个)也按「网关不可用」处理。
+    const down = !err?.error?.code && (res.status === 502 || res.status === 504);
+    throw new ApiRequestError(
+      res.status,
+      err?.error?.code ?? (down ? 'gateway_unavailable' : 'unknown'),
+      err?.error?.message ?? (down ? GATEWAY_DOWN_MESSAGE : res.statusText || `HTTP ${res.status}`),
+      body,
+    );
+  }
+  if (typeof body === 'string') throw new ApiRequestError(res.status, 'bad_response', `网关返回的不是 JSON:${body.slice(0, 80)}`, body);
   return body as T;
 }
 
@@ -640,6 +669,8 @@ export const api = {
   /** 可能要几秒到几十秒(CLI 最长 ~90s) */
   testModelConnection: (id: string, model?: string | null) => post<ModelConnectionTest>(`/api/models/connections/${encodeURIComponent(id)}/test`, model ? { model } : {}),
   putModelBinding: (role: ModelRole, connection_id: string | null, model: string | null) => send<ModelsView>('PUT', `/api/models/bindings/${encodeURIComponent(role)}`, { connection_id, model }),
+  /** 按角色测试(#models 每张 agent 卡的「测试连接」);CLI 可能要一分多钟 */
+  testModelRole: (role: ModelRole) => post<RoleTestResult>(`/api/models/bindings/${encodeURIComponent(role)}/test`, {}),
 };
 
 export { ApiRequestError };
@@ -739,7 +770,8 @@ function sseConnect(): void {
     if (sseSource === es) sseSource = null;
     if (sseSubscribers.size === 0) return;
     sseRetryTimer = window.setTimeout(sseConnect, sseRetryMs);
-    sseRetryMs = Math.min(30_000, sseRetryMs * 2);
+    // 本机网关重启通常几十秒到几分钟,封顶 5s 让恢复后尽快重连(重连会触发整页刷新)。
+    sseRetryMs = Math.min(5_000, sseRetryMs * 2);
   });
 }
 

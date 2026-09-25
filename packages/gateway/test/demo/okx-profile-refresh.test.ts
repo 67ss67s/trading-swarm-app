@@ -29,4 +29,15 @@ describe('setup 后重新发现默认 profile', () => {
     vi.stubEnv('TG_OKX_PROFILE', 'old'); fake.profile = 'new'; resetOkxAvailability();
     expect(okxAvailability('fake-okx').profile).toBe('old');
   });
+  it('缓存过期后先回旧结果、后台异步重探,不再同步 spawn 卡事件循环', () => {
+    vi.stubEnv('TG_OKX_PROFILE', undefined); resetOkxAvailability();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      expect(okxAvailability('fake-okx').profile).toBe('old');
+      const syncCalls = fake.calls.length;
+      vi.setSystemTime(Date.now() + 61_000);
+      expect(okxAvailability('fake-okx').profile).toBe('old');
+      expect(fake.calls.length).toBe(syncCalls);
+    } finally { vi.useRealTimers(); }
+  });
 });

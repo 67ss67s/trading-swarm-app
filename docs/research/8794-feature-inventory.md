@@ -1,4 +1,4 @@
-# 8794(Trade Switch 控制台)功能盘点 —— 供新 gate 对齐/借用(2026-09-02 子代理报告整理)
+# 8794(Trade Switch 控制台)功能盘点 —— 供新 gate 对齐/借用(2026-09-02 工作线报告整理)
 
 仓库 `~/Desktop/trade-switch-dev-8793`(8794 实盘基线,**只读参考,不动**)。后端 Rust/axum/sqlx-sqlite:`backend/crates/{console-api, console-core, console-db, console-types, account-hub}`;前端 `frontend/`(classic)+ `frontend-design/`(shadcn)+ `frontend-shared/`。路由全部集中在 `console-api/src/lib.rs:96-303`。
 

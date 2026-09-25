@@ -1,6 +1,7 @@
 /**
  * 主题 = 调色板 + 道具集 + 窗景。三套共用同一布局与引擎。
  */
+import { t } from '@/lib/i18n';
 import type { ThemeId } from './types';
 
 export type WallSegKind = 'window' | 'shelf' | 'screen' | 'poster' | 'neon' | 'toys';
@@ -89,8 +90,12 @@ export interface Theme {
 export const THEMES: Record<ThemeId, Theme> = {
   lab: {
     id: 'lab',
-    name: '夜间研究所',
-    desc: '暖木书房 · 台灯 · 窗外夜雨',
+    get name() {
+      return t('夜间研究所');
+    },
+    get desc() {
+      return t('暖木书房 · 台灯 · 窗外夜雨');
+    },
     ui: { '--bg': '#120d09', '--panel': '#1b140e', '--panel2': '#231a12', '--line': '#3a2c1d', '--ink': '#f3e9d8', '--dim': '#a8987f', '--faint': '#6b5d4a', '--accent': '#ffb454', '--up': '#8fd46a', '--down': '#ff6b6b', '--warn': '#ffd166', '--stage': '#0d0906' },
     c: {
       outline: '#140c07', ceiling: '#1a110a', wall: '#4a2e1b', wallHi: '#5e3b22', wallDark: '#321e11', trim: '#6e4526', trimHi: '#8e5c33',
@@ -117,12 +122,16 @@ export const THEMES: Record<ThemeId, Theme> = {
     win: { sky: ['#0c1030', '#141a44', '#1f2356', '#2c2a5e'], far: '#1a1c3a', near: '#10122a', nearHi: '#20244a', lit: ['#ffd27a', '#ffb454', '#fff1c4'], rain: true, moon: '#fff4d0', blimp: false, stars: true },
     pet: { kind: 'cat', body: '#e08a3c', dark: '#a45a1c', belly: '#f6d3a0' },
     lights: 'lamp',
-    evo: { good: '#8fd46a', ok: '#e8c060', bad: '#e0604a', none: '#4a3a2c' },
+    evo: { good: '#8fd46a', ok: '#e8c060', bad: '#e0604a', none: '#6a5640' },
   },
   command: {
     id: 'command',
-    name: '指挥中心',
-    desc: '深蓝霓虹 · 全息地球 · 大屏行情',
+    get name() {
+      return t('指挥中心');
+    },
+    get desc() {
+      return t('深蓝霓虹 · 全息地球 · 大屏行情');
+    },
     ui: { '--bg': '#070b14', '--panel': '#0c1320', '--panel2': '#101a2b', '--line': '#1c2a42', '--ink': '#e2ecff', '--dim': '#8497b8', '--faint': '#4e5f7e', '--accent': '#5ef2c8', '--up': '#5ef2a0', '--down': '#ff5d7a', '--warn': '#ffd166', '--stage': '#050810' },
     c: {
       outline: '#03060c', ceiling: '#060a14', wall: '#12203a', wallHi: '#1a2c4e', wallDark: '#0b1528', trim: '#1f3558', trimHi: '#2e6fa8',
@@ -148,12 +157,14 @@ export const THEMES: Record<ThemeId, Theme> = {
     win: { sky: ['#030814', '#06112a', '#0a1a3c', '#122750'], far: '#0b1a36', near: '#060e22', nearHi: '#10224a', lit: ['#5ec8ff', '#9fe8ff', '#ffd27a', '#5ef2c8'], rain: true, moon: null, blimp: false, stars: false },
     pet: { kind: 'cat', body: '#9aa6b8', dark: '#5f6a7c', belly: '#dfe6ee' },
     lights: 'screen',
-    evo: { good: '#5ef2a0', ok: '#ffd166', bad: '#ff5d7a', none: '#22314c' },
+    evo: { good: '#5ef2a0', ok: '#ffd166', bad: '#ff5d7a', none: '#3a4f74' },
   },
   meme: {
     id: 'meme',
     name: 'Meme Lab',
-    desc: '粉紫霓虹 · 柯基打盹 · 飞艇',
+    get desc() {
+      return t('粉紫霓虹 · 柯基打盹 · 飞艇');
+    },
     ui: { '--bg': '#0d0616', '--panel': '#160b24', '--panel2': '#1e1030', '--line': '#3a1f55', '--ink': '#f6e9ff', '--dim': '#b59ad6', '--faint': '#6e5690', '--accent': '#ff4fd8', '--up': '#5effa8', '--down': '#ff5d7a', '--warn': '#ffe066', '--stage': '#08030f' },
     c: {
       outline: '#07020d', ceiling: '#0c0418', wall: '#2a1245', wallHi: '#3a1a5e', wallDark: '#1c0a32', trim: '#4a2070', trimHi: '#ff4fd8',
@@ -179,7 +190,7 @@ export const THEMES: Record<ThemeId, Theme> = {
     win: { sky: ['#12042a', '#2a0a4a', '#4a1266', '#7a1f7a'], far: '#2a0f4a', near: '#16062a', nearHi: '#2e1250', lit: ['#ff4fd8', '#39f0ff', '#ffe066', '#b78cff'], rain: false, moon: '#ffe8a8', blimp: true, stars: true },
     pet: { kind: 'corgi', body: '#e89a4a', dark: '#b0662a', belly: '#fff0dc' },
     lights: 'neon',
-    evo: { good: '#5effa8', ok: '#ffe066', bad: '#ff4f7a', none: '#34204f' },
+    evo: { good: '#5effa8', ok: '#ffe066', bad: '#ff4f7a', none: '#553a7c' },
   },
 };
 

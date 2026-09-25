@@ -2,6 +2,8 @@
  * 世界状态:每个 agent 的位置/动作(坐着、走路、茶水间、开会、伸懒腰)、信封、气泡、粒子特效。
  * 只吃 FloorSnapshot;新交接 → 信封,新会议 → 走到会议桌,新事件 → 升级光圈/完成火花。
  */
+import { t } from '@/lib/i18n';
+import type { SfxKind } from '../engine-b/types';
 import type { AgentSnapshot, EvoDay, FloorSnapshot, HandoffSnapshot, MeetingSnapshot, Pt, TeamEvent } from './types';
 import { CATCH_LINES, roleMeta, ROLE_ORDER, type RoleMeta } from './roles';
 import { DESKS, MEETING_SEATS, PANTRY, TABLE, GLOBE, SOFA, deskOf, nearestRing, polyAt, polyLen, routeBetween, trailFromSeat, type DeskSpot } from './layout';
@@ -93,6 +95,8 @@ export class World {
   evo = new Map<string, EvoDay[]>();
   weather: Weather = { rain: false, thunder: false, alarm: false, fireworks: false, night: true, explain: '' };
   reduced = false;
+  /** 音效钩子(引擎只喊,外壳决定响不响) */
+  onSfx: ((k: SfxKind) => void) | null = null;
   now = 0;
   cursor: Pt | null = null;
   dropHover: string | null = null;
@@ -178,7 +182,7 @@ export class World {
     else if (a.act === 'seated') fromTrail = trailFromSeat(a.desk);
     else fromTrail = [{ ...a.pos }, nearestRing(a.pos)];
     const path = routeBetween(fromTrail, trailFromSeat(b.desk));
-    const lines = CATCH_LINES[to] ?? ['收到'];
+    const lines = CATCH_LINES[to] ?? ['收到']; // i18n-ignore(中文 key,取用处 t())
     const env: Envelope = {
       id: `env${++this.seq}`,
       from,
@@ -187,7 +191,7 @@ export class World {
       len: polyLen(path),
       d: 0,
       color: gold ? '#ffcf4a' : a?.meta.color ?? '#ffffff',
-      reply: reply ?? lines[Math.floor(Math.random() * lines.length)]!,
+      reply: reply ?? t(lines[Math.floor(Math.random() * lines.length)]!),
       gold,
       trail: [],
     };
@@ -215,6 +219,7 @@ export class World {
     b.look = 0;
     b.lookUntil = 0;
     this.say(b.role, reply, 2800, 'catch');
+    this.onSfx?.('envelope');
     const head = this.head(b);
     this.burst(head.x, head.y - 2, color, 8, 'spark');
   }
@@ -229,15 +234,18 @@ export class World {
       this.burst(head.x, head.y, '#ffe066', 10, 'star');
       this.fx.push({ kind: 'plus', x: head.x, y: head.y - 6, vx: 0, vy: -10, life: 0, max: 1.6, color: '#ffe066' });
       const what = e.text.replace(sim.meta.callsign + ' ', '');
-      this.say(e.role, what.includes('教训') ? '+1 教训' : what.includes('假设') ? '+1 验证' : '+1 进化', 2600, 'evo');
+      const lesson = /教训|lesson/i.test(what); // i18n-ignore(事件文本匹配词)
+      const hypo = /假设|hypothes/i.test(what); // i18n-ignore(事件文本匹配词)
+      this.say(e.role, lesson ? t('+1 教训') : hypo ? t('+1 验证') : t('+1 进化'), 2600, 'evo');
+      this.onSfx?.('evolve');
     } else if (e.kind === 'task_done') {
       this.burst(head.x, head.y, sim.meta.color, 14, 'spark');
       this.fx.push({ kind: 'ring', x: sim.pos.x, y: sim.pos.y - 2, vx: 0, vy: 0, life: 0, max: 1, color: sim.meta.color });
-      this.say(e.role, '搞定!', 2400, 'done');
+      this.say(e.role, t('搞定!'), 2400, 'done');
     } else if (e.kind === 'task_start') {
       sim.hopUntil = this.now + 0.4;
-      this.say(e.role, '收到,这就办', 2200, 'catch');
-    } else if (e.kind === 'system' && e.text.includes('紧急停止')) {
+      this.say(e.role, t('收到,这就办'), 2200, 'catch');
+    } else if (e.kind === 'system' && /紧急停止|emergency stop|e-stop/i.test(e.text)) { // i18n-ignore(事件文本匹配词)
       this.flash = 1;
     }
   }
@@ -258,9 +266,10 @@ export class World {
         const cols = ['#ff4fd8', '#39f0ff', '#ffe066', '#5effa8', '#ff7a5c'];
         this.fx.push({ kind: 'confetti', x: head.x, y: head.y - 4, vx: (Math.random() - 0.5) * 80, vy: -40 - Math.random() * 50, life: 0, max: 1.6, color: cols[i % cols.length]!, floor: sim.pos.y + 4 });
       }
-      this.say(role, '击掌!', 1800, 'done');
+      this.say(role, t('击掌!'), 1800, 'done');
+      this.onSfx?.('highfive');
     } else if (kind === 'catch') {
-      this.catchMail(sim, '接住!', sim.meta.color);
+      this.catchMail(sim, t('接住!'), sim.meta.color);
     } else if (kind === 'done') {
       this.burst(head.x, head.y, sim.meta.color, 14, 'spark');
     } else {
@@ -396,7 +405,7 @@ export class World {
     const roles = m.roles.filter((r) => this.agents.has(r)).slice(0, MEETING_SEATS.length);
     this.meetingActive = dur;
     if (this.reduced) {
-      roles.forEach((r, i) => this.say(r, i === 0 ? `开会:${m.topic}` : '在', dur * 1000, 'say'));
+      roles.forEach((r, i) => this.say(r, i === 0 ? t('开会:{topic}', { topic: m.topic }) : t('在'), dur * 1000, 'say'));
       return;
     }
     roles.forEach((r, i) => {
@@ -406,7 +415,7 @@ export class World {
       this.goToSeat(s, MEETING_SEATS[i]!);
     });
     const host = roles[0];
-    if (host) window.setTimeout(() => this.say(host, `碰一下:${m.topic}`, 3200, 'say'), 2600);
+    if (host) window.setTimeout(() => this.say(host, t('碰一下:{topic}', { topic: m.topic }), 3200, 'say'), 2600);
   }
 
   private updateAgent(s: AgentSim, dt: number, now: number): void {
@@ -428,7 +437,7 @@ export class World {
           s.meetingId = null;
           if (s.mail > 0) {
             s.mail = 0;
-            this.catchMail(s, '有信,我看看', s.meta.color);
+            this.catchMail(s, t('有信,我看看'), s.meta.color);
           }
         } else {
           s.act = 'stand';
@@ -480,7 +489,7 @@ export class World {
 
   petRoll(): void {
     this.petRollUntil = this.now + 2.4;
-    this.bubbles.set('__pet', { key: `pet${++this.seq}`, role: '__pet', text: '哈~欠', until: this.now + 2.2, tone: 'say', anchor: { x: SOFA.x - 16, y: SOFA.y - 26 } });
+    this.bubbles.set('__pet', { key: `pet${++this.seq}`, role: '__pet', text: t('哈~欠'), until: this.now + 2.2, tone: 'say', anchor: { x: SOFA.x - 16, y: SOFA.y - 26 } });
   }
 }
 
@@ -495,12 +504,13 @@ export function computeWeather(s: FloorSnapshot): Weather {
   const alarm = m?.risk_level === 'high' || !!s.halted;
   const fireworks = !rain && pnl > 0;
   const parts: string[] = [];
-  if (thunder) parts.push(`在打雷:BTC 1 小时波动 ${vol.toFixed(1)}%`);
-  else if (rain) parts.push(`在下雨:BTC 1 小时波动 ${vol.toFixed(1)}%`);
-  else parts.push(`天气晴:1 小时波动只有 ${vol.toFixed(1)}%`);
-  if (fireworks) parts.push(`今天赚了 ${s.money.pnl_today} U,放点烟花`);
-  if (alarm) parts.push(s.halted ? '紧急停止中:警报灯在转' : '风控等级 high:警报灯在转');
-  parts.push(night ? `UTC ${hour} 点,夜景` : `UTC ${hour} 点,白天`);
+  const v = vol.toFixed(1);
+  if (thunder) parts.push(t('在打雷:BTC 1 小时波动 {v}%', { v }));
+  else if (rain) parts.push(t('在下雨:BTC 1 小时波动 {v}%', { v }));
+  else parts.push(t('天气晴:1 小时波动只有 {v}%', { v }));
+  if (fireworks) parts.push(t('今天赚了 {pnl} U,放点烟花', { pnl: s.money.pnl_today }));
+  if (alarm) parts.push(s.halted ? t('紧急停止中:警报灯在转') : t('风控等级 high:警报灯在转'));
+  parts.push(night ? t('UTC {h} 点,夜景', { h: hour }) : t('UTC {h} 点,白天', { h: hour }));
   return { rain, thunder, alarm, fireworks, night, explain: parts.join(' · ') };
 }
 

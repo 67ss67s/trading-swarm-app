@@ -11,9 +11,9 @@
   - `copy`:照抄。入场区、止损、分档止盈原样进线程,只过 trading-swarm 自己的闸(preflight、entry_style、黑窗、名义上限、每日开仓上限)。
   - `gated`:agent 把关。信号作为证据挂到一次 `scan` episode,agent 给 stance;同向 → 用信号的止损/止盈几何开线程(agent 自己的止损更紧则取 agent 的);反向或 flat → 不开,记 reason code;仓位 = 权重 × workflow.risk_pct。
   - `evidence`:只进证据与判断账本,不开线程,不改 active。
-- **仓位**按风险算(`risk_pct × weight`),不用交易员的"2% 保证金 100 倍"——那不是可比的风险权重(研究报告 §1 三马节)。
+- **仓位**按风险算(`risk_pct × weight`),不用交易员的"2% 保证金 100 倍"——那不是可比的风险权重(研究报告 §1 交易员A节)。
 - **新鲜度**:live 信号 `published_at` 距今 > `freshness_s`(默认 180s)只能 `evidence`;启动补拉(backfill)一律 `review_only`,永远不自动开仓(8794 同款)。
-- **止损必需**:open/add 没有止损的信号不进 `copy`/`gated`,降级为 `evidence` 并记 `trader_signal_no_stop`(赵哥 341 条无止损就是这个归宿)。
+- **止损必需**:open/add 没有止损的信号不进 `copy`/`gated`,降级为 `evidence` 并记 `trader_signal_no_stop`(交易员C 341 条无止损就是这个归宿)。
 
 ## 1. 数据流
 
@@ -67,7 +67,7 @@ bridge /subscriber/signals ──trader-feed.ts(游标 kv、退避、DLQ)──�
 - 不改 active、不改晋升门、不动 8794、不给 bridge 写任何东西(只读订阅 + ack 游标)。
 - 不自动执行 `add`;不自动放松止损。
 - 不把交易员信号喂给影子腿(对照统计仍要干净)。
-- 代币化美股信号(赵哥)只在 backend 支持该 symbol 时进 copy/gated,否则 evidence。
+- 代币化美股信号(交易员C)只在 backend 支持该 symbol 时进 copy/gated,否则 evidence。
 
 ## 5. 验收
 

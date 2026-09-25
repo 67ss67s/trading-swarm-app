@@ -16,6 +16,7 @@ import { botRoutes } from './routes-bots.js';
 import { candidateRoutes } from './routes-candidates.js';
 import { strategyRunRoutes } from './routes-strategy-runs.js';
 import { recommendationRoutes } from './routes-recommendations.js';
+import { aspServiceRoutes } from './routes-asp-services.js';
 import { agentStrategyRoutes } from './routes-agent-strategy.js';
 import { eventRoutes } from './routes-events.js';
 import { marketRoutes } from './asp-agent/routes-market.js';
@@ -48,6 +49,7 @@ export type RouteModule = (ctx: RouteContext) => void;
 export const extraRouteModules: RouteModule[] = [
   // ---- register below (one line per module; keep alphabetical)
   agentStrategyRoutes,
+  aspServiceRoutes,
   attributionRoutes,
   botRoutes,
   candidateRoutes,

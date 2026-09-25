@@ -73,7 +73,7 @@ export const singleAsset = (d: FrozenData, symbol: string): FrozenData | null =>
 // ---------------------------------------------------------------- judge 运行时
 export interface MatrixJudgeDeps {
   /** 钉住连接版本、maxRetries=0 的决策客户端(judge/ fromDecisionClient 适配);缺省 → code_judge 臂标执行不支持 */
-  provider?: DecisionProvider;
+  microstructure?: import('../judge/microstructure.js').MicrostructureSource; provider?: DecisionProvider;
   /** recorded_only:只用已记录响应重放(G1/G4 或留出恢复);缺省 request_once */
   mode?: 'request_once' | 'recorded_only';
 }
@@ -84,7 +84,7 @@ export function judgeRuntimeFor(db: DatabaseSync, row: MatrixStudyRow, deps: Mat
   const mode = deps?.mode ?? 'request_once';
   if (mode === 'request_once' && !deps?.provider) return null;
   const budget = AtomicCallBudget.create(db, judgeBudgetId(row.id), s.budget.max_judge_calls, s.budget.max_judge_usd);
-  return { mode, model_profile: s.model_profile, execution_spec_hash: row.manifest.execution_spec_hash, scope: `matrix:${s.research_program_id}`, store: new JudgeDecisionStore(db), budget, ...(deps?.provider ? { provider: deps.provider } : {}), ...(signal ? { signal } : {}) };
+  return { mode, model_profile: s.model_profile, execution_spec_hash: row.manifest.execution_spec_hash, scope: `matrix:${s.research_program_id}`, ...(deps?.microstructure ? { microstructure: deps.microstructure } : {}), store: new JudgeDecisionStore(db), budget, ...(deps?.provider ? { provider: deps.provider } : {}), ...(signal ? { signal } : {}) };
 }
 
 // ---------------------------------------------------------------- 单次评估
@@ -103,6 +103,7 @@ async function runPair(data: FrozenData, ir: StrategyIR, win: Window, o: { check
 function judgeFailure(c: CandidateLog[]): string | null {
   for (const x of c) {
     const codes = x.decision?.reason_codes ?? [];
+    if (codes.some(c => c.startsWith('judge_live_only_data_unavailable'))) return 'DATA_MISSING:judge_live_only_data_unavailable';
     if (codes.includes('cancelled') || codes.includes('CANCELLED')) return 'CANCELLED';
     if (codes.includes('judge_budget_exhausted')) return 'judge_budget_exhausted';
     if (codes.includes('request_in_flight')) return 'judge_request_in_flight';
@@ -132,13 +133,14 @@ function slicesFor(p: RunPair, data: FrozenData, v: MatrixVariantRef, segs: Reco
 export const signOf = (ir: StrategyIR): 1 | -1 => (ir.order?.direction === 'short' ? -1 : 1);
 
 /** 开发视图上评估一个变体(单资产):训练 + 选择段 */
-export async function evaluateDev(data: FrozenData, g: TimeframeSegments, v: MatrixVariantRef, o: { check: () => void; executorFor?: (ir: StrategyIR) => AssetExecutor; judge: JudgeRuntime | null; onCandidate?: (c: CandidateLog) => void }): Promise<DevResult> {
+export async function evaluateDev(data: FrozenData, g: TimeframeSegments, v: MatrixVariantRef, o: { check: () => void; executorFor?: (ir: StrategyIR) => AssetExecutor; judge: JudgeRuntime | null; onCandidate?: (c: CandidateLog) => void; train_only?: boolean }): Promise<DevResult> {
   if (data.assets.some((a) => (a.bars.at(-1)?.close_time ?? 0) > g.selection.to_ms)) throw Error('dev_view_leak');
-  data = { ...data, segments: { folds: folds4(g.train, g.timeframe_ms), train: g.train, validation: g.selection, holdout: SEALED } };
-  const p = await runPair(data, v.ir, { from_ms: g.train.from_ms, to_ms: g.selection.to_ms }, o);
+  if (o.train_only) data = { ...data, assets: data.assets.map(a=>truncate(a,g.train.to_ms)) };
+  data = { ...data, segments: { folds: folds4(g.train, g.timeframe_ms), train: g.train, validation: o.train_only ? SEALED : g.selection, holdout: SEALED } };
+  const p = await runPair(data, v.ir, { from_ms: g.train.from_ms, to_ms: o.train_only ? g.train.to_ms : g.selection.to_ms }, o);
   for (const c of p.candidates) o.onCandidate?.(c);
   const jf = judgeFailure(p.candidates); if (jf) throw Error(jf);
-  const sl = slicesFor(p, data, v, { train: g.train, selection: g.selection }), sign = signOf(v.ir);
+  const sl = slicesFor(p, data, v, { train: g.train, selection: o.train_only ? g.train : g.selection }), sign = signOf(v.ir);
   const tr = poolScore([sl.train!], sign), se = poolScore([sl.selection!], sign);
   let diagnosis: DevResult['diagnosis'] = [];
   try { diagnosis = diagnoseRun(p.run, data, v.ir).map((f) => ({ key: f.key, severity: f.severity, text: f.text })); } catch { /* 诊断失败不影响成绩 */ }

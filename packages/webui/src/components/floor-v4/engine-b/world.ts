@@ -2,9 +2,10 @@
  * 世界状态:角色(走路 / 坐电梯 / 开会 / 茶水间)、电梯调度(SCAN)、交接信封、气泡、粒子。
  * 纯逻辑,不碰 canvas;render.ts 只读这里的状态画图。
  */
+import { t } from '@/lib/i18n';
 import type { Layout } from './layout';
 import { ROLES } from './roles';
-import type { AgentSnap, AgentStatus, EvoRoleRow, HandoffSnap, MeetingSnap, Role } from './types';
+import type { AgentSnap, AgentStatus, EvoRoleRow, HandoffSnap, MeetingSnap, Role, SfxKind } from './types';
 import { handoffKey, EVO_KIND_LABEL } from './types';
 import type { Pose } from './sprites';
 
@@ -80,6 +81,7 @@ export interface Cab {
 
 interface Meeting { id: string; topic: string; roles: Role[]; phase: 'gather' | 'talk' | 'leave'; t: number; talkIdx: number }
 
+/** 开会时的闲聊;播放时才 t() */
 const MEET_LINES = ['我同意', '风险可控', '再等一根 K 线', '仓位减半?', '数据够了', '我来盯着'];
 
 export class World {
@@ -110,6 +112,8 @@ export class World {
   private evoSeen = new Map<Role, string>();
   reduced: boolean;
   onDelivered: ((key: string) => void) | undefined;
+  /** 音效触发点(信封送达 / 批准 / 进化 / 击掌);引擎只喊不响 */
+  onSfx: ((k: SfxKind) => void) | undefined;
   private seenHandoffs = new Set<string>();
   private seenMeetings = new Set<string>();
   private primed = false;
@@ -153,17 +157,17 @@ export class World {
       this.evoSeen.set(row.role, sig);
       if (!primed || prev === undefined || prev === sig) continue;
       const [pd, pe] = prev.split('|');
-      if (pd === today.date && (today.events ?? 0) > Number(pe)) this.evolve(row.role, EVO_KIND_LABEL[today.last_event?.kind ?? 'distill'].plus);
+      if (pd === today.date && (today.events ?? 0) > Number(pe)) this.evolve(row.role, t(EVO_KIND_LABEL[today.last_event?.kind ?? 'distill'].plus));
     }
     for (const s of agents) {
       const a = this.actors.get(s.role);
       if (!a) continue;
-      if (a.status !== 'stuck' && s.status === 'stuck') this.say(s.role, '卡住了!' , 'alert', 2.6);
+      if (a.status !== 'stuck' && s.status === 'stuck') this.say(s.role, t('卡住了!'), 'alert', 2.6);
       a.status = s.status;
       a.line = s.line;
       const nt = s.task?.label ?? null;
       if (a.task && !nt && this.primed) this.taskDone(a.role, s.line);
-      else if (!a.task && nt && this.primed) { this.say(a.role, `收到:${nt}`); a.poseOverride = 'catch'; a.poseLeft = 0.8; }
+      else if (!a.task && nt && this.primed) { this.say(a.role, t('收到:{task}', { task: nt })); a.poseOverride = 'catch'; a.poseLeft = 0.8; }
       a.task = nt;
     }
     if (!this.primed) {
@@ -233,7 +237,7 @@ export class World {
     const a = this.actors.get(role);
     if (!a) return;
     const p = this.actorPos(a);
-    this.say(role, `搞定!${line.length > 18 ? line.slice(0, 18) + '…' : line}`, 'say', 3.2);
+    this.say(role, t('搞定!{line}', { line: line.length > 18 ? line.slice(0, 18) + '…' : line }), 'say', 3.2);
     this.burst(p.x, p.y - 14, ['#5dff8f', '#ffffff', '#ffe36b'], 16);
     a.poseOverride = 'stretch'; a.poseLeft = 1;
   }
@@ -246,7 +250,8 @@ export class World {
     if (!a) return;
     const p = this.actorPos(a);
     a.poseOverride = 'catch'; a.poseLeft = 0.9;
-    this.say(role, '击掌!', 'say', 1.6);
+    this.say(role, t('击掌!'), 'say', 1.6);
+    this.onSfx?.('highfive');
     this.burst(p.x, p.y - 18, ['#ff4fd8', '#39f0ff', '#ffd166', '#7dffb0', '#ff7a5c'], 26, true);
   }
   ripple(x: number, y: number): void {
@@ -264,29 +269,30 @@ export class World {
     const L = this.L;
     if (!ok) {
       this.burst(this.mailboxX + 3, L.groundY - 14, ['#b0aaa0', '#6a655c', '#e8e2d4'], 12, true);
-      this.bubbles.push({ id: ++this.bubbleSeq, role: 'executor', text: '已拒绝,揉掉了', until: this.t + 2, kind: 'alert', at: { x: this.mailboxX + 3, y: L.groundY - 16 } });
+      this.bubbles.push({ id: ++this.bubbleSeq, role: 'executor', text: t('已拒绝,揉掉了'), until: this.t + 2, kind: 'alert', at: { x: this.mailboxX + 3, y: L.groundY - 16 } });
       return;
     }
     // 批准的金信封:信箱 → 底层大堂门 → (需要时坐电梯)→ EXEC 工位
     const dest = L.rooms.executor;
     const door = this.lobbyX;
     const env: Envelope = {
-      key: `approval-${this.t}`, from: 'executor', to: 'executor', reply: '收到你的批准,下单!', color: '#ffd23a',
+      key: `approval-${this.t}`, from: 'executor', to: 'executor', reply: t('收到你的批准,下单!'), color: '#ffd23a',
       level: 0, x: this.mailboxX + 3, mode: 'idle',
       plan: [{ k: 'walk', x: door - 6 }, { k: 'stay', dur: 0.35, pose: 'stand' }, { k: 'walk', x: door + 8 }, ...this.route(0, door + 8, dest.level, dest.seatX)],
       stayLeft: 0, stayPose: 'stand', speed: 60, trail: [], popT: 0.45, state: 'travel', bornAt: this.t,
     };
     this.envelopes.push(env);
+    this.onSfx?.('approval');
   }
   emergency(): void {
     this.alarmUntil = this.t + 10;
     for (const a of this.actors.values()) { a.poseOverride = 'catch'; a.poseLeft = 1.4; }
-    this.say('risk_sentinel', '紧急停止!全部停手!', 'alert', 3.5);
+    this.say('risk_sentinel', t('紧急停止!全部停手!'), 'alert', 3.5);
   }
   petRoll(petX: number, petY: number): void {
     if (this.petRollUntil > this.t) return;
     this.petRollUntil = this.t + 2.6;
-    this.bubbles.push({ id: ++this.bubbleSeq, role: 'reviewer', text: '哈~欠…', until: this.t + 2.2, kind: 'say', at: { x: petX, y: petY } });
+    this.bubbles.push({ id: ++this.bubbleSeq, role: 'reviewer', text: t('哈~欠…'), until: this.t + 2.2, kind: 'say', at: { x: petX, y: petY } });
   }
   coinShower(x: number, y: number): void {
     for (let i = 0; i < 46; i++) {
@@ -308,6 +314,7 @@ export class World {
   evolve(role: Role, label: string): void {
     this.evoFx.push({ role, t0: this.t });
     this.say(role, label, 'evo', 2.6);
+    this.onSfx?.('evolve');
     const a = this.actors.get(role);
     if (!a || this.reduced) return;
     const p = this.actorPos(a);
@@ -330,7 +337,7 @@ export class World {
     const to = this.actors.get(h.to);
     if (!from || !to) return;
     const env: Envelope = {
-      key: handoffKey(h), from: h.from, to: h.to, reply: h.reply ?? '收到', color: ROLES[h.from].color,
+      key: handoffKey(h), from: h.from, to: h.to, reply: h.reply ?? t('收到'), color: ROLES[h.from].color,
       level: from.mode === 'inLift' ? this.L.rooms[h.from].level : from.level,
       x: from.mode === 'inLift' ? this.L.rooms[h.from].seatX : from.x,
       mode: 'idle', plan: [], stayLeft: 0, stayPose: 'stand', speed: 64, trail: [], popT: 0.45, state: 'travel', bornAt: this.t,
@@ -350,6 +357,7 @@ export class World {
     this.say(env.to, env.reply);
     this.sparkle(env.x, this.L.floorY(env.level) - 18, env.color);
     this.onDelivered?.(env.key);
+    this.onSfx?.('envelope');
   }
 
   // ---------- 开会 ----------
@@ -366,7 +374,7 @@ export class World {
       const x = r === 'gate_captain' ? L.meetTableX + 56 : L.meetSeats[seat++ % L.meetSeats.length]!;
       this.goto(a, helmLevel, x, [{ k: 'stay', dur: 999, pose: 'stand', tag: 'meet' }]);
     }
-    this.say('gate_captain', `开会:${m.topic}`, 'say', 3.2);
+    this.say('gate_captain', t('开会:{topic}', { topic: m.topic }), 'say', 3.2);
   }
 
   private updateMeeting(dt: number): void {
@@ -385,7 +393,7 @@ export class World {
         const r = m.roles[beat % m.roles.length]!;
         const a = this.actors.get(r)!;
         a.poseOverride = 'talk'; a.poseLeft = 1.2;
-        this.say(r, beat === 1 ? m.topic : MEET_LINES[(beat * 7 + r.length) % MEET_LINES.length]!, 'say', 2.2);
+        this.say(r, beat === 1 ? m.topic : t(MEET_LINES[(beat * 7 + r.length) % MEET_LINES.length]!), 'say', 2.2);
       }
       if (m.t > 9.5) {
         m.phase = 'leave';

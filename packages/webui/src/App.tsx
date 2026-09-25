@@ -131,7 +131,7 @@ import { ConnectPage } from '@/pages/connect';
 import { bootRedirect } from '@/components/start/logic';
 import { useStartCore } from '@/components/start/use-start';
 
-const PAGE_IDS: Page[] = ['start', 'connect', 'trade', 'agent', 'watch', 'floor', 'floor-v4', 'intel', 'events', 'screener', 'market', 'judgments', 'evolution', 'history', 'strategies', 'research', 'matrix-study', 'my-strategies', 'models', 'logs', 'settings'];
+const PAGE_IDS: Page[] = ['start', 'connect', 'trade', 'agent', 'watch', 'floor', 'floor-legacy', 'intel', 'events', 'screener', 'market', 'judgments', 'evolution', 'history', 'strategies', 'research', 'matrix-study', 'my-strategies', 'models', 'logs', 'settings'];
 
 const LAST_PAGE_KEY = 'tg.page.last';
 
@@ -156,6 +156,8 @@ function readPageFromHash(): Page {
   if ((hash as string) === 'backtest') return 'my-strategies';
   // 2026-09-23:记忆并进进化页,#memory 落到进化页的「记忆」标签(页内按 hash 选标签)
   if ((hash as string) === 'memory') return 'evolution';
+  // 2026-09-25:楼层 v4 成为默认 #floor,旧链接 #floor-v4 落到新楼层
+  if ((hash as string) === 'floor-v4') return 'floor';
   return PAGE_IDS.includes(hash) ? hash : defaultPage();
 }
 
@@ -228,6 +230,25 @@ export default function App() {
 
   const overviewQ = useQuery({ queryKey: ['overview'], queryFn: api.overview, refetchInterval: 20_000 });
   const [connected, setConnected] = useState(false);
+  // 网关重启时各 tab 的请求会失败;SSE 重连上就把所有查询重拉一遍,不用手动刷新。断开超过 4s 才亮横幅,免得闪。
+  const lastLiveRef = useRef<boolean | null>(null);
+  const [gatewayDown, setGatewayDown] = useState(false);
+  const onLiveConnected = (ok: boolean) => {
+    const prev = lastLiveRef.current;
+    lastLiveRef.current = ok;
+    setConnected(ok);
+    if (!ok || prev === true) return;
+    const hasErrors = queryClient.getQueryCache().getAll().some((q) => q.state.status === 'error');
+    if (prev === false || hasErrors) void queryClient.invalidateQueries();
+  };
+  useEffect(() => {
+    if (connected) {
+      setGatewayDown(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setGatewayDown(true), 4_000);
+    return () => window.clearTimeout(timer);
+  }, [connected]);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [haltOpen, setHaltOpen] = useState(false);
   const [resumeHaltOpen, setResumeHaltOpen] = useState(false);
@@ -419,7 +440,7 @@ export default function App() {
       // §9.52:连接增删改 / 测试结果 / 角色绑定变了,data 就是完整 ModelsView,直接写缓存
       'models.changed': (view) => queryClient.setQueryData(['models'], view),
     },
-    setConnected,
+    onLiveConnected,
   );
 
   const account = overviewQ.data?.account ?? null;
@@ -468,6 +489,11 @@ export default function App() {
             onOpenHalt={() => setHaltOpen(true)}
             onOpenResumeHalt={() => setResumeHaltOpen(true)}
           />
+          {gatewayDown ? (
+            <div role="status" className="border-b border-amber-500/40 bg-amber-500/10 px-3 py-1 text-xs text-amber-700 dark:text-amber-300">
+              {t('网关连接中断(多半在重启),恢复后页面会自动刷新,不用手动刷新')}
+            </div>
+          ) : null}
           <main className="min-h-0 flex-1 overflow-auto p-3">
             <PageErrorBoundary page={page}>
             {page === 'start' ? <StartPage /> : null}
@@ -479,8 +505,8 @@ export default function App() {
             {page === 'screener' ? <ScreenerPage /> : null}
             {page === 'market' ? <MarketPage /> : null}
             {page === 'watch' ? <WatchPage /> : null}
-            {page === 'floor' ? <FloorPage connected={connected} /> : null}
-            {page === 'floor-v4' ? <FloorV4Page connected={connected} /> : null}
+            {page === 'floor' ? <FloorV4Page connected={connected} /> : null}
+            {page === 'floor-legacy' ? <FloorPage connected={connected} /> : null}
             {page === 'judgments' ? <JudgmentsPage /> : null}
             {page === 'evolution' ? <EvolutionPage /> : null}
             {page === 'history' ? <HistoryPage /> : null}
