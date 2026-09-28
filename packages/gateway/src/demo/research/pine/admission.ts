@@ -15,7 +15,7 @@
  *
  * 通过 PineRunner 注入引擎,单元测试直接用 mock,不需要真起引擎。
  */
-import type { ResearchBar, ResearchDataset } from '@trading-swarm/contracts';
+import type { ResearchBar, ResearchDataset } from '@trade-gate/contracts';
 import type { PineRunner, PineRunInput } from './client.js';
 import { validatePineInputs, type PineInputsSchema } from './inputs-schema.js';
 

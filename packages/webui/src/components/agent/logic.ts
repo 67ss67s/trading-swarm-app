@@ -59,10 +59,11 @@ export function fmtCountdown(ms: number): string {
 }
 
 function modeText(mode: string | null | undefined): string {
-  if (mode === 'auto') return t('信号到了自动下单');
-  if (mode === 'confirm') return t('每笔等你确认');
+  if (mode === 'auto') return t('信号到了直接下单');
+  if (mode === 'jev') return t('Jev 判断后下单');
+  if (mode === 'confirm') return t('每笔等你确认'); // 已下线,只给老运行
   if (mode === 'signal_only') return t('只出信号不下单');
-  return t('Jev 把关后下单');
+  return t('LLM 判断后下单');
 }
 
 function strategyLabel(s: NonNullable<IntentInput['strategy']>): string {
@@ -117,7 +118,7 @@ export function suggestedPrompts(opts: { watchlist?: string[] | null; strategy?:
   const running = opts.strategy?.kind === 'strategy';
   return [
     { id: 'recommend', title: t('推荐几个币'), text: t('推荐几个币,短中长线分别适合什么'), hint: t('出资产 × 周期推荐卡') },
-    { id: 'research', title: t('研究 {sym} 4h', { sym }), text: t('帮我研究 {sym} 4h 适合什么策略', { sym }), hint: t('开矩阵研究,跑完回报') },
+    { id: 'research', title: t('研究 {sym} 4h', { sym }), text: t('帮我研究 {sym} 4h 适合什么策略', { sym }), hint: t('开海选,跑完回报') },
     running
       ? { id: 'switch', title: t('换一条策略'), text: t('当前策略「{name}」最近表现怎么样?要不要换一条跑', { name: opts.strategy?.name ?? '' }), hint: t('对比后再切,实盘要你输 LIVE') }
       : { id: 'switch', title: t('切到某条策略跑'), text: t('我的策略里哪条适合现在跑?帮我切过去'), hint: t('从「我的策略」挑一条设为当前') },
@@ -160,8 +161,9 @@ const TOOL_VERB: Record<string, { zh: string; group: ToolGroup }> = {
   reject_intent: { zh: '否决下单', group: 'act' },
   request_execution: { zh: '推送确认卡', group: 'act' },
   recommend_assets: { zh: '推荐资产与周期', group: 'research' },
-  start_matrix_study: { zh: '开始矩阵研究', group: 'research' },
-  get_matrix_study: { zh: '查看矩阵研究进度', group: 'research' },
+  // 09-25 批量验证并进「策略研究」流程页,对用户叫「海选」;toolHref 给出对应步骤的深链
+  start_matrix_study: { zh: '开始海选', group: 'research' },
+  get_matrix_study: { zh: '查看海选进度', group: 'research' },
   adopt_matrix_finalist: { zh: '把候选存成我的策略', group: 'research' },
   get_agent_strategy: { zh: '查看当前策略', group: 'read' },
   set_agent_strategy: { zh: '切换当前策略', group: 'config' },
@@ -171,6 +173,12 @@ const TOOL_VERB: Record<string, { zh: string; group: ToolGroup }> = {
   get_backtest_report: { zh: '读回测报告', group: 'research' },
   get_evolution: { zh: '查看进化方格', group: 'read' },
   get_universe_scan: { zh: '读全市场扫描', group: 'read' },
+  // §9.55 ASP Agent 只读工具
+  get_asp_overview: { zh: '读 ASP 总览', group: 'read' },
+  list_asp_services: { zh: '看上架的服务', group: 'read' },
+  list_asp_tasks: { zh: '看接单与交付', group: 'read' },
+  list_asp_subscribers: { zh: '看订阅者', group: 'read' },
+  list_market_inbox: { zh: '看信号收件箱', group: 'read' },
 };
 
 function asRecord(v: unknown): Record<string, unknown> {
@@ -223,9 +231,24 @@ export interface ToolAction {
   ok: boolean;
   /** 原始工具名(展开时显示,方便对照日志) */
   raw: string;
+  /** 研究类工具对应的「策略研究」流程页步骤深链(推荐 → 选资产,海选 → 海选详情,存成策略 → 验收);没有就 null */
+  href: string | null;
 }
 
-export function toolAction(call: { name: string; args: unknown; ok: boolean }): ToolAction {
+/**
+ * 研究类工具 → #strategy-research 的对应步骤(09-25 批量验证 / 研究台并进流程页)。
+ * 只读参数和结果里现成的 id,拿不到就不给链接(不猜)。
+ */
+export function toolHref(name: string, rawArgs: unknown, rawResult?: unknown): string | null {
+  const a = asRecord(rawArgs), r = asRecord(rawResult);
+  const q = (step: string, k: string, v: string | null) => (v ? `#strategy-research?step=${step}&${k}=${encodeURIComponent(v)}` : null);
+  if (name === 'recommend_assets') return q('assets', 'rec', str(r.recommendation_id) ?? str(r.id));
+  if (name === 'start_matrix_study' || name === 'get_matrix_study') return q('scout', 'study', str(r.id) ?? str(r.study_id) ?? str(a.id) ?? str(a.study_id));
+  if (name === 'adopt_matrix_finalist') return q('validate', 'strategy', str(r.strategy_id) ?? str(a.strategy_id));
+  return null;
+}
+
+export function toolAction(call: { name: string; args: unknown; ok: boolean; result?: unknown }): ToolAction {
   const known = TOOL_VERB[call.name];
   return {
     verb: known ? t(known.zh) : call.name,
@@ -233,6 +256,7 @@ export function toolAction(call: { name: string; args: unknown; ok: boolean }): 
     group: known?.group ?? 'read',
     ok: call.ok,
     raw: call.name,
+    href: call.ok ? toolHref(call.name, call.args, call.result) : null,
   };
 }
 

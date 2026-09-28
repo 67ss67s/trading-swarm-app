@@ -1,6 +1,6 @@
 # 第三方打分 agent 的任务书(2026-09-03)
 
-你是独立评审,对 trading-swarm 仓库里两套互不相识的 eval 实现打分:`packages/eval-a`(实现 A)与 `packages/eval-b`(实现 B)。规格在 `docs/eval/README.md`,打分表在 `docs/eval/grading-rubric.md`(10 项,每项 0-5,写依据)。你**不许**修改任何一方的代码;只能读、跑、注入。
+你是独立评审,对 trade-gate 仓库里两套互不相识的 eval 实现打分:`packages/eval-a`(实现 A)与 `packages/eval-b`(实现 B)。规格在 `docs/eval/README.md`,打分表在 `docs/eval/grading-rubric.md`(10 项,每项 0-5,写依据)。你**不许**修改任何一方的代码;只能读、跑、注入。
 
 必须实际动手的检查(不看文档、看行为):
 1. 各跑一遍 `npm run build --workspace packages/eval-<x>` 和 `npm test --workspace packages/eval-<x>`(从仓库根目录),记录用时与通过数。

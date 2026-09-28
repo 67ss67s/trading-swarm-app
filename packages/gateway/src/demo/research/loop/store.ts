@@ -11,7 +11,7 @@ import type {
   LoopBlocks,
   LoopArtifact,
   LoopResult,
-} from "@trading-swarm/contracts";
+} from "@trade-gate/contracts";
 import type { SnapshotDraft } from "../data/index.js";
 import { check, encode } from "./schema.js";
 export type {

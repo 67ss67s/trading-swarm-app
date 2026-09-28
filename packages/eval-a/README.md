@@ -1,6 +1,6 @@
-# @trading-swarm/eval-a — 判断链 eval harness(实现 A)
+# @trade-gate/eval-a — 判断链 eval harness(实现 A)
 
-按 `docs/eval/README.md` 的规格对「`demo.buildContext` → 大脑 → `demo.validateJudgment` → `demo.evaluateGates` / `demo.reduceReview`」做离线、可复现的评测。线上代码**只**经 `import { demo } from '@trading-swarm/gateway'` 复用;本包没有自己的 context builder / validator / gates / reducer。打分表见 `docs/eval/grading-rubric.md`。
+按 `docs/eval/README.md` 的规格对「`demo.buildContext` → 大脑 → `demo.validateJudgment` → `demo.evaluateGates` / `demo.reduceReview`」做离线、可复现的评测。线上代码**只**经 `import { demo } from '@trade-gate/gateway'` 复用;本包没有自己的 context builder / validator / gates / reducer。打分表见 `docs/eval/grading-rubric.md`。
 
 ## 怎么跑
 

@@ -1,5 +1,5 @@
 /** Public OHLCV only: no credentials, account APIs or execution transport. */
-import type {ResearchAsset,ResearchUniverseRequest} from '@trading-swarm/contracts';
+import type {ResearchAsset,ResearchUniverseRequest} from '@trade-gate/contracts';
 import type {Kline} from '../types.js';
 import {timeframeMillis} from './strategy.js';
 export interface PublicMarket {symbol:string;base:string;quote:string;spot?:boolean;active?:boolean}
@@ -10,7 +10,31 @@ export async function publicExchange(exchange='okx'):Promise<PublicExchange>{
  const packageName='ccxt';let ccxt:Record<string,unknown>;try{ccxt=(await import(packageName)).default as Record<string,unknown>;}catch{throw Error('ccxt_dependency_unavailable: install gateway dependencies');}
  const Constructor=ccxt[exchange] as (new(options:unknown)=>PublicExchange)|undefined;if(typeof Constructor!=='function')throw Error('unsupported_exchange');// 2026-09-21:这台机的 OKX 直连被墙,ccxt 的 Node fetch 不读环境变量代理,显式喂 HTTPS_PROXY/HTTP_PROXY。
  const proxy=process.env['HTTPS_PROXY']??process.env['https_proxy']??process.env['HTTP_PROXY']??process.env['http_proxy'];
- return new Constructor({enableRateLimit:true,timeout:30000,options:{defaultType:'spot'},...(proxy?{httpsProxy:proxy}:{})});
+ // 2026-09-25:okx 的 loadMarkets 缺省连 FUTURES/OPTION 一起拉(期权按标的再拆两次请求),走 Clash 出网时任何一条被掐 TLS 整个 loadMarkets 就失败,
+ // 快速回测真单因此拉不到 K 线。研究层只用现货与永续,限定 fetchMarkets 只拉 spot/swap;偶发网络错再有限重试。
+ const options={defaultType:'spot',...(exchange==='okx'?{fetchMarkets:{types:['spot','swap']}}:{})};
+ return withPublicRetry(new Constructor({enableRateLimit:true,timeout:30000,options,...(proxy?{httpsProxy:proxy}:{})}));
+}
+/** 偶发网络错(代理掐 TLS/连接重置/超时/网关 5xx/限频)才值得重试;参数错、币对不存在等业务错立即抛出。 */
+export function isTransientNetworkError(e:unknown):boolean{
+ if(!e||typeof e!=='object')return false;const names:string[]=[];
+ for(let p=Object.getPrototypeOf(e);p&&p!==Object.prototype;p=Object.getPrototypeOf(p))names.push(String((p as {constructor?:{name?:string}}).constructor?.name??''));
+ if(names.some(n=>/^(NetworkError|RequestTimeout|ExchangeNotAvailable|DDoSProtection|RateLimitExceeded|OnMaintenance)$/.test(n)))return true;
+ const m=`${(e as {name?:string}).name??''} ${(e as {message?:string}).message??''} ${String((e as {cause?:{code?:string}}).cause?.code??'')}`;
+ return /ECONNRESET|ETIMEDOUT|ECONNREFUSED|EAI_AGAIN|EPIPE|UND_ERR|socket|TLS|other side closed|fetch failed|network|timed?[\s_-]?out|RequestTimeout|ExchangeNotAvailable|\b50[234]\b/i.test(m);
+}
+/**
+ * 给公共行情客户端的 loadMarkets / fetchOHLCV 套有限重试(缺省 3 次,退避 0.8s/1.6s)。原地改实例方法,保留 ccxt 其余方法(资金费/持仓量/原始 fetch)。
+ * ccxt 的 loadMarkets 失败后会把 rejected promise 缓存在 marketsLoading,不带 reload 再调永远拿到同一个失败:失败过一次就强制 reload。
+ */
+export function withPublicRetry<T extends PublicExchange>(client:T,opts:{attempts?:number;backoff_ms?:number}={}):T{
+ const attempts=Math.max(1,opts.attempts??3),backoff=opts.backoff_ms??800;
+ const load=client.loadMarkets.bind(client) as (reload?:boolean,params?:unknown)=>Promise<Record<string,PublicMarket>>,ohlcv=client.fetchOHLCV.bind(client) as (...a:unknown[])=>Promise<(number|undefined)[][]>;
+ const retry=async<R>(fn:()=>Promise<R>):Promise<R>=>{for(let n=0;;n++){try{return await fn();}catch(e){if(n+1>=attempts||!isTransientNetworkError(e))throw e;if(backoff>0)await new Promise<void>(r=>setTimeout(r,backoff*(n+1)));}}};
+ let failed=false;
+ (client as unknown as {loadMarkets:(reload?:boolean,params?:unknown)=>Promise<Record<string,PublicMarket>>}).loadMarkets=(reload=false,params?:unknown)=>retry(async()=>{try{const m=await load(reload||failed,params);failed=false;return m;}catch(e){failed=true;throw e;}});
+ (client as unknown as {fetchOHLCV:(...a:unknown[])=>Promise<(number|undefined)[][]>}).fetchOHLCV=(...a:unknown[])=>retry(()=>ohlcv(...a));
+ return client;
 }
 export class CcxtMarket {
  constructor(readonly exchange:string,readonly client:PublicExchange){}

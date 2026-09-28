@@ -1,3 +1,5 @@
+import { assertVisitorCannotWrite } from '../public-demo.js';
+import { aspCliBlocked } from '../asp-snapshot.js';
 /** All Signal Market CLI processes inherit the environment, including proxy configuration. */
 import { execFile, spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -12,6 +14,8 @@ export function cliBinary(bin: CliBinary): string {
   return existsSync(local) ? local : bin;
 }
 export const spawnCli: CliRunner = (bin, args, timeoutMs = CLI_TIMEOUT_MS) => new Promise((resolve) => {
+  // 信号市场只读快照模式:这台机器没有钱包/okx-a2a,一律不启动子进程。
+  if (aspCliBlocked(bin)) return resolve({ code: 1, stdout: '', stderr: 'asp_snapshot_mode: OKX.AI CLI is disabled on this server' });
   execFile(cliBinary(bin), args, { env: process.env, timeout: timeoutMs, maxBuffer: 4 * 1024 * 1024 }, (err, stdout, stderr) => {
     resolve({ code: err ? (typeof err.code === 'number' ? err.code : err.killed ? 124 : 1) : 0, stdout: String(stdout ?? ''), stderr: String(stderr || err?.message || '') });
   });
@@ -67,12 +71,19 @@ export const NETWORK_ATTEMPTS = 3;
 export let NETWORK_BACKOFF_MS = 1500;
 /** 测试用:把网络重试退避设为 0 */
 export function setNetworkBackoffForTest(ms: number): void { NETWORK_BACKOFF_MS = ms; }
+/** 进程内 onchainos 调用统计(监视器用):最近 CLI_STATS_MAX 次调用的结果,不落库 */
+export interface CliCallStat { at: number; command: string; ok: boolean; code: string | null; ms: number }
+const CLI_STATS_MAX = 2000;
+const cliStatsBuf: CliCallStat[] = [];
+function recordCli(stat: CliCallStat): void { cliStatsBuf.push(stat); if (cliStatsBuf.length > CLI_STATS_MAX) cliStatsBuf.splice(0, cliStatsBuf.length - CLI_STATS_MAX); }
+export function cliStats(since: number): CliCallStat[] { return cliStatsBuf.filter((x) => x.at >= since); }
 export class MarketCli {
   constructor(readonly runner: CliRunner = spawnCli) {}
   async call(command: string, args: string[] = []): Promise<Record<string, unknown>> {
     // 本机经 Clash 出网,TLS 握手常被掐断:读操作失败就重试;写操作只在「连接没建立」时重试
     // (请求没到 OKX,重发不会重复写),发出后才断的交给调用方的「失败后回查状态」处理。
     const write = WRITE_COMMANDS.has(command);
+    if (write) assertVisitorCannotWrite();
     for (let attempt = 1; ; attempt++) {
       try {
         return await this.json(['agent', command, ...args]);
@@ -84,8 +95,15 @@ export class MarketCli {
     }
   }
   async json(args: string[]): Promise<Record<string, unknown>> {
+    if (WRITE_COMMANDS.has(args[1] ?? '') || args.some(arg => /^accept-|^decline-/.test(arg))) assertVisitorCannotWrite();
+    const started = Date.now();
+    try { const out = await this.jsonInner(args); recordCli({ at: started, command: args[1] ?? args[0] ?? '', ok: true, code: null, ms: Date.now() - started }); return out; }
+    catch (e) { recordCli({ at: started, command: args[1] ?? args[0] ?? '', ok: false, code: e instanceof CliError ? e.code : 'error', ms: Date.now() - started }); throw e; }
+  }
+  private async jsonInner(args: string[]): Promise<Record<string, unknown>> {
     // Serialize child processes sharing one CLI wallet session; a failed call never poisons the queue.
-    const timeout = ['create-subscribe', 'subscribe-cancel', 'start-autorenew', 'refund-execute'].includes(args[1] ?? '') ? 120_000 : args[1] === 'my-subscriptions' ? 45_000 : CLI_TIMEOUT_MS;
+    // deliver 要先上传长文本/附件,高负载下 20s 常不够;超时即结果未知,宁可多等
+    const timeout = ['create-subscribe', 'subscribe-cancel', 'start-autorenew', 'refund-execute', 'deliver'].includes(args[1] ?? '') ? 120_000 : args[1] === 'my-subscriptions' ? 45_000 : CLI_TIMEOUT_MS;
     const pending = (runnerQueues.get(this.runner) ?? Promise.resolve()).then(() => this.runner('onchainos', args, timeout));
     runnerQueues.set(this.runner, pending.catch(() => undefined));
     const r = await pending;
@@ -111,6 +129,10 @@ export interface WatchHandle { stop(): void | Promise<void>; }
 export type WatchRunner = (line: (text: string) => void, ended: (error: string | null) => void) => WatchHandle;
 /** Experimental streaming transport; the persistent process intentionally has no 20s lifetime limit. */
 export const spawnWatch: WatchRunner = (line, ended) => {
+  if (aspCliBlocked('okx-a2a')) {
+    queueMicrotask(() => ended('asp_snapshot_mode'));
+    return { stop() {} };
+  }
   const child = spawn(cliBinary('okx-a2a'), ['user', 'watch', '--json'], { env: process.env, stdio: ['ignore', 'pipe', 'pipe'] });
   const reader = createInterface({ input: child.stdout });
   let error = ''; let stopped = false;

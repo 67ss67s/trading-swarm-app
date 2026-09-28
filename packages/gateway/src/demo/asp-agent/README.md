@@ -11,3 +11,10 @@ node node_modules/vitest/vitest.mjs run --root packages/gateway test/demo/market
 npm test -w packages/gateway
 npm run typecheck
 ```
+
+对话读模型位于 `chat-read.ts`（§9.55）：`get_asp_overview`、`list_asp_services`、
+`list_asp_tasks`、`list_asp_subscribers`、`list_market_inbox`。它只调用独立 SELECT 入口、
+`cachedAspIdentity` 和已有 `AspServices.chatSnapshot()` / `ProviderTaskPoller.status()`；
+不会为了读状态构造 AspAgent，不会刷新 CLI、写缓存、启动接单或推进游标。
+服务和订阅/收入的远端信息取市场页已加载的快照，缺快照明确 `ready:false`；默认价格标记为建议价，不能当成实时上架报价。
+错误仅保留脱敏摘要，买方/任务标识只显示末四位。验收覆盖缺表降级及 SQLite `query_only` / `total_changes`。

@@ -13,7 +13,7 @@
 //
 // 纯函数:只吃 (case, 判断行),没有 I/O、没有时钟、没有网络。
 
-import { demo } from '@trading-swarm/gateway';
+import { demo } from '@trade-gate/gateway';
 import { openTrade, stepTrade, tradeR, type Outcome } from './outcome.js';
 import type { EvalCase } from './types.js';
 import { mean, median, round } from './util.js';

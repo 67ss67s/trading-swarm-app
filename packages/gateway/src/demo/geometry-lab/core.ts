@@ -18,7 +18,7 @@
  *     bars, HH since fill, tighten-only, 7 days max) because that script is not importable (top-level side
  *     effects); costs are added here via tradeCosts so both variants are net of the same fees/slippage.
  */
-import type { ResearchBar } from '@trading-swarm/contracts';
+import type { ResearchBar } from '@trade-gate/contracts';
 import { atrSeries, emaSeries } from '../research/primitives/indicators.js';
 import { completeBuckets } from '../research/primitives/structure.js';
 import { openTrade, simulateOutcome, stepTrade, tradeCosts, tradeR } from '../outcome.js';

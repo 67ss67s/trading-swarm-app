@@ -10,6 +10,8 @@ export function Workspace({ className, children }: { className?: string; childre
 
 interface PaneProps {
   title: string;
+  /** 标题右侧的小徽标(评审版状态标记等) */
+  badge?: ReactNode;
   hint?: string;
   actions?: ReactNode;
   className?: string;
@@ -17,11 +19,12 @@ interface PaneProps {
   children: ReactNode;
 }
 
-export function Pane({ title, hint, actions, className, contentClassName, children }: PaneProps) {
+export function Pane({ title, badge, hint, actions, className, contentClassName, children }: PaneProps) {
   return (
     <section className={cn("flex min-h-0 min-w-0 flex-col", className)}>
       <header className="flex h-8 shrink-0 items-center gap-2 border-b bg-muted/40 px-2.5 select-none">
         <h2 className="kicker text-[10.5px] text-foreground/85">{title}</h2>
+        {badge}
         {hint ? <span className="text-[11px] text-muted-foreground">{hint}</span> : null}
         <div className="ml-auto flex items-center gap-1">{actions}</div>
       </header>

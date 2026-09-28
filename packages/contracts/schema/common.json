@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://trading-swarm.dev/schema/common.json",
+  "$id": "https://trade-gate.dev/schema/common.json",
   "title": "Common",
   "description": "所有契约共享的基础类型。金额/价格/数量一律十进制字符串,时间戳一律 unix 毫秒整数,枚举一律小写 snake_case。",
   "$defs": {

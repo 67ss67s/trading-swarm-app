@@ -3,7 +3,7 @@
  * 实际数据起点比窗口晚(或终点早)超过 2 根 K 线时单独标黄 —— 用户之前被「只看到 2020–2022」坑过。
  */
 import { CalendarRange, TriangleAlert } from 'lucide-react';
-import type { BacktestReport } from '@trading-swarm/contracts';
+import type { BacktestReport } from '@trade-gate/contracts';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { ASSET_STATUS_LABEL, pctPlain, spanLabel, usdPlain, ymd, ymdhm } from './format';

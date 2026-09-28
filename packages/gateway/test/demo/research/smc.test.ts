@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
-import { schemas, type ResearchBar } from '@trading-swarm/contracts';
+import { schemas, type ResearchBar } from '@trade-gate/contracts';
 import { registry } from '../../../src/demo/research/primitives/index.js';
 import { smcCompute, smcStateAt, smcOverlay, smcParamsFromIR, SMC_PRIMITIVES } from '../../../src/demo/research/primitives/smc.js';
 import { checkIR, defaultIR, node, applyOrderPhrases } from '../../../src/demo/research/strategy.js';

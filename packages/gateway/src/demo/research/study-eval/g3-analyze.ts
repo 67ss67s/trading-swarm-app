@@ -13,12 +13,23 @@ export interface G3Outcomes {
 }
 export function analyzeG3(m:G3CollectionManifest,c:G3Collection,out:G3Outcomes) {
  validateCollectionManifest(m);
- if(c.version!=='g3_collection_result_v2'||typeof c.synthetic!=='boolean'||c.synthetic!==!!m.synthetic)throw Error('g3_collection_mode_mismatch');
+ if(c.version!=='g3_collection_result_v2'||typeof c.synthetic!=='boolean'||!!m.synthetic&&!c.synthetic)throw Error('g3_collection_mode_mismatch');
  if(c.manifest_hash!==hash(m)||out.manifest_hash!==c.manifest_hash||!c.complete||out.costs_included!==true)throw Error('g3_audit_or_collection_incomplete');
  if(!out.days.length||out.days.some((d,i)=>!Number.isSafeInteger(d)||d<0||d%DAY!==0||i>0&&d!==out.days[i-1]!+DAY))throw Error('g3_days_invalid');
  const allKeys=new Set<string>();
  for(const d of c.decisions){const key=`${d.finalist_id}:${d.candidate_id}:${d.arm}`;if(allKeys.has(key)||!G3_ARMS.includes(d.arm)||!['follow','skip'].includes(d.action))throw Error('g3_decisions_invalid');allKeys.add(key);if(d.cost_usd!==null)usdUnits(d.cost_usd);usdUnits(d.reserved_usd);}
  const expected=m.finalists.reduce((n,f)=>n+f.opportunities.length*4,0);if(c.decisions.length!==expected)throw Error('g3_decisions_missing');
+ for(const f of m.finalists)for(const o of f.opportunities)for(const arm of G3_ARMS)if(!c.decisions.some(d=>d.finalist_id===f.id&&d.candidate_id===o.candidate.id&&d.arm===arm&&d.as_of===o.candidate.as_of))throw Error('g3_decisions_missing');
+ const unavailable=(out as G3Outcomes & {unavailable?:{finalist_id:string;candidate_id:string;reason:string}[]}).unavailable??[];
+ if(unavailable.length){
+  for(const f of m.finalists){
+   if(out.execution_spec_hashes[f.id]!==f.execution_spec_hash)throw Error('g3_execution_mismatch');
+   const ids=[...(out.finalists[f.id]??[]).map(o=>o.candidate_id),...unavailable.filter(o=>o.finalist_id===f.id).map(o=>o.candidate_id)];
+   if(ids.length!==f.opportunities.length||new Set(ids).size!==ids.length||f.opportunities.some(o=>!ids.includes(o.candidate.id)))throw Error('g3_outcomes_missing');
+  }
+  return {version:'g3_analysis_v2',manifest_hash:c.manifest_hash,synthetic:c.synthetic,collection_hash:hash(c),outcomes_hash:hash(out),arms:G3_ARMS,
+   results:m.finalists.map(f=>({id:f.id,status:'insufficient_evidence',evidence:'execution_data_unavailable'})),accounts:[] as unknown[],records:[] as G3FourArmFinalist[],unavailable};
+ }
  const records:G3FourArmFinalist[]=[],accounts:unknown[]=[];
  const unknown=c.decisions.some(d=>d.cost_usd===null);
  for(const f of m.finalists){
@@ -56,7 +67,7 @@ export function analyzeG3(m:G3CollectionManifest,c:G3Collection,out:G3Outcomes) 
   }
   records.push({id:f.id,candidate_count:f.opportunities.length,follow_count:follows,days:out.days,daily_returns,...m.analysis,costs_included:true,jev_cost_usd:usdString(costTotals.jev),deepseek_cost_usd:usdString(costTotals.deepseek)});
  }
- const results=evaluateG3FourRecorded(records).map(r=>({...r,status:c.synthetic||unknown?'insufficient_evidence':r.status,...(unknown?{cost_warning:'unknown_cost_charged_at_reservation'}:{}),...(c.synthetic?{evidence:'offline_stub_only'}:{})}));
+ const results=evaluateG3FourRecorded(records).map(r=>({...r,status:c.synthetic||unknown||!!(m as G3CollectionManifest & {export_audit?:unknown}).export_audit?'insufficient_evidence':r.status,...(unknown?{cost_warning:'unknown_cost_charged_at_reservation'}:{}),...(c.synthetic?{evidence:'offline_stub_only'}:(m as G3CollectionManifest & {export_audit?:unknown}).export_audit?{evidence:'selection_historical_replay_not_independent'}:{})}));
  return {version:'g3_analysis_v2',manifest_hash:c.manifest_hash,collection_hash:hash(c),outcomes_hash:hash(out),arms:G3_ARMS,synthetic:c.synthetic,results,accounts,records,
   boundary:'四臂 v2；cash/matched_random 未采集；条件执行路径必须由相同冻结执行器生成，分析器不独立证明供应商数据或成交正确。'};
 }

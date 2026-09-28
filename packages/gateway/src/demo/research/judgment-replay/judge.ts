@@ -175,7 +175,7 @@ export function deepseekClient(apiKey: string, model = 'deepseek-v4-flash'): Mod
   const scrub = (s: string): string => s.split(apiKey).join('***');
   return {
     name,
-    key_note: 'dedicated key(~/.trading-swarm-okx/secrets/deepseek.env,不入库)',
+    key_note: 'dedicated key(~/.trade-gate-okx/secrets/deepseek.env,不入库)',
     stub: false,
     complete(system, user, _pub, o) {
       const started = Date.now();

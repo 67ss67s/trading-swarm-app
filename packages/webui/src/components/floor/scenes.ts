@@ -1,5 +1,5 @@
 /**
- * 楼层「场景」注册表(2026-09-07,来源 ~/Downloads/trading_swarm_pixel_ui_design.ipynb 的三个方向):
+ * 楼层「场景」注册表(2026-09-07,来源 ~/Downloads/trade_gate_pixel_ui_design.ipynb 的三个方向):
  *   command  — 方向 A「自主指挥中心」:石墨黑 + 终端绿,市场格 / 指挥核心 / 四张岗位桌,产品默认。
  *   research — 方向 B「研究楼层」:暖灯夜景木地板、书架、圆桌,偏情报 / 策略讨论。
  *   meme     — 方向 C「霓虹实验室」:青 / 品红霓虹,高波动感,给 demo / 传播用。

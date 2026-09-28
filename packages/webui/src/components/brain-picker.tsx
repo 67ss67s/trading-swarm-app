@@ -15,6 +15,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { api } from '@/api/client';
 import type { BrainKind, BrainOption } from '@/api/types';
 import { cn } from '@/lib/utils';
+import { JudgeLock } from '@/components/judge-lock';
+import { friendlyError, lockReason } from '@/lib/edition';
 import { t } from '@/lib/i18n';
 
 interface BrainPickerRowProps {
@@ -32,6 +34,8 @@ interface BrainPickerRowProps {
 
 export function BrainPickerRow({ id, label, hint, kind, model, brains, onKindChange, onModelChange, kindError, modelError }: BrainPickerRowProps) {
   const current = brains.find((b) => b.kind === kind) ?? null;
+  // 评审版:模型配置只读(key / 本机 CLI 不外露)
+  const lock = lockReason('model_connection_edit');
 
   const test = useMutation({
     mutationFn: () => api.testBrain(kind, model && model.trim() !== '' ? model.trim() : null),
@@ -46,8 +50,8 @@ export function BrainPickerRow({ id, label, hint, kind, model, brains, onKindCha
         </Label>
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
-        <Select value={kind} onValueChange={(v) => onKindChange(v as BrainKind)}>
-          <SelectTrigger size="sm" className="h-7 w-28 text-[12px]">
+        <Select value={kind} disabled={!!lock} onValueChange={(v) => onKindChange(v as BrainKind)}>
+          <SelectTrigger size="sm" className="h-7 w-28 text-[12px]" title={lock ?? undefined}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -64,6 +68,8 @@ export function BrainPickerRow({ id, label, hint, kind, model, brains, onKindCha
           list={id ? `${id}-models` : undefined}
           value={model ?? ''}
           onChange={(e) => onModelChange(e.target.value)}
+          disabled={!!lock}
+          title={lock ?? undefined}
           placeholder={current?.default_model ?? t('这个 CLI 的默认模型')}
           className="h-7 min-w-0 flex-1 text-[12px]"
         />
@@ -75,17 +81,19 @@ export function BrainPickerRow({ id, label, hint, kind, model, brains, onKindCha
           </datalist>
         ) : null}
 
-        <Button size="xs" variant="outline" disabled={test.isPending} onClick={() => test.mutate()}>
-          {test.isPending ? <Loader2 className="size-3 animate-spin" /> : null}
-          {t('测试')}
-        </Button>
+        <JudgeLock feature="model_connection_edit">
+          <Button size="xs" variant="outline" disabled={test.isPending} onClick={() => test.mutate()}>
+            {test.isPending ? <Loader2 className="size-3 animate-spin" /> : null}
+            {t('测试')}
+          </Button>
+        </JudgeLock>
       </div>
 
       {kindError ? <div className="mt-1 text-[11px] text-destructive">{kindError}</div> : null}
       {modelError ? <div className="mt-1 text-[11px] text-destructive">{modelError}</div> : null}
 
-      {current && !current.available ? <div className="mt-1 text-[10.5px] text-warn">{current.note || t('没找到这个 CLI,用不了')}</div> : null}
-      {current?.note && current.available ? <div className="mt-1 text-[10.5px] text-muted-foreground">{current.note}</div> : null}
+      {current && !current.available ? <div className="mt-1 text-[10.5px] text-warn">{friendlyError(current.note) || t('没找到这个 CLI,用不了')}</div> : null}
+      {current?.note && current.available ? <div className="mt-1 text-[10.5px] text-muted-foreground">{friendlyError(current.note)}</div> : null}
 
       {test.data ? (
         <div className={cn('mt-1.5 flex items-center gap-1.5 text-[11px]', test.data.ok ? 'text-up' : 'text-destructive')}>
@@ -93,11 +101,11 @@ export function BrainPickerRow({ id, label, hint, kind, model, brains, onKindCha
             {test.data.ok ? t('成功') : t('失败')}
           </Badge>
           {test.data.ok ? <span className="num">{test.data.latency_ms}ms</span> : null}
-          <span className="truncate text-muted-foreground">{test.data.ok ? test.data.text : test.data.error}</span>
+          <span className="truncate text-muted-foreground">{test.data.ok ? test.data.text : friendlyError(test.data.error)}</span>
         </div>
       ) : null}
       {test.isError ? (
-        <div className="mt-1.5 text-[11px] text-destructive">{t('测试失败')}:{test.error instanceof Error ? test.error.message : String(test.error)}</div>
+        <div className="mt-1.5 text-[11px] text-destructive">{t('测试失败')}:{friendlyError(test.error instanceof Error ? test.error.message : String(test.error))}</div>
       ) : null}
     </div>
   );

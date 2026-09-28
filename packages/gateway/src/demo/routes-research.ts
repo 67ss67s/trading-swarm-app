@@ -12,18 +12,19 @@ import { compileStrategy } from './research/strategy.js';
 import { listPrimitives } from './research/primitives/index.js';
 /** Horizon-style workbench: research-only API. No execution, wallet, or live strategy writes. */
 import type { IncomingMessage } from 'node:http';
-import { schemas, type ResearchRequest, type ResearchChatRequest, type ResearchToolCall, type ResearchUniverseRequest } from '@trading-swarm/contracts';
+import { schemas, type ResearchRequest, type ResearchChatRequest, type ResearchToolCall, type ResearchUniverseRequest } from '@trade-gate/contracts';
 import type { RouteModule, RouteHandler } from './http-extra.js';
 import { resolveRunStrategies } from './backtest.js';
 import { ResearchStore } from './research/store.js';
 import { ResearchService, runSummary } from './research/service.js';
+import { executionThresholds } from './execution-policy.js';
 import { researchChat, researchTool, RESEARCH_TOOLS } from './research/tools.js';
 import { assertContract, hash } from './research/primitives.js';
 import { importMarketDataset } from './research/market-dataset.js';
 import { buildUniverse, factorDefinition } from './research/universe.js';
 import { screenUniverse } from './research/screen.js';
 export const researchRoutes:RouteModule=ctx=>{
-  const store=new ResearchStore(ctx.store.marketDb),svc=new ResearchService(store,event=>ctx.emit('research.workbench',event));
+  const store=new ResearchStore(ctx.store.marketDb),svc=new ResearchService(store,event=>ctx.emit('research.workbench',event),{executionThresholds:()=>executionThresholds(ctx.rt.workflow)});// 执行层阈值:研究 run 创建 / 回测报告时读当前 workflow 并冻结
   // Pine 脚本目录 + 准入 + 即席运行(2026-09-22);传 store 让回测窗口还原成整段数据,一个数据集只跑一次引擎
   registerPineRoutes(ctx,store);
   const wrap=(handler:RouteHandler):RouteHandler=>async(req,res,url,p)=>{try{await handler(req,res,url,p);}catch(e){const message=e instanceof Error?e.message:String(e);ctx.fail(res,message.includes('not_found')?404:message.includes('busy')||message.includes('conflict')||message.includes('sealed')?409:400,message,'research_error');}};
@@ -42,9 +43,9 @@ export const researchRoutes:RouteModule=ctx=>{
     return runSummary(row);
   }
   ctx.route('GET','/api/research/capabilities',wrap(async(_req,res)=>ctx.json(res,200,{version:'v1',status:'research_only',limits:{walk_bars:10000,recording_bytes:33554432},active_run_id:svc.active_run_id,markets:['spot'],directions:['long'],interpreters:['donchian_close_long_v1','strategy_ir_v1'],decision_arms:['a_rules','b_agent','c_filter'],execution:{entry:'next_open_market',exit:'next_open_market',protective:'gap_then_stop_first',accounting:'fixed_point_8_decimal',position_limit:1,portfolio_position_limit:30,default_max_positions:3},unsupported:['perp','funding','liquidation','short','limit_entry','add','live_automation','external_news_history'],tools:RESEARCH_TOOLS,source_strategy_note:'source_strategy_ref 是 B 的原策略全文；A/C 使用明确的机械解释，不能默认语义相同。',eval_status:'engineering_tests_only_until_real_model_and_oos_trials',pine:pineEngineHealth(),pine_admission:'pine_admission_v2'})));
-  ctx.route('POST','/api/research/strategies/precheck',wrap(async(req,res)=>ctx.json(res,200,await precheck(await body(req) as import('@trading-swarm/contracts').ResearchPrecheckRequest,store))));
+  ctx.route('POST','/api/research/strategies/precheck',wrap(async(req,res)=>ctx.json(res,200,await precheck(await body(req) as import('@trade-gate/contracts').ResearchPrecheckRequest,store))));
   ctx.route('GET','/api/research/primitives',wrap(async(_req,res)=>ctx.json(res,200,listPrimitives())));
-  ctx.route('POST','/api/research/strategies/compile',wrap(async(req,res)=>{const raw=await body(req);assertContract<import('@trading-swarm/contracts').StrategyCompileRequest>(raw);if(!('timeframe' in raw))throw new Error('expected_compile_request');ctx.json(res,200,await compileStrategy(raw,ctx.rt.brainForRole('research'),raw.dataset_id?store.dataset(raw.dataset_id):null));}));
+  ctx.route('POST','/api/research/strategies/compile',wrap(async(req,res)=>{const raw=await body(req);assertContract<import('@trade-gate/contracts').StrategyCompileRequest>(raw);if(!('timeframe' in raw))throw new Error('expected_compile_request');ctx.json(res,200,await compileStrategy(raw,ctx.rt.brainForRole('research'),raw.dataset_id?store.dataset(raw.dataset_id):null));}));
   ctx.route('GET','/api/research/schema',wrap(async(_req,res)=>ctx.json(res,200,schemas.research)));
   ctx.route('GET','/api/research/datasets',wrap(async(_req,res)=>ctx.json(res,200,{items:store.datasets()})));
   // 外部上传的数据集只收现货:market=perp 的数据集只由永续回测报告(data/perp-market.ts)落库,旧引擎按现货做多跑,不能拿来直接实验

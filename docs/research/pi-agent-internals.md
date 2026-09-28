@@ -1,4 +1,4 @@
-# pi coding agent — harness 内核调研(2026-09-02,工作线报告整理)
+# pi coding agent — harness 内核调研(2026-09-02,子代理报告整理)
 
 版本 `@earendil-works/pi-coding-agent@0.84.2`,路径 `/usr/local/lib/node_modules/@earendil-works/pi-coding-agent`;兄弟包 vendored 在其 `node_modules/@earendil-works/{pi-agent-core,pi-ai,pi-protocol,pi-client,pi-tui,pi-telemetry}`。
 

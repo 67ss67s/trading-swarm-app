@@ -1,6 +1,6 @@
-# @trading-swarm/gateway
+# @trade-gate/gateway
 
-TS network/control-plane process. **A0 scope** (see `docs/design/trading-swarm-design-v1-2026-09-02.md`
+TS network/control-plane process. **A0 scope** (see `docs/design/trade-gate-design-v1-2026-09-02.md`
 §15.1): just the two pieces everything else in the gateway will sit on top of —
 
 - `src/exec-client.ts` — `ExecClient`, the UDS JSON-RPC client for execd (the only thing in this
@@ -15,9 +15,9 @@ Nothing here reads or writes `exec.sqlite` (execd's own database) or exchange cr
 ## `ExecClient`
 
 ```ts
-import { ExecClient } from '@trading-swarm/gateway';
+import { ExecClient } from '@trade-gate/gateway';
 
-const client = new ExecClient(); // socketPath defaults to ~/.trading-swarm/run/execd.sock
+const client = new ExecClient(); // socketPath defaults to ~/.trade-gate/run/execd.sock
 const health = await client.call('exec.health', {});
 const sub = client.subscribe(0, (event) => console.log(event.event, event.seq));
 // ...
@@ -26,7 +26,7 @@ client.close();
 ```
 
 - `call(method, params, {timeoutMs?})` — typed per method via `ExecMethods` (from
-  `@trading-swarm/contracts`); default 10s, 30s for `exec.account.snapshot`
+  `@trade-gate/contracts`); default 10s, 30s for `exec.account.snapshot`
   (docs/contracts/README.md §8). Rejects with `ExecRpcError` (code/kind/retryable/details) on a
   JSON-RPC error frame, or **`ExecTimeout`** if nothing came back in time.
 - **A timeout is not a failure.** For a write method (`exec.intent.propose`,
@@ -49,7 +49,7 @@ client.close();
 ## `openStateDb`
 
 ```ts
-import { openStateDb } from '@trading-swarm/gateway';
+import { openStateDb } from '@trade-gate/gateway';
 
 const db = openStateDb('/path/to/state.sqlite'); // creates the file + runs migrations if needed
 db.appendEvent({ event: 'run.started', at: Date.now(), source: 'gateway', json: '{}' });
@@ -96,7 +96,7 @@ a temp-directory sqlite file per test.
 
 `evidence.events` 中普通触发种类保持与 `trigger.kinds` 取交集；`cpi/fomc/unlock` 等事件 subkind 则显式订阅对应的 `event` 入口，仍遵守最小周期。事件事实来自 `EventStore.liveFor`，判断前复核资产、时间窗口和撤销状态。判断的 `trigger.hits` 与触发证据保存事件 ID、subkind、来源 URL、研究任务 ID。`vol_spike` 同名时可匹配普通触发和派生事件，两种来源仍由 `kind` 区分。
 
-事件简报由 `research` 任务产出，任务详情保留来源正文摘录与 refs；旧统计 brief 仅保留历史，不作为一手简报注入。自动研究为 T−24h 预研和 T+2m 发布核对，预算按任务持久化，不能再把 brief 数当模型调用数。离线回归：`npx vitest run test/demo/calendar-feed.test.ts test/demo/events-http.test.ts test/demo/strategies.test.ts test/demo/strategy-loop.test.ts`。官方逐条核对结果见仓库 内部评审记录 的 P5b 段。
+事件简报由 `research` 任务产出，任务详情保留来源正文摘录与 refs；旧统计 brief 仅保留历史，不作为一手简报注入。自动研究为 T−24h 预研和 T+2m 发布核对，预算按任务持久化，不能再把 brief 数当模型调用数。离线回归：`npx vitest run test/demo/calendar-feed.test.ts test/demo/events-http.test.ts test/demo/strategies.test.ts test/demo/strategy-loop.test.ts`。官方逐条核对结果见仓库 `.codex-reports/event-research.md` 的 P5b 段。
 ### P1b 策略采样与成绩隔离（2026-09-12）
 
 `shadow-scheduler.ts` 每分钟独立采集零模型策略信号，使用策略自己的周期、horizon、SignalFn 与 outcome 成本。它不使用扫描队列、议会开关、paper 容量或模型预算；停止时等待在途 shadow 任务，禁止关闭后写库。完整闭合且连续的 K 线水位才允许结算，缺口保留待补并退避。
@@ -105,20 +105,20 @@ a temp-directory sqlite file per test.
 
 shadow 与 Lab 的 `n` 为 4h 行情桶有效样本量，另保留原始数量；期望、CI/DSR 使用簇统计，净回撤合并并发仓位的闭合 K 线清算权益。方向代理与完整代码策略分栏，模型回放另列 eval。Lab 同时检查候选/入选币池的加载失败率，任一超过 20% 不生成可写回统计；manifest 保存候选参数、币池上市/退市代理及缺失明细、原始数据哈希。定时 Lab 禁用参数探针，手动研究仍只按训练窗选择。
 
-测试：根目录 `npm test`（按 workspace 运行）；聚焦 `npm test --workspace @trading-swarm/gateway -- test/demo/strategy-p1b.test.ts`。迁移 `0021_shadow_generation.sql` 扩展 shadow 在途唯一键为 backend × generation；通过正常迁移流程加载。
+测试：根目录 `npm test`（按 workspace 运行）；聚焦 `npm test --workspace @trade-gate/gateway -- test/demo/strategy-p1b.test.ts`。迁移 `0021_shadow_generation.sql` 扩展 shadow 在途唯一键为 backend × generation；通过正常迁移流程加载。
 
-P9 离线预注册研究：根目录 `npm run lab -- fill` 以当前 workflow 币池补齐缓存（curl 使用环境代理，每请求间隔 1s，429/暂时故障指数退避，断点按覆盖区间续拉；不写运行数据库）。`npm run lab -- --study entry` / `--study params` 冻结 180d 窗口复跑，可指定 `--to <unix毫秒>`、`--symbols BTCUSDT,ETHUSDT` 和 `--output <文件>`。公开元数据和默认 JSON 结果在 `~/.trading-swarm/demo/research-entry/`；trial 账本复用 `~/.trading-swarm/demo/lab-trials.sqlite`；5m 仅补 30d；`--snapshot <已有研究结果.json>` 冻结版本、币池、窗口与 tick 重放。研究采用当前币池，不能解释为无幸存偏差的历史全集。测试 `npm test -w @trading-swarm/gateway -- entry-param-study.test.ts`。
+P9 离线预注册研究：根目录 `npm run lab -- fill` 以当前 workflow 币池补齐缓存（curl 使用环境代理，每请求间隔 1s，429/暂时故障指数退避，断点按覆盖区间续拉；不写运行数据库）。`npm run lab -- --study entry` / `--study params` 冻结 180d 窗口复跑，可指定 `--to <unix毫秒>`、`--symbols BTCUSDT,ETHUSDT` 和 `--output <文件>`。公开元数据和默认 JSON 结果在 `~/.trade-gate/demo/research-entry/`；trial 账本复用 `~/.trade-gate/demo/lab-trials.sqlite`；5m 仅补 30d；`--snapshot <已有研究结果.json>` 冻结版本、币池、窗口与 tick 重放。研究采用当前币池，不能解释为无幸存偏差的历史全集。测试 `npm test -w @trade-gate/gateway -- entry-param-study.test.ts`。
 ## 相对价值离线研究
 
 `pair-signals.ts` 在训练窗拟合冻结的残差模型，`pair-outcome.ts` 计算双腿费用、资金费与不同步压力，`pair-study.ts` 固定三对/五折及拒绝标准。`strategy-signals.ts` 提供独立 `PAIR_SIGNAL_REGISTRY`；单腿注册表对 `relative_value` 返回 null，常规漏斗不可测。不会创建策略/active记录或接入线上议会。
 
-仓库根运行 `npm run lab -- --study pair`；缓存 `~/.trading-swarm/research/pair-v1`（可用 `TG_PAIR_CACHE` 指定），缺失公开历史通过脚本的环境代理串行补充。`npx vitest run packages/gateway/test/demo/pair-study.test.ts` 验证拟合、z、双腿费用/资金费和退出。详见 `docs/research/relative-value-study-2026-09-12.md`。
+仓库根运行 `npm run lab -- --study pair`；缓存 `~/.trade-gate/research/pair-v1`（可用 `TG_PAIR_CACHE` 指定），缺失公开历史通过脚本的环境代理串行补充。`npx vitest run packages/gateway/test/demo/pair-study.test.ts` 验证拟合、z、双腿费用/资金费和退出。详见 `docs/research/relative-value-study-2026-09-12.md`。
 
 ### 交易员语料离线研究
 
 仓库根执行 `npm run lab -- --study traders`：从公开行情缓存生成原文审计、逐条特征、同时间段随机对照、两类确定性策略与人肉初始计划回放；自动重建 `docs/research/trader-study-2026-09-12.md`。首次补数加 `--fill`，可用 `--cache-root /path` 指定独立目录。取数脚本继承环境代理，按秒限速、重试并原子续写；不读运行 `state.sqlite`。价格与原始输入为十进制字符串，内部纯研究数值运算使用 JS number。
 
-`TRADER_SIGNAL_REGISTRY` / `HUMAN_SIGNAL_REGISTRY` 独立于生产 `SIGNAL_REGISTRY`；没有生产 family、active 或晋升写入。参数、观察窗口、执行规则与源文件 hash 进入试验登记。预注册与实际网格不一致即拒绝执行。修正表、剔除原因、逐条特征与统计结果位于 `docs/research/data/traders-0912/`;原始频道消息与结构化信号(raw_messages.json / structured_signals.json)不随仓库分发,`scripts/trader-study.mjs` 重跑需要自备这两份输入。
+`TRADER_SIGNAL_REGISTRY` / `HUMAN_SIGNAL_REGISTRY` 独立于生产 `SIGNAL_REGISTRY`；没有生产 family、active 或晋升写入。参数、观察窗口、执行规则与源文件 hash 进入试验登记。预注册与实际网格不一致即拒绝执行。公开信号数据、修正表、所有剔除原因和数据 hash 位于 `docs/research/data/traders-0912/`。输入含频道原文，提交仅为本地研究归档，不自动发布。
 
 定向测试：`npm exec --workspace packages/gateway -- vitest run src/demo/trader-study.test.ts`（从仓库根执行）；覆盖时区、去重、原文覆盖、前视、缺口、限价、分档止盈、保本及成本。完整验证仍使用根目录 `npm test` 与 `npm run typecheck`。
 
@@ -160,10 +160,7 @@ role autonomy/chat, but hard risk checks, alerts, safety demotions and emergency
 protection are not disabled. Lab pause prevents automatic promotions.
 
 The top bar exposes an Executor shortcut and an eight-role control menu; the team
-card also has individual buttons. `scripts/restart-agent-controls.sh` reloads only
-18801 and its 5181 frontend, preserves saved settings and makes a database backup.
-It checks process directories and refuses forced termination or a busy work queue.
-
+card also has individual buttons. 
 现货/永续市场：接口 `market` 缺省为 `perp`；OKX 与 paper 支持 `spot`，Binance 通道只支持 `perp`。现货只做多、杠杆为 1，独立保护凭据与行情缓存；`GET /api/market/basis?symbol=BTCUSDT` 提供十秒缓存的基差。OKX 简单账户模式在本地拒绝永续请求。CLI 现货成交历史超出三天或不能证明单页覆盖时，结算保持未知。
 
 市场功能验证：`cd packages/gateway && npx vitest run`；类型检查 `npx tsc --noEmit -p packages/gateway`；构建 `npm run build --workspace packages/gateway`（后两条在仓库根执行）。OKX 执行测试注入假进程，不启动交易 CLI。
@@ -172,7 +169,7 @@ It checks process directories and refuses forced termination or a busy work queu
 
 `src/demo/research/` 与 `/api/research/*` 提供不可变行情/实验、现货 A/B/C 共用账本、历史代理适配、预算、对照和受限研究工具；不会写线上策略或下单。Schema 在 `packages/contracts/schema/research.json`。
 
-设计/量化边界见 `docs/research/architecture-and-evaluation.md`，前端/API 契约见 `docs/demo/v3-ui-contract.md`。根目录先运行 `npm run build -w @trading-swarm/gateway`；零费用样本：`node packages/gateway/scripts/research-demo.mjs /absolute/scratch/output`。第二轮增加多资产 universe/screen、共享现金回放、IR/20 个原语/compile、模型失败恢复和诊断/零模型消融，详见 `src/demo/research/README.md` 与 `docs/research/round2-report.md`。测试：本包运行 `npx vitest run test/demo/research --maxWorkers 4`。样本的合成数据/脚本决策不代表真实代理收益。
+设计/量化边界见 `docs/research/architecture-and-evaluation.md`，前端/API交接见 `docs/research/claude-frontend-handoff.md`。根目录先运行 `npm run build -w @trade-gate/gateway`；零费用样本：`node packages/gateway/scripts/research-demo.mjs /absolute/scratch/output`。第二轮增加多资产 universe/screen、共享现金回放、IR/20 个原语/compile、模型失败恢复和诊断/零模型消融，详见 `src/demo/research/README.md` 与 `docs/research/round2-report.md`。测试：本包运行 `npx vitest run test/demo/research --maxWorkers 4`。样本的合成数据/脚本决策不代表真实代理收益。
 
 ### OKX 资产全集与每日全市场扫描(2026-09-24)
 
@@ -196,3 +193,30 @@ It checks process directories and refuses forced termination or a busy work queu
 仍不执行追踪/保本改止损与同币新信号替换/结转/加仓/反手，预检 warnings 明示；无硬止损、Pine、超出历史窗口等仍阻断，并给修正方法。agent 入场过滤只允许 follow/skip，不改价格，失败即 skip。
 
 验证在此包目录执行：`npx tsc --noEmit -p .`、`npx vitest run test/demo/strategy-run.test.ts`。测试使用内存 SQLite、注入行情/过滤器/发布器及 PaperBackend，不访问真实交易所或付费模型。
+
+页面性能排查：`scripts/start-perf-dev.sh` 只启动独立 18831/5211（paper、副本库）；
+`scripts/measure-page-perf.py --output .codex-reports/page-perf-after.json` 热身后按接口测五轮。
+回归覆盖 `test/demo/read-cache.test.ts`、`market-read-cache.test.ts`、`page-history.test.ts`、`memory-scope.test.ts`。
+
+### 九角色身份与规范对话线程（§9.55）
+
+`src/demo/agent-registry.ts` 是名称、callsign、工具白名单与循环图的唯一口径；
+`agents/<role>.md` 提供九个角色的身份与职责，`agent-doc.ts` 按包根定位并按 mtime 失效。
+`GET /api/agents` 返回九张卡片，`GET /api/agents/:role` 返回身份文档、流程图和近期运行/交接。
+循环状态读取实际运行记录及已有调度器；对话状态经 `chat.status` 推送。
+
+迁移 `0052_agent_roster.sql` 归档遗留的临时角色会话，保留全部原消息；
+`DemoStore` 启动时补齐 `default` 与八个 `agent:<role>`。按 role 创建会话幂等，规范线程不可归档或删除，允许 reset。
+角色权限在工具调用前检查。ASP 新增五个工具只读 SQLite / 已有内存快照，冷缓存逐块报告 `ready:false`，操作链接统一指向 `#market`。
+
+验证（仓库根）：
+
+```sh
+npm test -w packages/gateway
+npm run typecheck
+node packages/gateway/scripts/agent-roster-readonly.mjs
+```
+
+最后一条脚本默认只读 `~/.trade-gate-okx/demo/state.sqlite`，打印九个系统提示长度、ASP 总览和 SQLite 写入计数；
+它不迁移、不创建 runtime、不调用模型/CLI。可传数据库路径。需先 typecheck 或 build 生成 dist。
+定向回归文件是 `test/demo/agent-roster.test.ts`、`chat.test.ts`、`queue.test.ts`。

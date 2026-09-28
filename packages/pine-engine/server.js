@@ -1,5 +1,5 @@
 /**
- * trading-swarm 自己的 Pine 引擎(@trading-swarm/pine-engine):把 PineTS(LuxAlgo 开源 Pine 运行时,AGPL-3.0)
+ * trade-gate 自己的 Pine 引擎(@trade-gate/pine-engine):把 PineTS(LuxAlgo 开源 Pine 运行时,AGPL-3.0)
  * 包成一个本地 HTTP 子进程。
  *
  * 由 gateway 托管(packages/gateway/src/demo/research/pine/engine-host.ts):网关启动时拉起、崩溃退避重启、

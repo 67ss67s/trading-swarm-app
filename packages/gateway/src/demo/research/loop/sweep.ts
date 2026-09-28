@@ -4,7 +4,7 @@
  * - 没写 → 敏感性扫描:周期类参数整体 ×0.5 与 ×2(取整、不低于 2)。
  * 每个变体都过零模型 compile 校验(参数越界、结构不合法就换下一种缩放),变更逐条列出给报告用。
  */
-import type { StrategyIR, StrategyPrimitive } from "@trading-swarm/contracts";
+import type { StrategyIR, StrategyPrimitive } from "@trade-gate/contracts";
 import type { DefineTool, ToolRegistryLike } from "../data/loop-tools.js";
 import type { ToolContext } from "./tools.js";
 

@@ -1,4 +1,4 @@
-//! `DemoExec`/`tswarm-demo-exec` 集成测试。
+//! `DemoExec`/`tgate-demo-exec` 集成测试。
 //!
 //! 假服务器是一个跑在回环随机端口上的 axum app(不碰真实网络);每个测试推自己的
 //! 脚本化响应,再用 `DemoExec::handle` 或(测试 8)真的把 bin 跑起来去打它。
@@ -535,7 +535,7 @@ async fn leverage_bracket_hits_leverage_bracket_endpoint_with_symbol() {
 }
 
 // ---------------------------------------------------------------------------
-// 12. bin 级:真的把 tswarm-demo-exec 跑起来,走 NDJSON 协议
+// 12. bin 级:真的把 tgate-demo-exec 跑起来,走 NDJSON 协议
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -544,7 +544,7 @@ fn bin_ndjson_protocol_round_trips_against_a_fake_server() {
     let server = runtime.block_on(FakeServer::start());
     server.push("GET", "/fapi/v3/balance", 200, json!([{ "asset": "USDT", "balance": "1000" }]));
 
-    let mut child = Command::new(env!("CARGO_BIN_EXE_tswarm-demo-exec"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_tgate-demo-exec"))
         .env("TG_DEMO_API_KEY", "demo-test-key")
         .env("TG_DEMO_API_SECRET", "demo-test-secret")
         .env("TG_DEMO_EXEC_TEST_BASE_URL", &server.base_url)
@@ -552,7 +552,7 @@ fn bin_ndjson_protocol_round_trips_against_a_fake_server() {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .expect("spawn tswarm-demo-exec");
+        .expect("spawn tgate-demo-exec");
 
     let mut stdin = child.stdin.take().expect("stdin");
     let stdout = child.stdout.take().expect("stdout");
@@ -561,7 +561,7 @@ fn bin_ndjson_protocol_round_trips_against_a_fake_server() {
     let hello = read_json_line(&mut reader);
     assert_eq!(hello["id"], json!(0));
     assert_eq!(hello["ok"], json!(true));
-    assert_eq!(hello["result"]["hello"], json!("tswarm-demo-exec"));
+    assert_eq!(hello["result"]["hello"], json!("tgate-demo-exec"));
     assert_eq!(hello["result"]["base_url"], json!(server.base_url));
     let masked = hello["result"]["api_key_masked"].as_str().expect("api_key_masked string");
     assert!(!masked.is_empty());

@@ -46,7 +46,8 @@ import { bestPerSymbol, humanReasons, isSameLocalDay, quota, uniqueSymbols } fro
 import { exchangeInfo } from '@/lib/exchange';
 import { directionLabel, fmtDateTime, relativeTime, useNow } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { t, tmap } from '@/lib/i18n';
+import { t, tmap, listSep } from '@/lib/i18n';
+import { friendlyError } from '@/lib/edition';
 
 // label 是 i18n key(中文原文),渲染时过 t()
 const HORIZONS: { id: ScreenHorizon; label: string }[] = [
@@ -132,7 +133,7 @@ function fitClass(score: number): string {
   return 'text-muted-foreground';
 }
 
-const MODEL_PREFIXES = ['模型:', '模型:'];
+const MODEL_PREFIXES = ['模型:', '模型:']; // i18n-ignore(匹配后端理由前缀)
 
 function isModelReason(line: string): boolean {
   return MODEL_PREFIXES.some((p) => line.trimStart().startsWith(p));
@@ -340,7 +341,7 @@ function UniversePopover({ workflow, screen }: { workflow: Workflow | null; scre
       .map((x) => (x.endsWith('USDT') ? x : `${x}USDT`));
     const bad = incoming.filter((x) => !SYMBOL_RE.test(x));
     if (bad.length) {
-      toast.error(t('币种格式不对'), { description: t('{list}(要写成 BTCUSDT 这样)', { list: bad.join('、') }) });
+      toast.error(t('币种格式不对'), { description: t('{list}(要写成 BTCUSDT 这样)', { list: bad.join(listSep()) }) });
       return;
     }
     const next = [...new Set([...editable, ...incoming])];
@@ -1267,7 +1268,7 @@ export function ScreenerPage() {
       }
       queryClient.setQueryData(['workflow'], res.workflow);
       void queryClient.invalidateQueries({ queryKey: ['screener'] });
-      toast.success(t('加进观察列表了:{list}', { list: symbols.join('、') }));
+      toast.success(t('加进观察列表了:{list}', { list: symbols.join(listSep()) }));
     },
     onError: (err) => toast.error(t('没能加进观察列表'), { description: err instanceof Error ? err.message : String(err) }),
   });
@@ -1347,7 +1348,7 @@ export function ScreenerPage() {
               <ul className="max-h-32 space-y-1 overflow-y-auto p-2">
                 {screen.errors.map((e, i) => (
                   <li key={`${e.symbol}-${i}`} className="rounded-sm border border-down/30 bg-down/10 px-2 py-1 text-[11.5px] text-down">
-                    <span className="font-medium">{e.symbol}</span> — {e.error}
+                    <span className="font-medium">{e.symbol}</span> — {friendlyError(e.error)}
                   </li>
                 ))}
               </ul>
@@ -1356,7 +1357,7 @@ export function ScreenerPage() {
         ) : null}
 
         {screen?.error ? (
-          <div className="shrink-0 rounded-md border border-down/30 bg-down/10 px-3 py-2 text-[12px] text-down">{ex.id === 'okx' ? screen.error.replace(/币安/g, ex.name) : screen.error}</div>
+          <div className="shrink-0 rounded-md border border-down/30 bg-down/10 px-3 py-2 text-[12px] text-down">{friendlyError(ex.id === 'okx' ? screen.error.replace(/币安/g, ex.name) : screen.error)}</div>
         ) : null}
 
         <Workspace className="shrink-0">

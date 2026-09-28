@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { validate, type ResearchStrategyStatus } from '@trading-swarm/contracts';
+import { validate, type ResearchStrategyStatus } from '@trade-gate/contracts';
 import { openStateDb } from '../../../../src/state-db.js';
 import { ResearchStore } from '../../../../src/demo/research/store.js';
 import type { ResearchService } from '../../../../src/demo/research/service.js';

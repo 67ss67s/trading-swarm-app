@@ -21,7 +21,7 @@ import {
   type Time,
   type UTCTimestamp,
 } from 'lightweight-charts';
-import type { BacktestCandle, BacktestPlan, BacktestTrade, SmcOverlay } from '@trading-swarm/contracts';
+import type { BacktestCandle, BacktestPlan, BacktestTrade, SmcOverlay } from '@trade-gate/contracts';
 import { SmcPrimitive, type SmcLayerKey } from './smc-layer';
 import { CHART_COLORS } from '@/lib/chart-colors';
 import { cn } from '@/lib/utils';

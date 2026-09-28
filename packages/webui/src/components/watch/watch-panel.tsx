@@ -17,7 +17,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { exchangeInfo } from '@/lib/exchange';
 import { useNow } from '@/lib/format';
-import { t } from '@/lib/i18n';
+import { t, listSep } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { AssetPicker } from './asset-picker';
 import { PaceSection } from './pace-section';
@@ -68,7 +68,7 @@ export function WatchPanel({ layout = 'page', className }: { layout?: 'page' | '
   const add = (syms: string[]) =>
     write((w) => {
       const r = mergeAdd(w.watchlist, syms, w.watchlist_max ?? 60);
-      if (r.overflow.length) toast.error(t('超过名单上限,没加:{list}', { list: r.overflow.join('、') }));
+      if (r.overflow.length) toast.error(t('超过名单上限,没加:{list}', { list: r.overflow.join(listSep()) }));
       return r.added.length ? { watchlist: r.next } : null;
     }, syms.length === 1 ? t('{symbol} 加进观察列表了', { symbol: syms[0]! }) : t('加进观察列表了:{n} 个', { n: syms.length }));
   const remove = (sym: string) =>

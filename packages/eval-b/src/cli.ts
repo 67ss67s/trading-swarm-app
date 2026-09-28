@@ -54,7 +54,7 @@ function optionalNumber(args: ParsedArgs, name: string): number | null {
 function printHelp(): void {
   process.stdout.write(
     [
-      'trading-swarm eval-b',
+      'trade-gate eval-b',
       '',
       'gen --symbols BTCUSDT,ETHUSDT --tf 15m --from YYYY-MM-DD --to YYYY-MM-DD --n 12 --seed 7 --out cases/v1',
       'run --cases cases/v1 --brain stub|pi|claude --out runs/name [--limit N] [--tags a,b,!c] [--resume]',

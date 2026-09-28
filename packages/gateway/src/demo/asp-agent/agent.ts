@@ -1,10 +1,14 @@
+import { aspSnapshotEnabled } from '../asp-snapshot.js';
 import { MarketWallet } from './wallet.js';
 import type { DemoRuntime } from '../runtime.js';
 import { MarketCli, CliError, data, list, object, payload } from './cli.js';
 import { ProviderTaskPoller, ensureBuyerSession, registerProviderHandler } from './provider-tasks.js';
 import { AspServices } from './services/index.js';
+import { infoSignal, type SubscriptionServiceDef } from './services/broadcast.js';
+import type { SubscriptionChannel } from './services/types.js';
+import { symbolToInstId } from '../okx/instruments.js';
 import { MarketInbox, downloadFileDelivery } from './inbox.js';
-import { MarketPublisher, renderDeliverable, realizedR, serviceMessage, signalLine, type PublishEvent } from './publisher.js';
+import { MarketPublisher, englishName, renderDeliverable, realizedR, serviceMessage, signalLine, type PublishEvent } from './publisher.js';
 import { MarketIdentity } from './identity.js';
 import { MarketAftersales } from './aftersales.js';
 import { MarketCatalog } from './catalog.js';
@@ -20,6 +24,31 @@ export function subscriptionStatus(r: Record<string, unknown>): string {
 }
 const terminal = (r: Record<string, unknown>) => ['CLOSED', 'COMPLETED', 'FAILED', 'CANCELLED', 'CANCELED', 'EXPIRED'].includes(subscriptionStatus(r));
 const enabled = (v: unknown) => v === true || v === 1 || v === '1';
+export type SubscriptionGroup = 'active' | 'trial' | 'pending' | 'cancelled_trial' | 'ended';
+export const SUBSCRIPTION_GROUP_ORDER: readonly SubscriptionGroup[] = ['active', 'trial', 'pending', 'cancelled_trial', 'ended'];
+const epochMs = (v: unknown): number | null => { if (v === null || v === undefined || v === '') return null; const n = Number(v); return Number.isFinite(n) && n > 0 ? (n < 1e12 ? n * 1000 : n) : null; };
+const utc = (ms: number) => `${new Date(ms).toISOString().slice(5, 16).replace('T', ' ')} UTC`;
+/**
+ * 订阅栏分组(买方视图):付费进行中 → 试用中(会转付费)→ 等服务方接单 → 已取消续费但试用未到期 → 已结束。
+ * 试用期内(ACTIVE + trialType 1)一律按剩余试用时间显示并标到期是否转付费;已不是 ACTIVE 但试用期没到的归「已取消 · 试用至」。时间字段是秒。
+ */
+export function subscriptionDisplay(r: Record<string, unknown> | null, now = Date.now()): { group: SubscriptionGroup; label: string; until: number | null; started_at: number | null } {
+  if (!r) return { group: 'ended', label: '平台没有返回这条订阅', until: null, started_at: null };
+  const status = subscriptionStatus(r); const trial = Number(r['trialType']) === 1; const renew = enabled(r['autoRenew']);
+  const subEnd = epochMs(r['subEndTime']); const trialEnd = epochMs(r['trialEndTime']);
+  const started_at = epochMs(r['subStartTime']) ?? epochMs(r['trialStartTime']) ?? epochMs(r['createTime']) ?? null;
+  // 试用单没法区分「主动取消续费」和「建单时就没开续费」(都是 autoRenew=0),所以试用期内一律按试用剩余时间显示,再标到期后会不会转付费
+  if (status === 'ACTIVE' && trial) {
+    const until = trialEnd ?? subEnd; const h = until ? Math.max(0, Math.round((until - now) / 3_600_000)) : null;
+    const left = h === null ? '试用中' : h >= 24 ? `试用中 · 剩 ${Math.floor(h / 24)} 天 ${h % 24} 小时` : `试用中 · 剩 ${h} 小时`;
+    return { group: 'trial', label: `${left} · ${renew ? '到期转付费' : '到期不续费'}`, until, started_at };
+  }
+  if (trial && subEnd !== null && subEnd > now) return { group: 'cancelled_trial', label: `已取消 · 试用至 ${utc(subEnd)}`, until: subEnd, started_at };
+  if (status === 'ACTIVE') return { group: 'active', label: subEnd ? `进行中 · 至 ${utc(subEnd)}${renew ? ' · 自动续费' : ' · 已关闭续费'}` : '进行中', until: subEnd, started_at };
+  if (!status || status === 'INIT' || status === 'CREATED') return { group: 'pending', label: '等待服务方接单', until: null, started_at };
+  const ended: Record<string, string> = { CLOSED: '已结束', COMPLETED: '已完成', EXPIRED: '已到期', FAILED: '失败', CANCELLED: '已取消', CANCELED: '已取消', REJECTED: '已拒收', DISPUTED: '争议处理中' };
+  return { group: 'ended', label: ended[status] ?? `已结束(${status})`, until: subEnd ?? trialEnd, started_at };
+}
 export function findJobId(v: unknown, depth = 0): string | null {
   if (depth > 12 || !v || typeof v !== 'object') return null;
   const o = object(v);
@@ -53,13 +82,15 @@ export class AspAgent {
     this.identity = new MarketIdentity(this.cli, rt.store);
     const emit = (name: string, payload: unknown) => rt.emit(name, payload);
     this.aftersales = new MarketAftersales({ store: rt.store, cli: this.cli, aspId: () => this.identity.aspId(), emit, activity: (title) => rt.activity('info_update', { title }) });
-    this.inbox = new MarketInbox({ store: rt.store, settings: () => ({ ...rt.followSettings, enabled: this.shouldCollect() }), session, fetchFile: async (d, job) => { const buyer = (await this.identity.mine()).buyer; const id = buyer?.['agentId']; if (!id) throw new Error('没有买方身份,无法解密文件投递'); return downloadFileDelivery(d, String(id), job); }, signalEnabled: () => rt.followSettings.enabled, ...(rt.okxAspReadQueue ? { readQueue: rt.okxAspReadQueue } : {}), system: async (e, id) => { await this.aftersales.receive(e, id); if (/^(sub_open|job_asp_selected|sub_asp_selected)$/.test(String(e['event']))) void this.providerTasks.tick(); }, emit, traderOf: (job) => rt.okxAspFeed().traderOf(job) });
+    this.inbox = new MarketInbox({ store: rt.store, settings: () => ({ ...rt.followSettings, enabled: this.shouldCollect() }), session, fetchFile: async (d, job) => { const buyer = (await this.identity.mine()).buyer; const id = buyer?.['agentId']; if (!id) throw new Error('没有买方身份,无法解密文件投递'); return downloadFileDelivery(d, String(id), job); }, signalEnabled: () => rt.followSettings.enabled, selfAspIds: () => { try { const a = JSON.parse(rt.store.kvGet('market.asp_identity') ?? '{}').value?.asp; const id = a?.agentId ?? a?.aspAgentId ?? a?.id; return id ? [String(id)] : []; } catch { return []; } }, ...(rt.okxAspReadQueue ? { readQueue: rt.okxAspReadQueue } : {}), system: async (e, id) => { await this.aftersales.receive(e, id); if (/^(sub_open|job_asp_selected|sub_asp_selected)$/.test(String(e['event']))) void this.providerTasks.tick(); }, emit, traderOf: (job) => rt.okxAspFeed().traderOf(job) });
     this.catalog = new MarketCatalog({ store: rt.store, log: (level, message) => rt.log(level, 'asp_agent', message) });
-    this.publisher = new MarketPublisher({ store: rt.store, cli: this.cli, settings: () => this.settings().publisher, aspId: () => this.identity.aspId(), emit });
+    this.publisher = new MarketPublisher({ store: rt.store, cli: this.cli, settings: () => this.settings().publisher, aspId: () => this.identity.aspId(), emit, serviceId: () => signalServiceId(rt.store), paused: () => this.services?.isPaused('strategy_signal') ?? false });
     this.providerTasks = new ProviderTaskPoller({
       store: rt.store, cli: this.cli, emit, log: (level, message) => rt.log(level, 'asp_agent', message),
       aspId: async () => { const asp = (await this.identity.mine()).asp; const id = asp?.['agentId'] ?? asp?.['aspAgentId'] ?? asp?.['id']; return id ? String(id) : null; },
       ensureSession: (job, asp, buyer) => ensureBuyerSession(job, buyer, { asp_id: asp, ...(rt.okxAspRunCli ? { runner: rt.okxAspRunCli } : {}) }),
+      // 【Futures】/【Spot】+200 字的信号格式只约束策略信号订阅;市场情报/微观告警是分析类服务
+      strictSignalService: () => signalServiceId(rt.store),
     });
     // 策略信号服务:接单后立即回一条规范化信号(有效期内的最新计划;没有就发「当前无信号 + 下次扫描时间」的服务消息)。
     // 只挂在这条服务的 serviceId 上;其它服务(市场情报等)由各自处理器负责,没有处理器就不接单。
@@ -68,9 +99,10 @@ export class AspAgent {
       cli: this.cli, aspId: () => this.identity.aspId(), register: registerProviderHandler,
       // 会话建不起来必须抛错,扇出才不会 deliver
       ensureSession: async (job, asp, buyer) => { if (!(await ensureBuyerSession(job, buyer, { asp_id: asp, ...(rt.okxAspRunCli ? { runner: rt.okxAspRunCli } : {}) }))) throw new Error('A2A 会话建立失败,本次不投递'); },
+      extraServices: () => [this.strategyStatusService()],
     });
     // 注入了 CLI 的环境(测试)不自动起轮询;生产可用 TG_ASP_PROVIDER_POLL=0 关。
-    if (!rt.okxAspRunCli && process.env['TG_ASP_PROVIDER_POLL'] !== '0' && !process.env['VITEST']) { this.providerTasks.start(); this.services.start(); }
+    if (!rt.okxAspRunCli && process.env['TG_ASP_PROVIDER_POLL'] !== '0' && process.env['TG_SOAK_OFFLINE'] !== '1' && !process.env['VITEST']) { this.providerTasks.start(); this.services.start(); }
   }
   /** 新订阅的第一条交付:有效期内(至少还剩 1 分钟)最近一条可执行信号按剩余有效期重发;否则发状态消息。 */
   welcomeText(now = Date.now()): string {
@@ -82,14 +114,42 @@ export class AspAgent {
       if ((e.valid_until ?? e.signal_time + 180_000) < now + 60_000) continue;
       return signalLine(e, e.direction === 'short' ? 'SHORT' : 'LONG', now);
     }
-    let runs: { strategy_name: string; timeframe: string; symbols: string[]; next_scan_at: number | null }[] = [];
+    return this.statusSignal(now);
+  }
+  /**
+   * 没有有效信号时的状态信号行(【Futures】/【Spot】类型头、≤200 字、不含方向和价格,买方 agent 不会当成可执行单)。
+   * OKX.AI 审核只把类型头开头的交付算「发了信号」,「Service message」不算,所以欢迎包和保活都用它。
+   */
+  statusSignal(now = Date.now()): string {
+    let runs: { strategy_name: string; timeframe: string; symbols: string[]; next_scan_at: number | null; market: 'spot' | 'perp' }[] = [];
     try { runs = this.rt.strategyRuns().store.list().filter((r) => r.status === 'running' && r.publish_asp); } catch {}
     const next = runs.map((r) => r.next_scan_at).filter((x): x is number => typeof x === 'number' && x > now).sort((a, b) => a - b)[0];
     const run = runs[0];
     const hhmm = (ms: number) => new Date(ms).toISOString().slice(5, 16).replace('T', ' ');
-    return serviceMessage(`订阅已开通 / Subscription active. 当前无有效信号 / No active signal now.${run ? ` 运行中 / Running: ${run.strategy_name} ${run.timeframe} ${run.symbols.slice(0, 3).join(',')}.` : ''}${next ? ` 下次扫描 / Next scan ${hhmm(next)} UTC.` : run ? ` 每根 ${run.timeframe} 收盘扫描 / Scans every ${run.timeframe} bar close.` : ''} 新信号收盘即推送 / New signals pushed on bar close.`);
+    const spot = run?.market === 'spot';
+    const inst = run ? run.symbols.slice(0, 2).map((s) => symbolToInstId(s, run.market)).join(', ') : 'BTC-USDT-SWAP';
+    const head = spot ? `【Spot】OKX | ${inst}` : `【Futures】${inst}`;
+    const scan = run ? `${englishName(run.strategy_name) ?? 'Strategy'} ${run.timeframe} scanning${next ? ` | Next scan ${hhmm(next)} UTC` : ` | Scans every ${run.timeframe} bar close`}` : 'Strategy scan idle';
+    return infoSignal(`${head} | No active setup`, scan).replace(' | Info only, no order |', ' | Status only, no order |');
+  }
+  /** 策略信号服务的保活频道:最近 6 小时内没推过任何交付(真实信号或状态)就推一条状态信号,保证订阅者 12 小时内必有信号 */
+  strategyStatusService(): SubscriptionServiceDef {
+    const BUCKET = 6 * 3_600_000;
+    const channel: SubscriptionChannel = {
+      key: 'strategy_status', every_ms: 10 * 60_000,
+      tick: async (deps) => {
+        const now = deps.now();
+        const recent = this.rt.store.marketDb.prepare("SELECT 1 FROM okx_market_delivery_out_job WHERE status='delivered' AND updated_at>=? LIMIT 1").get(now - BUCKET);
+        if (recent) return null;
+        const signal = this.statusSignal(now);
+        return { event_id: `strategy_status:${Math.floor(now / BUCKET)}`, channel: 'strategy_status', summary: signal, text: signal, signal, payload: { kind: 'strategy_status', at: now } };
+      },
+      welcome: async (deps) => { const signal = this.statusSignal(deps.now()); return { event_id: `strategy_status:welcome:${deps.now()}`, channel: 'strategy_status', summary: signal, text: signal, signal, payload: { kind: 'strategy_status' } }; },
+    };
+    return { service_id: signalServiceId(this.rt.store), channels: [channel], ...(this.services?.isPaused('strategy_signal') ? { paused: true } : {}) };
   }
   shouldCollect(): boolean {
+    if (aspSnapshotEnabled()) return false; // 只读快照模式:不轮询收件箱
     if (this.rt.followSettings.enabled || this.settings().publisher.enabled) return true;
     try { return !!JSON.parse(this.rt.store.kvGet('market.asp_identity') ?? '{}').value?.asp; } catch { return false; }
   }
@@ -159,7 +219,10 @@ export class AspAgent {
     const remote = await this.remoteSubscriptions(true);
     const stats = this.stats(); const rows = list(remote); const settings = this.rt.followSettings;
     const ids = new Set([...rows.map((x) => normalizeJobId(x['jobId'])), ...Object.keys(settings.subscriptions).map(normalizeJobId)].filter(Boolean));
-    return { thisDeviceId: remote['thisDeviceId'] ?? null, subscriptions: [...ids].map((job_id) => { const r = rows.find((x) => normalizeJobId(x['jobId']) === job_id) ?? null; return { job_id, remote: r, asp: this.aspOf(r ? String(r['providerAgentId'] ?? '') || null : null, r ? String(r['serviceTokenAmount'] ?? r['paymentTokenAmount'] ?? '') || null : null), config: Object.entries(settings.subscriptions).find(([id]) => normalizeJobId(id) === job_id)?.[1] ?? { mode: settings.default_mode, weight: 0, enabled: true, approval: 'manual' }, stats: stats.find((x) => normalizeJobId(x.job_id) === job_id) ?? { job_id, received: 0, order: 0, analysis: 0, followed: 0, realized_r: null, agent_agree_rate: null, last_signal_at: null } }; }) };
+    const now = Date.now(); const rank = (g: SubscriptionGroup) => SUBSCRIPTION_GROUP_ORDER.indexOf(g);
+    // 排序:按 display.group 顺序,组内按开始时间倒序
+    return { thisDeviceId: remote['thisDeviceId'] ?? null, subscriptions: [...ids].map((job_id) => { const r = rows.find((x) => normalizeJobId(x['jobId']) === job_id) ?? null; const { started_at, ...display } = subscriptionDisplay(r, now); return { job_id, display, started_at, remote: r, asp: this.aspOf(r ? String(r['providerAgentId'] ?? '') || null : null, r ? String(r['serviceTokenAmount'] ?? r['paymentTokenAmount'] ?? '') || null : null), config: Object.entries(settings.subscriptions).find(([id]) => normalizeJobId(id) === job_id)?.[1] ?? { mode: settings.default_mode, weight: 0, enabled: true, approval: 'manual' }, stats: stats.find((x) => normalizeJobId(x.job_id) === job_id) ?? { job_id, received: 0, order: 0, analysis: 0, followed: 0, realized_r: null, agent_agree_rate: null, last_signal_at: null } }; })
+      .sort((a, b) => rank(a.display.group) - rank(b.display.group) || (b.started_at ?? 0) - (a.started_at ?? 0)) };
   }
   async devices(job: string, receives: boolean) {
     const remote = await this.remoteSubscriptions(true);
@@ -184,7 +247,7 @@ export class AspAgent {
     for (const key of ['service_id', 'fee_amount', 'fee_token_address']) if (typeof o[key] !== 'string' || !o[key]) throw Object.assign(new Error(`${key} 必填`), { status: 400 });
     if (!/^\d+(?:\.\d{1,6})?$/.test(String(o['fee_amount']))) throw Object.assign(new Error('fee_amount 必须是十进制字符串'), { status: 400 });
     this.validateConfig(o);
-    const args = ['--service-id', String(o['service_id']), '--service-token-amount', String(o['fee_amount']), '--service-token-address', String(o['fee_token_address']), '--use-trial', String(o['use_trial'] === true), '--auto-renew', o['auto_renew'] === true ? '1' : '0', '--title', [...String(o['title'] ?? `trading-swarm · ${o['service_id']}`)].slice(0, 30).join('') /* 4.6.2 硬限 30 个字符(按码点数) */, '--description', String(o['description'] ?? 'trading-swarm 信号订阅')];
+    const args = ['--service-id', String(o['service_id']), '--service-token-amount', String(o['fee_amount']), '--service-token-address', String(o['fee_token_address']), '--use-trial', String(o['use_trial'] === true), '--auto-renew', o['auto_renew'] === true ? '1' : '0', '--title', [...String(o['title'] ?? `trade-gate · ${o['service_id']}`)].slice(0, 30).join('') /* 4.6.2 硬限 30 个字符(按码点数) */, '--description', String(o['description'] ?? 'trade-gate 信号订阅')];
     // onchainos 4.6.2 的 create-subscribe 没有任何 autotrade 参数(自动交易是 skill 流程里另行 consent 的),这里永远不传;provider-agent-id 在 4.6.2 是必填。
     if (typeof o['provider_agent_id'] !== 'string' || !o['provider_agent_id']) throw Object.assign(new Error('provider_agent_id 必填(onchainos 4.6.2 起 create-subscribe 要求)'), { status: 400 });
     args.push('--provider-agent-id', String(o['provider_agent_id']));

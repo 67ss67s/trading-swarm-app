@@ -1,3 +1,4 @@
+import { BoundedMap } from './bounded-map.js';
 /**
  * 零 PROPOSE 漏斗的只读路由(funnel.ts)。在 http-extra.ts 里一行注册。
  *
@@ -15,7 +16,7 @@ interface Entry {
   promise: Promise<FunnelReport>;
 }
 
-const cache = new Map<string, Entry>();
+const cache = new BoundedMap<string, Entry>(16);
 
 /** 测试用:清掉缓存。 */
 export function clearFunnelCache(): void {

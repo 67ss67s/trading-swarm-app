@@ -495,7 +495,7 @@ function describeReduce(signal: TraderSignal): string {
 
 /**
  * 跟单仓位的风险预算:`risk_pct × weight`。**不用**带单员自称的仓位比重
- * (研究报告 §1「交易员A」节:2% 保证金 100 倍不是可比的风险权重)。
+ * (研究报告 §1「TraderB」节:2% 保证金 100 倍不是可比的风险权重)。
  */
 export function followRiskPct(riskPct: string | number, weight: number): string {
   const base = Number(riskPct);
@@ -614,7 +614,7 @@ function utcDayStart(now: number): number {
  */
 export type OpenFromSignalResult =
   | { outcome: 'opened'; thread_id: string; reason: string }
-  | { outcome: 'rejected'; reason: string; thread_id?: string | null }
+  | { outcome: 'rejected'; reason: string; thread_id?: string | null; /** §9.56 结构化拒绝:哪一层、原因码、原样闸结果 */ layer?: 'judge' | 'strategy' | 'gate' | 'execution'; code?: string; gates?: import('./types.js').GateResult[] }
   | { outcome: 'failed_before_send'; reason: string; thread_id?: string | null }
   | { outcome: 'unknown'; reason: string; thread_id?: string | null };
 

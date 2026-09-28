@@ -8,7 +8,7 @@
  *   - 从整段 series 一次算完并按数组缓存:第 i 根的取值只依赖 series[0..i](桶的完整性只看桶内、≤ end 的根),所以与「每根截前缀再算」逐位相同。
  * 不受决策视图(engine viewBars / 订单核 view,500–5000 根)约束:原语从 ctx.series 读整段,缺省退回 ctx.bars。
  */
-import type { ResearchBar } from '@trading-swarm/contracts';
+import type { ResearchBar } from '@trade-gate/contracts';
 import { n, type PrimitiveContext } from './registry.js';
 
 const UNIT: Record<string, number> = { m: 60000, h: 3600000, d: 86400000 };

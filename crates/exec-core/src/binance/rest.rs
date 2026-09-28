@@ -10,7 +10,7 @@
 //! - 时间偏移与令牌桶从进程 `static` 改成实例字段(`Arc` 共享),测试不再互相污染;
 //! - 新增 `X-MBX-USED-WEIGHT-1M` / `Retry-After` 响应头自适应;
 //! - 删掉 `test_order` / `allow_live_orders` / hedge 运行时联锁 / CM(币本位)探测 /
-//!   copy_trading 端点 —— trading-swarm 的闸门在 execd 的 gate v2,不在适配器里。
+//!   copy_trading 端点 —— trade-gate 的闸门在 execd 的 gate v2,不在适配器里。
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI64, Ordering};
@@ -30,7 +30,7 @@ use crate::secrets::{MainCredentials, SecretString, mask};
 
 pub const FAPI_LIVE: &str = "https://fapi.binance.com";
 pub const API_LIVE: &str = "https://api.binance.com";
-/// 币安 USDⓈ-M 的**演示环境**。trading-swarm 的 Agentic 子账户底座没有 testnet
+/// 币安 USDⓈ-M 的**演示环境**。trade-gate 的 Agentic 子账户底座没有 testnet
 /// (设计 §0),这里保留常量只为主账户侧的连通性排查。
 pub const FAPI_DEMO: &str = "https://demo-fapi.binance.com";
 
@@ -171,7 +171,7 @@ impl BinanceRest {
             Ok(())
         } else {
             Err(BinanceError::credentials_missing(
-                "缺少主账户 API key/secret:设置 TG_MAIN_API_KEY/TG_MAIN_API_SECRET 或写入 ~/.trading-swarm/secrets/apikey-main.json",
+                "缺少主账户 API key/secret:设置 TG_MAIN_API_KEY/TG_MAIN_API_SECRET 或写入 ~/.trade-gate/secrets/apikey-main.json",
             ))
         }
     }

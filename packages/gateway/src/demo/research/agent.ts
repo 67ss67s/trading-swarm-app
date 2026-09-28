@@ -1,4 +1,4 @@
-import type { ResearchExecution, ResearchFilterDecision } from '@trading-swarm/contracts';
+import type { ResearchExecution, ResearchFilterDecision } from '@trade-gate/contracts';
 import type { Brain, BrainResult } from '../brain.js';
 import { policyToIR, strategyNodes } from './strategy.js';
 import { registry } from './primitives/index.js';

@@ -2,7 +2,7 @@
  * 楼层右栏:Agent Council(8 角色 tile + AI/CODE/EXEC 徽章)+ Live Handoffs 流。
  * 交接流里真 bot_handoffs 行(实线左边)与 activity 映射行(点线左边)视觉区分(设计稿 §4);
  * 待阅的真交接可以 ack(= 已阅);subject.type='screen' 且带 watchlist 提案的,只预览 before → after
- * diff,应用去筛选页确认(楼层只读,评审 §8)。
+ * diff,应用去筛选页确认(楼层只读,Codex 评审 §8)。
  */
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -42,7 +42,7 @@ export function Council({ meta, agents, selected, onSelect, rosterSource, riskLe
               type="button"
               onClick={() => onSelect(a.role)}
               className={cn('flex items-center gap-2 bg-[var(--of-panel)] px-2 py-2 text-left hover:bg-[var(--of-panel-2)]', sel && 'outline outline-1 outline-[var(--of-danger)]')}
-              title={a.presence.action ?? a.note ?? a.name}
+              title={a.presence.action ?? (a.note ? t(a.note) : t(a.name))}
             >
               <Sprite rows={m.sprite} color={m.color} px={2.5} state={a.presence.state} />
               <span className="min-w-0 flex-1">

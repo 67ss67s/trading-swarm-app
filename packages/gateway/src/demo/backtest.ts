@@ -1,3 +1,4 @@
+import { claimSlot } from './public-demo.js';
 import { effectiveReturns } from './replay-stats.js';
 import { SIGNAL_REGISTRY, nextSignalState, closedWeeks, type SignalState } from './strategy-signals.js';
 import { mechanicalDirection, type LedgerLeg, type LedgerSnapshot, type JudgmentLedgerRow } from './judgment-ledger.js';
@@ -256,11 +257,11 @@ function fapiBase(): string {
 /**
  * Read per call, not once at import: `TG_DEMO_KLINE_CACHE_DIR` is set by tests in `beforeAll`, which
  * runs AFTER this module is imported — a module-level const meant those tests silently read the real
- * ~/.trading-swarm cache and only passed while it happened to be empty (2026-09-05: warming it for the
+ * ~/.trade-gate cache and only passed while it happened to be empty (2026-09-05: warming it for the
  * funnel made three blind-replay tests read live BTC bars).
  */
 function cacheDir(): string {
-  return process.env['TG_DEMO_KLINE_CACHE_DIR'] ?? join(homedir(), '.trading-swarm', 'demo', 'klines');
+  return process.env['TG_DEMO_KLINE_CACHE_DIR'] ?? join(homedir(), '.trade-gate', 'demo', 'klines');
 }
 
 const id = (prefix: string): string => `${prefix}-${Date.now().toString(36)}${randomBytes(3).toString('hex')}`;
@@ -950,7 +951,9 @@ export class BacktestManager {
   private async execute(run0: BacktestRun): Promise<void> {
     let run: BacktestRun = { ...run0, status: 'running' };
     this.save(run);
+    let release: (() => void) | undefined;
     try {
+      release = claimSlot('heavy'); // 1 vCPU 保护:重计算并发上限(TG_HEAVY_CONCURRENCY)
       const summary = await this.walk(run);
       const cancelled = this.cancelled.has(run.id);
       run = { ...run, status: cancelled ? 'cancelled' : 'done', summary, progress: { done: run.params.legs ? summary.scans : summary.judgments, total: summary.candidates, last_action: null, at: Date.now() } };
@@ -970,6 +973,7 @@ export class BacktestManager {
       this.deps.log?.('error', `回测 ${run.id} 失败:${run.error}`);
       this.save(run);
     } finally {
+      release?.();
       this.cancelled.delete(run.id);
       this.running = null;
     }

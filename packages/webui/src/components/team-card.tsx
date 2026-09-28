@@ -23,6 +23,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { fmtDateTime, relativeTime, useNow } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { t, tmap } from '@/lib/i18n';
+import { st } from '@/lib/server-text-en';
 
 type BotBadge = 'AI' | 'CODE' | 'EXEC';
 
@@ -77,7 +78,7 @@ function BotRow({ bot, lastRun, pending, now }: { bot: BotProfile; lastRun: BotR
         <span className="block truncate text-[11.5px]">{bot.name}</span>
         {lastRun || pending || presence?.action ? (
           <span className="num block truncate text-[10px] text-muted-foreground">
-            {presence?.action ? `${presence.action} · ` : ''}
+            {presence?.action ? `${st(presence.action)} · ` : ''}
             {lastRun ? `${lastRun.routine} ${RUN_STATUS[lastRun.status]} ${relativeTime(lastRun.started_at, now)}${lastRun.cost_cny ? ` ¥${lastRun.cost_cny.toFixed(3)}` : ''}` : ''}
             {pending ? <span className="text-warn"> · {t('{n} 条待读', { n: pending })}</span> : null}
           </span>

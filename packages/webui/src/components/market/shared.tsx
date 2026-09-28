@@ -2,10 +2,16 @@
  * 信号市场(#/market)四栏共用的标签、格式化与小件。
  * 设计 docs/design/asp-market-2026-09-20.md;契约 §9.39。
  */
-import type { FollowMode, MarketAftersaleStatus, MarketInboxParseStatus, MarketService, TraderSignalStatus } from '@/api/types';
+import { useState } from 'react';
+import { Check, X } from 'lucide-react';
+import type { FeedKind } from '@/api/market-adapt';
+import type { FollowMode, MarketAftersaleStatus, MarketInboxParseStatus, MarketService, MarketSubscriptionGroup, MarketSubscriptionView, TraderSignalStatus } from '@/api/types';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { t, tmap } from '@/lib/i18n';
+import { friendlyError } from '@/lib/edition';
+import { judgeLightDetail } from './judge';
 
 export const MODE_CLASS: Record<FollowMode, string> = {
   book: 'bg-up/15 text-up border-up/30',
@@ -13,11 +19,18 @@ export const MODE_CLASS: Record<FollowMode, string> = {
   evidence: 'bg-muted text-muted-foreground border-transparent',
 };
 
-/** 三种模式的一句话说明(订阅弹窗和订阅卡都用)。 */
+/** 三种处理方式的一句话说明(订阅弹窗和订阅卡都用)。业务语言,不出现内部词。 */
 export const MODE_HINT: Record<FollowMode, string> = tmap({
-  book: '组合经理接管:ASP Agent 把 open 信号归一成候选点位直接交给组合经理,代码算仓位、过基础闸 + 组合限额 + 风控哨兵,不问模型;审批 manual 生成待批意图、auto 直接执行;管理动作一律人工',
-  gated: 'agent 把关:信号作为证据交给 agent 判断,同向才进待办',
-  evidence: '只留证据:进判断账本,不开仓、不进待办',
+  book: '收到开仓信号后,系统按你的仓位和风控规则自动算好下单方案;可以选「等我确认」或「直接下单」。减仓、移止损这类后续动作始终需要你手动处理。',
+  gated: '收到信号后先让 AI 判断一遍,AI 也认同的才提醒你决定,不会自动下单。',
+  evidence: '只把信号记下来供参考和统计,不下单,也不提醒你。',
+});
+
+/** 处理方式的短名(订阅卡、选择框)。 */
+export const MODE_LABEL: Record<FollowMode, string> = tmap({
+  book: '按规则下单',
+  gated: 'AI 把关后提醒我',
+  evidence: '只记录,不下单',
 });
 
 export const STATUS_CLASS: Record<TraderSignalStatus, string> = {
@@ -134,7 +147,8 @@ export function fmtUsdt(v: string | null): string {
 }
 
 /** 一盏灯:绿点 / 灰点 + 一句 detail。 */
-export function Light({ ok, label, detail }: { ok: boolean; label: string; detail: string | null }) {
+export function Light({ ok, label, detail: rawDetail }: { ok: boolean; label: string; detail: string | null }) {
+  const detail = judgeLightDetail(ok, rawDetail);
   return (
     <span className="inline-flex items-center gap-1.5 text-[11px]" title={detail ?? ''}>
       <span className={cn('size-2 rounded-full', ok ? 'bg-up' : 'bg-muted-foreground/40')} />
@@ -145,10 +159,9 @@ export function Light({ ok, label, detail }: { ok: boolean; label: string; detai
 }
 
 export function ModeBadge({ mode }: { mode: FollowMode }) {
-  const label: Record<FollowMode, string> = { book: t('组合经理接管'), gated: t('agent 把关'), evidence: t('只留证据') };
   return (
     <Badge variant="outline" className={cn('text-[10px]', MODE_CLASS[mode])} title={MODE_HINT[mode]}>
-      {label[mode]}
+      {MODE_LABEL[mode]}
     </Badge>
   );
 }
@@ -160,7 +173,163 @@ export function EmptyNote({ children }: { children: React.ReactNode }) {
 export function ErrorNote({ err }: { err: unknown }) {
   return (
     <p className="p-3 text-[12px] text-destructive">
-      {t('加载失败')}:{err instanceof Error ? err.message : String(err)}
+      {t('加载失败')}:{friendlyError(err instanceof Error ? err.message : String(err))}
     </p>
   );
+}
+
+// ---------------------------------------------------------------------------
+// 2026-09-25 新用户视角改版:收到内容的类型、订阅分组、首次引导卡。
+
+export const FEED_KIND_LABEL: Record<FeedKind, string> = tmap({
+  trade: '交易信号',
+  intel: '市场情报',
+  alert: '告警',
+  report: '报告',
+  system: '系统消息',
+});
+
+export const FEED_KIND_CLASS: Record<FeedKind, string> = {
+  trade: 'border-primary/40 bg-primary/10 text-primary',
+  intel: 'border-transparent bg-muted text-foreground/80',
+  alert: 'border-warn/40 bg-warn/10 text-warn',
+  report: 'border-up/30 bg-up/10 text-up',
+  system: 'border-transparent bg-muted text-muted-foreground',
+};
+
+export const SUB_GROUP_TITLE: Record<MarketSubscriptionGroup, string> = tmap({
+  active: '进行中',
+  trial: '试用中',
+  pending: '等服务方接单',
+  cancelled_trial: '已取消续费 · 试用还没结束',
+  ended: '已结束',
+});
+
+export const SUB_GROUP_CLASS: Record<MarketSubscriptionGroup, string> = {
+  active: 'bg-up/15 text-up border-up/30',
+  trial: 'bg-primary/15 text-primary border-primary/30',
+  pending: 'bg-warn/15 text-warn border-warn/30',
+  cancelled_trial: 'bg-muted text-foreground/80 border-border',
+  ended: 'bg-muted text-muted-foreground border-transparent',
+};
+
+/** 剩余时长的人话:「2 天 5 小时」「3 小时」「20 分钟」;过期返回 null。 */
+export function fmtRemaining(until: number | null, now: number): string | null {
+  if (until === null) return null;
+  const ms = until - now;
+  if (ms <= 0) return null;
+  const m = Math.floor(ms / 60_000);
+  if (m < 60) return t('{n} 分钟', { n: Math.max(1, m) });
+  const h = Math.floor(m / 60);
+  if (h < 24) return t('{n} 小时', { n: h });
+  const d = Math.floor(h / 24);
+  return h % 24 ? t('{d} 天 {h} 小时', { d, h: h % 24 }) : t('{n} 天', { n: d });
+}
+
+/** localStorage 读写都包 try/catch:隐私模式 / 禁用站点数据时照常渲染,只是不记住。 */
+function readFlag(key: string): boolean {
+  try {
+    return window.localStorage.getItem(key) === '1';
+  } catch {
+    return false;
+  }
+}
+function writeFlag(key: string): void {
+  try {
+    window.localStorage.setItem(key, '1');
+  } catch {
+    /* 记不住就算了 */
+  }
+}
+
+/** 引导卡是否已关闭(按 key 记在本浏览器)。 */
+export function useDismissed(key: string): [boolean, () => void] {
+  const [dismissed, setDismissed] = useState(() => (typeof window === 'undefined' ? false : readFlag(key)));
+  return [
+    dismissed,
+    () => {
+      writeFlag(key);
+      setDismissed(true);
+    },
+  ];
+}
+
+export interface GuideStep {
+  title: string;
+  detail: string;
+  /** undefined = 这一步不追踪完成状态(纯说明)。 */
+  done?: boolean;
+  action?: { label: string; onClick: () => void };
+}
+
+/** 首次引导卡:≤ 3 步,每步可带「去做」按钮,完成的打勾;「知道了」后本浏览器不再显示。 */
+export function GuideCard({ storageKey, title, steps }: { storageKey: string; title: string; steps: GuideStep[] }) {
+  const [dismissed, dismiss] = useDismissed(storageKey);
+  // 每一步都做完了就不再打扰(纯说明步骤不算「做完」)。
+  if (dismissed || (steps.length > 0 && steps.every((st) => st.done === true))) return null;
+  return (
+    <section aria-label={title} className="relative rounded-md border border-primary/30 bg-primary/5 px-3 py-2.5">
+      <div className="flex items-center gap-2 pr-6">
+        <h3 className="text-[12.5px] font-semibold">{title}</h3>
+        <button className="ml-auto text-[11px] text-muted-foreground underline-offset-2 hover:underline" onClick={dismiss}>
+          {t('知道了,不再显示')}
+        </button>
+      </div>
+      <button className="absolute right-2 top-2 rounded p-0.5 text-muted-foreground hover:bg-muted" aria-label={t('关闭引导')} onClick={dismiss}>
+        <X className="size-3.5" />
+      </button>
+      <ol className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+        {steps.map((st, i) => (
+          <li key={st.title} className={cn('flex gap-2 rounded border bg-card px-2.5 py-2', st.done && 'opacity-75')}>
+            <span
+              className={cn(
+                'mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold',
+                st.done ? 'border-up/40 bg-up/15 text-up' : 'border-primary/40 text-primary',
+              )}
+            >
+              {st.done ? <Check className="size-3" /> : i + 1}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className={cn('text-[12px] font-medium', st.done && 'line-through decoration-muted-foreground/60')}>{st.title}</div>
+              <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">{st.detail}</p>
+              {st.action && !st.done ? (
+                <Button size="xs" variant="outline" className="mt-1.5" onClick={st.action.onClick}>
+                  {st.action.label}
+                </Button>
+              ) : null}
+            </div>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+/** 订阅的服务名:本地下单时起的标题(去掉 tg · 前缀)> 目录服务名 > 平台服务名。 */
+export function subName(sub: Pick<MarketSubscriptionView, 'title' | 'asp_service_name' | 'service_name'>): string {
+  const local = sub.title.replace(/^(trade-gate|tg)\s*·\s*/, '').trim();
+  return local || sub.asp_service_name || sub.service_name;
+}
+
+/** 服务方:名字 + 编号;都没有就 null。 */
+export function subProvider(sub: Pick<MarketSubscriptionView, 'provider_name' | 'provider_agent_id'>): string | null {
+  const name = sub.provider_name?.trim();
+  if (name && sub.provider_agent_id) return `${name} #${sub.provider_agent_id}`;
+  return name || (sub.provider_agent_id ? `#${sub.provider_agent_id}` : null);
+}
+
+/** 时间线上的时间:今天只写时分,其它天写月-日 时分。 */
+export function fmtFeedTime(ts: number, now: number): string {
+  const d = new Date(ts);
+  const hm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const n = new Date(now);
+  if (d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate()) return hm;
+  return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${hm}`;
+}
+
+/** 「09-27 14:00」(本地时间),给到期 / 试用截止用。 */
+export function fmtMdHm(ts: number): string {
+  const d = new Date(ts);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }

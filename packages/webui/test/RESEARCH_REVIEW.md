@@ -13,7 +13,7 @@
 在副本根目录：
 
 ```sh
-npm run typecheck --workspace @trading-swarm/webui
+npm run typecheck --workspace @trade-gate/webui
 node_modules/.bin/vitest run --config packages/webui/test/vitest.config.ts
 ```
 

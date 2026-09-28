@@ -11,7 +11,7 @@
  *    每次成交收 fee_rate 并向不利方向滑 slippage_bps。
  * 做空完全镜像。
  */
-import type { ResearchBar } from '@trading-swarm/contracts';
+import type { ResearchBar } from '@trade-gate/contracts';
 import { atrSeries } from '../../primitives/indicators.js';
 
 export type Side = 'long' | 'short';

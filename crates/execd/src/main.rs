@@ -1,4 +1,4 @@
-//! `execd --data-dir ~/.trading-swarm [--socket <path>] [--log-level info]`
+//! `execd --data-dir ~/.trade-gate [--socket <path>] [--log-level info]`
 
 use std::path::PathBuf;
 
@@ -7,9 +7,9 @@ use execd::{DataDir, Runtime};
 use tokio::sync::watch;
 
 #[derive(Parser, Debug)]
-#[command(name = "execd", about = "trading-swarm 执行服务(唯一凭证持有者与账户写者)")]
+#[command(name = "execd", about = "trade-gate 执行服务(唯一凭证持有者与账户写者)")]
 struct Cli {
-    /// 数据目录(默认 $TRADING_SWARM_HOME 或 ~/.trading-swarm)
+    /// 数据目录(默认 $TRADE_GATE_HOME 或 ~/.trade-gate)
     #[arg(long)]
     data_dir: Option<PathBuf>,
     /// UDS 路径(默认 <data-dir>/run/execd.sock;macOS 路径上限 104 字节)

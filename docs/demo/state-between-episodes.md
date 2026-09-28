@@ -33,4 +33,4 @@
 
 ## 4. 这个设计对 eval 的意义
 
-因为每轮的输入 = (visible 事实, 线程, MarketState, 上次摘要, playbook),eval 只要把这五样冻结成 case 就能离线重放;外部评审/评估文档要求的「无未来泄漏」也变成一句可检查的话:visible 里所有时间戳 ≤ as_of。规格在 `docs/eval/README.md`。
+因为每轮的输入 = (visible 事实, 线程, MarketState, 上次摘要, playbook),eval 只要把这五样冻结成 case 就能离线重放;Codex/评估文档要求的「无未来泄漏」也变成一句可检查的话:visible 里所有时间戳 ≤ as_of。规格在 `docs/eval/README.md`。

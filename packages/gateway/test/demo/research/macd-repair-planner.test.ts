@@ -1,6 +1,6 @@
 import { LEGACY_ORDER_GATE } from '../../../src/demo/research/order-gate.js';
 import { describe, it, expect, vi } from 'vitest';
-import type { ResearchBar } from '@trading-swarm/contracts';
+import type { ResearchBar } from '@trade-gate/contracts';
 import { macd, confirmedPivots, macdDivergence } from '../../../src/demo/research/primitives/signals.js';
 import { registry } from '../../../src/demo/research/primitives/index.js';
 import { checkIR, compileStrategy, defaultIR, repairIR, compileConstraints, node } from '../../../src/demo/research/strategy.js';

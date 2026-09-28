@@ -3,7 +3,7 @@
  *
  * 回答一个问题:「这笔已确定数量的提案成交后,账户的总/净敞口、风险簇集中度、止损预算会变成什么」。
  * 不预测价格、不做 Kelly、不改任何提案的经济字段;超限只拒(gates 里多一道「组合限额」闸)。
- * 设计:docs/design/team-roles-2026-09-06.md §3(评审稿的 §3 口径基本照收:
+ * 设计:docs/design/team-roles-2026-09-06.md §3(Codex 稿的 §3 口径基本照收:
  * gross 不许先净掉再算;挂单/待批 intent 全部预留;止损预算不能被盈利仓抵销)。
  *
  * 数字口径:这里用 number 算(demo 账户是纸面/模拟盘,金额在 1e4 量级,double 够用);
@@ -13,7 +13,7 @@ import { createHash } from 'node:crypto';
 import type { Market, AccountView, DemoIntent, MarketView, StrategyThread } from './types.js';
 import type { SymbolRules } from './gates.js';
 import { capacityDecimal as dec, type CapacityDecimal } from './capacity-decimal.js';
-import type { DemoPortfolioCapacity, DemoSymbolCapacity } from '@trading-swarm/contracts';
+import type { DemoPortfolioCapacity, DemoSymbolCapacity } from '@trade-gate/contracts';
 
 export type PortfolioCapacity = DemoPortfolioCapacity;
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { StrategyIR } from "@trading-swarm/contracts";
+import type { StrategyIR } from "@trade-gate/contracts";
 import { candidateVariants, explicitGroups, sweepVariants } from "../../../../src/demo/research/loop/sweep.js";
 
 const ir = {

@@ -9,7 +9,7 @@
  *
  * 依赖全部注入,runtime 只负责接线;本文件不碰交易所、不调模型。
  */
-import type { BindingRole, BindingRoleSlice } from '@trading-swarm/contracts';
+import type { BindingRole, BindingRoleSlice } from '@trade-gate/contracts';
 import type { StrategyRun, StrategyRunMode, StrategyRunStatus } from './strategy-run.js';
 
 export interface CurrentStrategyRef { strategy_id: string; version: number; run_id: string }
@@ -66,7 +66,8 @@ export class AgentStrategyService {
     if (!cur || !run) {
       return { kind: 'free', strategy_id: null, version: null, name: null, run_id: null, run_status: null, mode: null, since: null, slices: [], role_engines: {}, legacy_pool_ignored: legacy };
     }
-    const judge: RoleEngine = this.deps.hasJudge(cur.strategy_id, cur.version) ? 'decision' : run.mode === 'agent' ? 'llm' : 'code';
+    // jev 模式用的也是钉住的决策模型(§9.56),与 IR judge 块同属 decision 引擎
+    const judge: RoleEngine = this.deps.hasJudge(cur.strategy_id, cur.version) || run.mode === 'jev' ? 'decision' : run.mode === 'agent' ? 'llm' : 'code';
     return {
       kind: 'strategy', strategy_id: cur.strategy_id, version: run.version, name: run.strategy_name, run_id: run.id, run_status: run.status, mode: run.mode, since: cur.since,
       slices: this.deps.slices(cur.strategy_id, run.version),
@@ -92,6 +93,8 @@ export class AgentStrategyService {
     if (b['kind'] !== 'strategy') fail('kind 只能是 free 或 strategy');
     const strategy_id = b['strategy_id'];
     if (typeof strategy_id !== 'string' || !strategy_id) fail('缺 strategy_id');
+    // §9.56「每笔问我确认」已下线:与运行器同一个错误码,在停旧运行之前就拒
+    if (b['mode'] === 'confirm') throw Object.assign(new Error('「每笔问我确认」已下线;请选 auto / agent / jev / signal_only'), { code: 'mode_confirm_removed', status: 400 });
     const body: Record<string, unknown> = { strategy_id, mode: b['mode'] ?? 'agent' };
     for (const k of ['version', 'symbols', 'risk_pct', 'max_open', 'confirm'] as const) if (k in b) body[k] = b[k];
     // 已有同策略的非停止运行 → 运行器 create 会复用它(按新参数重配);否则新建。

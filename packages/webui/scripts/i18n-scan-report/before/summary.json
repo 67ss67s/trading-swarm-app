@@ -1,0 +1,37 @@
+{
+  "dict_keys": 5251,
+  "t_keys": 6609,
+  "untranslated": 309,
+  "untranslated_unique": 296,
+  "missing_keys": 520,
+  "missing_keys_unique": 466,
+  "dynamic_keys": 0,
+  "indirect": 578,
+  "by_context": {
+    "error": 8,
+    "template": 16,
+    "table": 180,
+    "other": 29,
+    "jsx-expr": 19,
+    "jsx-text": 53,
+    "jsx-attr": 4
+  },
+  "by_dir": {
+    "components/research-workbench": 147,
+    "api/types.ts": 43,
+    "components/floor": 43,
+    "components/backtest-report": 27,
+    "pages/trade.tsx": 12,
+    "pages/logs.tsx": 10,
+    "api/market-adapt.ts": 8,
+    "components/market": 6,
+    "components/agent-strategy": 3,
+    "pages/research.tsx": 3,
+    "pages/screener.tsx": 2,
+    "api/asp-products.ts": 1,
+    "api/client.ts": 1,
+    "api/judge-live.ts": 1,
+    "components/chat-panel.tsx": 1,
+    "components/history": 1
+  }
+}

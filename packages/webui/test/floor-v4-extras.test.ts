@@ -4,7 +4,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EpisodeSummary, ModelsView } from '../src/api/types';
 import type { AgentStrategyView } from '../src/api/agent-strategy';
-import type { ResearchStrategy } from '@trading-swarm/contracts';
+import type { ResearchStrategy } from '@trade-gate/contracts';
 import { buildFloorModel, currentStrategy, deriveCouncilMeetings, deskInfo, pickMeetings } from '../src/components/floor-v4/snapshot';
 import { COINS_KEY, COINS_MAX, addCoin, effectiveCoins, loadCoins, moveCoin, normCoins, removeCoin, saveCoins } from '../src/components/floor-v4/coins';
 import { SFX, createSfx } from '../src/components/floor-v4/sound';

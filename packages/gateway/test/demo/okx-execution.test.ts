@@ -117,7 +117,7 @@ describe('account():张数 → 币,算法单当挂单', () => {
     expect(a.open_orders[1]).toMatchObject({ client_order_id: 'tgd123s1', stop_price: '82000', reduce_only: true, qty: '0.13' });
   });
 
-  // review #8:OKX 的 `conditional` / `sell` 在 runtime 的词表里不存在。
+  // codex-review #8:OKX 的 `conditional` / `sell` 在 runtime 的词表里不存在。
   it('带 slTriggerPx 的算法单翻成 STOP_MARKET + 大写方向,hasLiveStop 能认出来', async () => {
     const { b } = backend(rules);
     const a = await b.account();
@@ -152,7 +152,7 @@ describe('account():张数 → 币,算法单当挂单', () => {
     expect(a.open_orders[1]!.client_order_id).toBe('tgdabc123s1');
   });
 
-  // review #9:吞成 [] 就等于对巡检说「现在没有保护单」,巡检会照着补挂一张。
+  // codex-review #9:吞成 [] 就等于对巡检说「现在没有保护单」,巡检会照着补挂一张。
   it('算法单查询失败 → 整个账户快照失败,不给一份「没有保护单」的新鲜视图', async () => {
     const { b } = backend([
       ...rules.filter((r) => !r.match.includes('oco')),
@@ -161,7 +161,7 @@ describe('account():张数 → 币,算法单当挂单', () => {
     await expect(b.account()).rejects.toThrow();
   });
 
-  // review #10:ctVal=0.01 的 BTC 合约,100 张是 1 BTC,不是 100 BTC。
+  // codex-review #10:ctVal=0.01 的 BTC 合约,100 张是 1 BTC,不是 100 BTC。
   it('合约规格缺失时账户读取硬失败,不把张数当币数量', async () => {
     // 表非空(所以不会去补拉),但里面没有 BTC:1:1 回退会把 13 张说成 13 BTC。
     setInstruments([XRP]);
@@ -190,7 +190,7 @@ describe('account():张数 → 币,算法单当挂单', () => {
 });
 
 describe('openWithProtection:附带止损/止盈,归属只认父订单详情', () => {
-  // review #4:附带腿的 algoId **只能**从父订单详情的 attachAlgoOrds[] 读回。
+  // codex-review #4:附带腿的 algoId **只能**从父订单详情的 attachAlgoOrds[] 读回。
   // CLI 的 `swap place` 不支持 --attachAlgoClOrdId(dist 里 buildAttachAlgoOrds 只拼 tp/sl 价格),
   // 所以拿不到就是 unknown —— 不许再去算法单列表里挑「最新的 reduceOnly 单」。
   const rules = (attach: unknown[] | null, extra: Rule[] = []): Rule[] => [
@@ -334,7 +334,7 @@ describe('placeStop:张数取当前持仓', () => {
     ], { calls });
     const r = await b.placeStop('BTCUSDT', 'short', '82000', 'tgd-abc123-s2');
     const args = calls.find((c) => c.includes('place') && c.includes('algo'))!;
-    // 独立挂的腿带得上客户端 id:CLI 的 --clOrdId → OKX 的 algoClOrdId(review #4)。
+    // 独立挂的腿带得上客户端 id:CLI 的 --clOrdId → OKX 的 algoClOrdId(codex-review #4)。
     expect(args[args.indexOf('--clOrdId') + 1]).toBe(toClOrdId('tgd-abc123-s2'));
     expect(args[args.indexOf('--sz') + 1]).toBe('13');
     expect(args[args.indexOf('--side') + 1]).toBe('buy'); // 空头的保护腿是买
@@ -469,6 +469,38 @@ describe('getOrder:状态映射与 51603', () => {
     expect(calls).toHaveLength(2);
   });
 
+  // 09-26 stuck-entry:CLI 1.4.x 出错时即使带 --json 也只在 stderr 印纯文本(下面这段是现网原样输出)。
+  // 以前 code 解析不出来 → 51603 被当成「读不到」抛错,巡检永远不计 miss,LINK 卡在 pending_entry 20 小时。
+  const PLAIN_51603 = '\nUpdate available for @okx_ai/okx-trade-cli: 1.4.7 -> 1.4.8\nRun: npm install -g @okx_ai/okx-trade-cli\n\n(node:13162) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.\n(Use `node --trace-warnings ...` to show where the warning was created)\nError: Order does not exist\nCode: 51603\nVersion: @okx_ai/okx-trade-cli@1.4.7\n';
+  it('纯文本 stderr 的 51603(现网 CLI 1.4.7 原样)→ null,不是抛错', async () => {
+    const { b } = backend([{ match: ['swap', 'get'], fail: { code: 1, stderr: PLAIN_51603 } }]);
+    expect(await b.getOrder('BTCUSDT', 'tgd-abc123-e1', true)).toBeNull();
+  });
+
+  it('纯文本里的其它 code 照样往上抛,且 code 被解析出来', async () => {
+    const { b } = backend([{ match: ['swap', 'get'], fail: { code: 1, stderr: 'Error: Too Many Requests\nCode: 50011\n' } }]);
+    await expect(b.getOrder('BTCUSDT', 'tgd-abc123-e1', true)).rejects.toMatchObject({ kind: 'rejected', code: '50011' });
+  });
+
+  it('纯文本超时类错误(没有 Code 行)仍是 transport 抛错,不算「没有」', async () => {
+    const { b } = backend([{ match: ['swap', 'get'], fail: { code: 1, stderr: 'Error: Failed to call OKX endpoint GET /api/v5/trade/order\nHint: Please check network connectivity' } }]);
+    await expect(b.getOrder('BTCUSDT', 'tgd-abc123-e1', true)).rejects.toMatchObject({ kind: 'transport' });
+  });
+
+  it('永续查 swap get + -SWAP instId;现货查 spot get + 现货 instId(不串接口)', async () => {
+    const calls: string[][] = [];
+    const { b } = backend([
+      { match: ['swap', 'get'], fail: { code: 1, stderr: PLAIN_51603 } },
+      { match: ['spot', 'get'], fail: { code: 1, stderr: PLAIN_51603 } },
+    ], { calls });
+    expect(await b.getOrder('BTCUSDT', 'tgd-abc123-e1', true, 'perp')).toBeNull();
+    expect(await b.getOrder('BTCUSDT', 'tgd-abc123-e1', true, 'spot')).toBeNull();
+    expect(calls[0]).toEqual(expect.arrayContaining(['swap', 'get', 'BTC-USDT-SWAP']));
+    expect(calls[0]).not.toContain('spot');
+    expect(calls[1]).toEqual(expect.arrayContaining(['spot', 'get', 'BTC-USDT']));
+    expect(calls[1]).not.toContain('swap');
+  });
+
   it('查单用的 clOrdId 与下单时同一套正向算法(不反解)', async () => {
     const calls: string[][] = [];
     const { b } = backend([{ match: ['swap', 'get'], out: [{ state: 'live' }] }], { calls });
@@ -486,7 +518,7 @@ describe('closePosition / cancelOrder 的「已经不在了」口径', () => {
     expect(await b.closePosition('BTCUSDT', 'tgd-abc123-x1')).toMatchObject({ closed: true, error: null });
   });
 
-  // review #1:51024 是「账户被限制」,仓位很可能还在 —— 报成已平会让 runtime 直接结束线程。
+  // codex-review #1:51024 是「账户被限制」,仓位很可能还在 —— 报成已平会让 runtime 直接结束线程。
   it('51024(账户受限)不算已平,原始错误必须留着', async () => {
     const { b } = backend([pos(), { match: ['swap', 'close'], out: { code: '51024', msg: 'account restricted' } }]);
     const r = await b.closePosition('BTCUSDT', 'tgd-abc123-x1');
@@ -500,7 +532,7 @@ describe('closePosition / cancelOrder 的「已经不在了」口径', () => {
     expect(await b.closePosition('BTCUSDT', 'tgd-abc123-x1')).toMatchObject({ closed: false });
   });
 
-  // review #7:命令已经发出去了,20 秒没回来 —— 这是未知,不是失败。
+  // codex-review #7:命令已经发出去了,20 秒没回来 —— 这是未知,不是失败。
   it('平仓写超时 → ambiguous:true(调用方保持 unknown)', async () => {
     const { b } = backend([pos(), { match: ['swap', 'close'], timeout: true }]);
     const r = await b.closePosition('BTCUSDT', 'tgd-abc123-x1');
@@ -519,7 +551,7 @@ describe('closePosition / cancelOrder 的「已经不在了」口径', () => {
     await b.closePosition('BTCUSDT', 'tgd-abc123-x1');
     const args = calls.find((c) => c.includes('close'))!;
     expect(args).toContain('--autoCxl');
-    // review #6:仓位是 isolated 开的,就得按 isolated 平,不能用实例字段里的 cross。
+    // codex-review #6:仓位是 isolated 开的,就得按 isolated 平,不能用实例字段里的 cross。
     expect(args[args.indexOf('--mgnMode') + 1]).toBe('isolated');
   });
 
@@ -566,7 +598,7 @@ describe('结算:窗口过滤、手续费保号、资金费求和、覆盖证明
     expect(Number(s.funding)).toBeCloseTo(-0.2, 8);
   });
 
-  // review #12:OKX 的 fee 正数 = maker 返佣。内部算 `realized - commission + funding`,
+  // codex-review #12:OKX 的 fee 正数 = maker 返佣。内部算 `realized - commission + funding`,
   // 取绝对值会把「多赚 0.02」记成「少赚 0.02」,净差 0.04。
   it('正的 fee(返佣)→ 负的 commission,不反向记成支出', async () => {
     const maker = [{ instId: 'BTC-USDT-SWAP', ts: String(start + 10), side: 'buy', fillPx: '80000', fillSz: '13', fillPnl: '0', fee: '0.02', tradeId: 'T1' }];
@@ -584,7 +616,7 @@ describe('结算:窗口过滤、手续费保号、资金费求和、覆盖证明
     expect((await b.settlement('BTCUSDT', start, end))!.trades).toHaveLength(1);
   });
 
-  // review #11:CLI 的 `swap fills` 不透传 begin/end/after,只能拿最新一页。
+  // codex-review #11:CLI 的 `swap fills` 不透传 begin/end/after,只能拿最新一页。
   // 整页塞满且最旧一条仍晚于窗口起点 = 开仓那笔的手续费已经被挤到上一页了。
   it('fills 整页塞满且没覆盖到窗口起点 → 返回 null(不给一份少算手续费的结算)', async () => {
     const full = Array.from({ length: 100 }, (_, i) => ({ instId: 'BTC-USDT-SWAP', ts: String(start + 1000 + i), side: 'buy', fillPx: '80000', fillSz: '1', fillPnl: '0', fee: '-0.01', tradeId: `T${i}` }));
@@ -700,7 +732,7 @@ describe('protectionCapability:只有人工标记过才算 verified', () => {
   });
 });
 
-describe('setMarginType / setLeverage(review #6)', () => {
+describe('setMarginType / setLeverage(codex-review #6)', () => {
   it('setMarginType 不发下单请求,只改后续下单的 tdMode', async () => {
     const calls: string[][] = [];
     const { b } = backend([{ match: ['swap', 'place'], out: [{ ordId: 'O1', sCode: '0' }] }, { match: ['swap', 'get'], out: [{ state: 'live' }] }], { calls });
@@ -763,7 +795,7 @@ describe('ctVal=100 的币(XRP):张数换算不靠浮点', () => {
 });
 
 describe('profile 发现:解析 okx config show(掩码版),网关不打开凭证文件', () => {
-  // review #5:`okx config show --json` 走的是 printJson(readFullConfig()) —— **未掩码**,
+  // codex-review #5:`okx config show --json` 走的是 printJson(readFullConfig()) —— **未掩码**,
   // 会把 api_key/secret_key/passphrase 原样吐出来。只有人类可读的那一份走 maskSecret()。
   const masked = [
     'Config: /Users/x/.okx/config.toml',
@@ -791,7 +823,7 @@ describe('profile 发现:解析 okx config show(掩码版),网关不打开凭证
     expect(JSON.stringify(cfg)).not.toMatch(/api_key|abcd|efgh/);
   });
 
-  // review #14:`default` 是合法 profile 名,旧解析器把它当容器段跳过了。
+  // codex-review #14:`default` 是合法 profile 名,旧解析器把它当容器段跳过了。
   it('名叫 default 的 profile 不被跳过,demo 标志读得到', () => {
     const cfg = parseOkxConfigShow([
       'default_profile: default',
@@ -809,7 +841,7 @@ describe('profile 发现:解析 okx config show(掩码版),网关不打开凭证
   });
 });
 
-describe('--demo 强制(review #3)', () => {
+describe('--demo 强制(codex-review #3)', () => {
   it('没有 TG_OKX_LIVE 时,每条命令都带 --demo', async () => {
     const calls: string[][] = [];
     const { b } = backend([{ match: ['account', 'balance'], out: [{ totalEq: '1' }] }, { match: ['swap', 'leverage'], out: [{ lever: '5' }] }], { calls });
@@ -832,7 +864,7 @@ describe('--demo 强制(review #3)', () => {
   });
 });
 
-describe('50004:请求结果未知,不是拒单(review #2)', () => {
+describe('50004:请求结果未知,不是拒单(codex-review #2)', () => {
   it('下单收到 50004 → unknown,沿原 CID 对账', async () => {
     const { b } = backend([{ match: ['swap', 'place'], out: { code: '50004', msg: 'endpoint request timeout' } }]);
     const r = await b.placeEntry({ symbol: 'BTCUSDT', direction: 'long', qty: '0.13', entry: 'market', limit_price: null, client_order_id: 'tgd-abc123-e1' });
@@ -939,8 +971,9 @@ describe('spot CLI:现金交易与市场隔离', () => {
 
   it('平仓先撤普通单和保护单再卖出', async () => {
     const { b, calls } = backend([
-      { match: ['spot', 'orders'], not: ['algo'], out: [{ instId: 'BTC-USDT', ordId: 'REST1', clOrdId: 'rest1' }] },
-      { match: ['spot', 'algo', 'orders', 'conditional'], out: [{ instId: 'BTC-USDT', algoId: 'SA3' }] },
+      // 自家单(tgd 前缀);外部单不撤,见 external-position.test.ts
+      { match: ['spot', 'orders'], not: ['algo'], out: [{ instId: 'BTC-USDT', ordId: 'REST1', clOrdId: 'tgdrest1' }] },
+      { match: ['spot', 'algo', 'orders', 'conditional'], out: [{ instId: 'BTC-USDT', algoId: 'SA3', algoClOrdId: 'tgdspotsl1' }] },
       { match: ['spot', 'cancel'], out: [{ sCode: '0' }] }, balance('0.13'), place, get(),
     ]);
     expect(await b.closePosition('BTCUSDT', 'tgd-spot-x1', 'spot')).toMatchObject({ closed: true });

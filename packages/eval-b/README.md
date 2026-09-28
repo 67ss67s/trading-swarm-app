@@ -1,6 +1,6 @@
-# @trading-swarm/eval-b
+# @trade-gate/eval-b
 
-这是 trading-swarm 判断链的实现 B 评测 harness。它对每个历史 case 调用线上同一份 `demo.buildContext`、`validateJudgment`、`evaluateGates` 与 review reducer；`run` 只读本地 case，行情网络访问只发生在 `gen`。
+这是 trade-gate 判断链的实现 B 评测 harness。它对每个历史 case 调用线上同一份 `demo.buildContext`、`validateJudgment`、`evaluateGates` 与 review reducer；`run` 只读本地 case，行情网络访问只发生在 `gen`。
 
 ## 使用
 
@@ -42,7 +42,7 @@ npm test --workspace packages/eval-b
 
 `node packages/eval-b/scripts/holding-ab.mjs prepare` 固定 2026-08-08 至 2026-09-07 的历史窗口并冻结输入；`run baseline` / `run candidate` 分别调用 `pi:zai/glm-5.3`，每臂最多 56 次，不启用工具。原始系统/用户提示、模型文字、独立重复和缓存键全部保留。账户为研究合成，行情来自只读公开缓存；程序没有交易后端调用。
 
-基线编译树默认 `/private/tmp/trading-swarm-real-ab-baseline`，候选冻结树默认 `/private/tmp/trading-swarm-real-ab-candidate`。可用 `TG_HOLDING_AB_BASELINE` / `TG_HOLDING_AB_CANDIDATE` / `TG_HOLDING_AB_OUT` / `TG_HOLDING_KLINE_CACHE` 覆盖。启动前必须准备独立编译树及其只读依赖，禁止把两臂指向同一会被修改的编译目录。已生成 manifest 后不要再次 prepare 改写选样。
+基线编译树默认 `/private/tmp/trade-gate-real-ab-baseline`，候选冻结树默认 `/private/tmp/trade-gate-real-ab-candidate`。可用 `TG_HOLDING_AB_BASELINE` / `TG_HOLDING_AB_CANDIDATE` / `TG_HOLDING_AB_OUT` / `TG_HOLDING_KLINE_CACHE` 覆盖。启动前必须准备独立编译树及其只读依赖，禁止把两臂指向同一会被修改的编译目录。已生成 manifest 后不要再次 prepare 改写选样。
 
 `revalidate` 只用保存的模型原文对当前候选编译树重算 context/动作闸，不发模型请求；`report` 输出成本后收益与晋升门。`scan-rr` 是之后新增的、独立最多 8 次真实扫描检查，存入 `scan-rr-refresh/`，不覆盖原 78 次 A/B；`revalidate-rr` 把新版提示的差异另存为 `*-after-rr.json`。RR 追加提示只修改 scan，原 review 缓存仍需逐字节核验。
 

@@ -8,9 +8,11 @@ import { toast } from 'sonner';
 import { api, ApiRequestError } from '@/api/client';
 import type { BotHandoff, ConfirmToken, DemoIntent } from '@/api/types';
 import { backendLabel, directionLabel, fmtPrice, fmtQty, relativeTime, useNow } from '@/lib/format';
+import { lockReason } from '@/lib/edition';
 import { t } from '@/lib/i18n';
 import { ROLES } from './engine-b/roles';
 import { isRole } from './snapshot';
+import { st } from '@/lib/server-text-en';
 
 function errText(e: unknown): { text: string; retake: boolean } {
   if (e instanceof ApiRequestError) {
@@ -132,7 +134,7 @@ export function HandoffCard({ h, onClose }: { h: BotHandoff; onClose: () => void
       <h4>
         <span style={{ color: from?.color }}>{from?.callsign ?? h.from_role}</span> → <span style={{ color: to?.color }}>{to?.callsign ?? h.to_role}</span>
       </h4>
-      <p>{h.summary}</p>
+      <p>{st(h.summary)}</p>
       <p className="hint">
         {h.subject.type} · {h.subject.id} · {relativeTime(h.created_at)}
       </p>
@@ -150,6 +152,8 @@ export function HandoffCard({ h, onClose }: { h: BotHandoff; onClose: () => void
 
 /** 紧急停止:先掀保护罩,再按住红钮 2 秒;halted 时只显示状态 */
 export function EStop({ halted, onFire }: { halted: boolean; onFire: () => void }) {
+  // 评审版:紧急停止锁住——保护罩掀不开、红钮按不下,悬停看原因(hooks 之后再分支,见下方 return)
+  const lock = lockReason('emergency_stop');
   const [open, setOpen] = useState(false);
   const [hold, setHold] = useState(false);
   const progRef = useRef<SVGCircleElement>(null);
@@ -182,6 +186,14 @@ export function EStop({ halted, onFire }: { halted: boolean; onFire: () => void 
     };
     raf.current = requestAnimationFrame(tick);
   };
+  if (lock && !halted)
+    return (
+      <div className="estop" title={lock} aria-disabled data-judge-lock="emergency_stop" style={{ cursor: 'not-allowed', opacity: 0.6 }}>
+        <div className="lid" style={{ pointerEvents: 'none', cursor: 'not-allowed' }}>
+          {t('紧急停止')}
+        </div>
+      </div>
+    );
   if (halted)
     return (
       <div className="estop halted" title={t('紧急停止生效中;解除在顶栏右上角')}>

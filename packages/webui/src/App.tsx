@@ -73,7 +73,7 @@
  *                                写操作后 / SSE `trader_signal` 到达时一起失效)
  *   ['follow','signals']         GET /api/follow/signals?limit=300(信号流全量,筛选在前端做;
  *                                SSE `trader_signal` 按 signal_id 直接 upsert 进这份缓存)
- *   ['follow','stats']           GET /api/follow/stats(8794 权重表 + 本地每人统计)
+ *   ['follow','stats']           GET /api/follow/stats(每个信号来源的本地统计)
  *
  *   ---- §9.46:我的策略(pages/my-strategies.tsx)----
  *   ['research','my-strategies',filter,sort,q]  GET /api/research/strategies?q=&filter=&sort=
@@ -102,9 +102,11 @@ import { CommandMenu } from '@/components/command-menu';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { StatusBar } from '@/components/status-bar';
 import { TopBar } from '@/components/top-bar';
+import { JudgeTour } from '@/components/tour/judge-tour';
+import { applyChatStatus } from '@/api/agents';
 import { api, useLiveEvents } from '@/api/client';
 import { setRoleProgress } from '@/components/floor/progress';
-import type { Page } from '@/lib/nav';
+import { pageAvailable, type Page } from '@/lib/nav';
 import { t, useLang } from '@/lib/i18n';
 import { TradePage } from '@/pages/trade';
 import { AgentPage } from '@/pages/agent';
@@ -112,7 +114,6 @@ import { IntelPage } from '@/pages/intel';
 import { EventsPage } from '@/pages/events';
 import { ScreenerPage } from '@/pages/screener';
 import { WatchPage } from '@/pages/watch';
-import { FloorPage } from '@/pages/floor';
 import { FloorV4Page } from '@/pages/floor-v4';
 import { PageErrorBoundary } from '@/components/page-error-boundary';
 import { JudgmentsPage } from '@/pages/judgments';
@@ -121,17 +122,19 @@ import { HistoryPage } from '@/pages/history';
 import { StrategiesPage } from '@/pages/strategies';
 import { ResearchPage } from '@/pages/research';
 import { MyStrategiesPage } from '@/pages/my-strategies';
-import { LogsPage } from '@/pages/logs';
 import { SettingsPage } from '@/pages/settings';
 import { ModelsPage } from '@/pages/models';
 import { MatrixStudyPage } from '@/pages/matrix-study';
+import { StrategyResearchPage } from '@/pages/strategy-research';
+import { RefinePage } from '@/pages/refine';
 import { MarketPage } from '@/pages/market';
 import { StartPage } from '@/pages/start';
 import { ConnectPage } from '@/pages/connect';
 import { bootRedirect } from '@/components/start/logic';
 import { useStartCore } from '@/components/start/use-start';
+import { HIDDEN_PAGE_FALLBACK, isPageHidden } from '@/lib/edition';
 
-const PAGE_IDS: Page[] = ['start', 'connect', 'trade', 'agent', 'watch', 'floor', 'floor-legacy', 'intel', 'events', 'screener', 'market', 'judgments', 'evolution', 'history', 'strategies', 'research', 'matrix-study', 'my-strategies', 'models', 'logs', 'settings'];
+const PAGE_IDS: Page[] = (['start', 'connect', 'trade', 'agent', 'watch', 'floor', 'floor-legacy', 'intel', 'events', 'screener', 'market', 'judgments', 'evolution', 'history', 'strategies', 'research', 'matrix-study', 'strategy-research', 'refine', 'my-strategies', 'models', 'logs', 'settings'] as Page[]).filter(pageAvailable);
 
 const LAST_PAGE_KEY = 'tg.page.last';
 
@@ -143,7 +146,8 @@ const LAST_PAGE_KEY = 'tg.page.last';
 function defaultPage(): Page {
   try {
     const saved = window.localStorage.getItem(LAST_PAGE_KEY) as Page | null;
-    if (saved && PAGE_IDS.includes(saved)) return saved;
+    if (saved === 'strategies') return 'my-strategies'; // 09-25 实盘部署台退出导航
+    if (saved && PAGE_IDS.includes(saved) && !isPageHidden(saved)) return saved;
   } catch {
     /* 无 storage */
   }
@@ -158,6 +162,16 @@ function readPageFromHash(): Page {
   if ((hash as string) === 'memory') return 'evolution';
   // 2026-09-25:楼层 v4 成为默认 #floor,旧链接 #floor-v4 落到新楼层
   if ((hash as string) === 'floor-v4') return 'floor';
+  // 2026-09-25:实盘部署台(#strategies,旧策略库)退出导航(§9.54 旧库不能开仓),旧深链落到「我的策略」
+  if (hash === 'strategies') {
+    try { window.history.replaceState(null, '', '#my-strategies'); } catch { /* 沙箱里可能不让改 */ }
+    return 'my-strategies';
+  }
+  // 「楼层(旧)」和「日志」两个旧页不露出(lib/edition.ts),hash 直达也回楼层首页
+  if (isPageHidden(hash)) {
+    try { window.history.replaceState(null, '', `#${HIDDEN_PAGE_FALLBACK}`); } catch { /* 沙箱里可能不让改 */ }
+    return HIDDEN_PAGE_FALLBACK;
+  }
   return PAGE_IDS.includes(hash) ? hash : defaultPage();
 }
 
@@ -312,6 +326,8 @@ export default function App() {
       },
       // 前缀匹配:['chat-messages','chat'] / ['chat-messages','narration'] 一起失效
       'chat.message': () => void queryClient.invalidateQueries({ queryKey: ['chat-messages'] }),
+      // §9.55:某条 agent 线程的进行状态(排队/想/调工具/空闲),楼层对话框与 Agent 页共用
+      'chat.status': (ev) => applyChatStatus(queryClient, ev),
       // v3.2:记忆提案/批准/拒绝/遗忘/使用任一变化都打这个事件;前缀失效 ['memory', ...] 全部子查询
       'memory.changed': () => void queryClient.invalidateQueries({ queryKey: ['memory'] }),
       // v3.3:切了执行后端 / 重新探了 MCP 连接 / OAuth 回调回来了
@@ -506,7 +522,7 @@ export default function App() {
             {page === 'market' ? <MarketPage /> : null}
             {page === 'watch' ? <WatchPage /> : null}
             {page === 'floor' ? <FloorV4Page connected={connected} /> : null}
-            {page === 'floor-legacy' ? <FloorPage connected={connected} /> : null}
+            {/* 旧楼层(#floor-legacy)和日志(#logs)两个旧页不再挂载:hash 直达会回楼层(lib/edition.ts isPageHidden) */}
             {page === 'judgments' ? <JudgmentsPage /> : null}
             {page === 'evolution' ? <EvolutionPage /> : null}
             {page === 'history' ? <HistoryPage /> : null}
@@ -515,7 +531,8 @@ export default function App() {
             {page === 'my-strategies' ? <MyStrategiesPage /> : null}
             {page === 'models' ? <ModelsPage /> : null}
             {page === 'matrix-study' ? <MatrixStudyPage /> : null}
-            {page === 'logs' ? <LogsPage /> : null}
+            {page === 'strategy-research' ? <StrategyResearchPage /> : null}
+            {page === 'refine' ? <RefinePage /> : null}
             {page === 'settings' ? <SettingsPage /> : null}
             </PageErrorBoundary>
           </main>
@@ -555,6 +572,8 @@ export default function App() {
         />
         <Toaster richColors position="bottom-right" />
       </SidebarProvider>
+      {/* 评审版新手引导(默认版不渲染):首次访问自动弹,顶栏 Tour 按钮重开 */}
+      <JudgeTour />
     </TooltipProvider>
   );
 }

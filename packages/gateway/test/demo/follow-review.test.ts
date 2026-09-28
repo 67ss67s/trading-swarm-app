@@ -1,6 +1,6 @@
 // Signal Market 迁移:这些下游安全测试直接预置规范化 TraderSignal inbox;
 // ASP 队列、账本与归一化端到端由 okx-asp-feed/market-backend 单独验证。
-// 跟单 session:对抗复审(内部评审记录)「测试缺口」那一节点名的分支。
+// 跟单 session:对抗复审(.codex-reports/follow-review.md)「测试缺口」那一节点名的分支。
 // 一条用例对一条编号,标题里写清是哪一条 —— 以后有人改回去,失败信息能直接说出违反了哪条结论。
 // 零网络、零模型:bridge/8794 是注入的假 fetch,后端是 PaperBackend,大脑是 stub。
 
@@ -76,7 +76,7 @@ describe('缺口 12:时区与未来时间', () => {
       signal_id: 'sig_future', symbol: 'BTCUSDT', side: 'long', source: 'telegram',
       entry: { type: 'limit', price: 77000 }, stop_loss: { price: 76000 },
       created_at: new Date(now + 86_400_000).toISOString(),
-      metadata: { trader: '交易员A', action_type: 'open', ...meta },
+      metadata: { trader: 'TraderB', action_type: 'open', ...meta },
     });
     // 唯一的时间来源在未来一天 → 定不出 published_at → 坏行
     const bad = normalizeBridgeSignal(payload({}), { now });
@@ -95,7 +95,7 @@ describe('缺口 12:时区与未来时间', () => {
       entry: { type: 'limit', price: 77000 }, stop_loss: { price: 76000 },
       valid_until: new Date(expired).toISOString(),
       created_at: new Date(now).toISOString(),
-      metadata: { trader: '交易员A', action_type: 'open' },
+      metadata: { trader: 'TraderB', action_type: 'open' },
     }, { now });
     // 第一版把它改成 null → 一条本来「已过期」的信号变成「没有有效期」可以开仓
     expect(r.signal!.valid_until).toBe(expired);
@@ -114,7 +114,7 @@ describe('缺口 12:时区与未来时间', () => {
       entry: { type: 'limit', price: 77000 }, stop_loss: { price: 76000 },
       valid_until: validUntil,
       created_at: new Date(now).toISOString(),
-      metadata: { trader: '交易员A', action_type: 'open', source_timestamp: (now + publishedOffset) / 1000 },
+      metadata: { trader: 'TraderB', action_type: 'open', source_timestamp: (now + publishedOffset) / 1000 },
     }, { now });
     // 解析不出来的期限:第一版 timestampOf → null,等于把约束删掉,信号照样能开
     const garbage = mk('下周之前');
@@ -137,7 +137,7 @@ describe('缺口 12:时区与未来时间', () => {
       signal_id: 'sig_badts', symbol: 'BTCUSDT', side: 'long', source: 'telegram',
       entry: { type: 'limit', price: 77000 }, stop_loss: { price: 76000 },
       created_at: new Date(now).toISOString(),
-      metadata: { trader: '交易员A', action_type: 'open', source_timestamp: ts },
+      metadata: { trader: 'TraderB', action_type: 'open', source_timestamp: ts },
     }, { now });
     // 解析不出来
     expect(mk('昨天下午').signal).toBeNull();
@@ -149,7 +149,7 @@ describe('缺口 12:时区与未来时间', () => {
       signal_id: 'sig_ok', symbol: 'BTCUSDT', side: 'long', source: 'telegram',
       entry: { type: 'limit', price: 77000 }, stop_loss: { price: 76000 },
       created_at: new Date(now).toISOString(),
-      metadata: { trader: '交易员A', action_type: 'open' },
+      metadata: { trader: 'TraderB', action_type: 'open' },
     }, { now });
     expect(fallback.signal!.published_at).toBe(now);
   });
@@ -168,9 +168,9 @@ describe('缺口 16:持久化 round-trip、碰撞 ID、迁移幂等', () => {
       signal_id: 'sig_rt', symbol: 'BTCUSDT', side: 'long', source: 'telegram', market_type: 'futures',
       entry: { type: 'limit', price: 77000 }, stop_loss: { price: 76000 }, take_profit: [{ price: 79000 }],
       created_at: new Date(now).toISOString(),
-      metadata: { trader: '交易员A', action_type: 'open', target_order_ref: '昨天那单', order_end_state: 'not_ended' },
+      metadata: { trader: 'TraderB', action_type: 'open', target_order_ref: '昨天那单', order_end_state: 'not_ended' },
     }, { now, backfill: true });
-    return { ...r.signal!, subscription_job_id: 'job-trader-a', ...over };
+    return { ...r.signal!, subscription_job_id: 'job-trader_b', ...over };
   };
 
   it('backfill / ref_order / market_type / transport / order_end_state 读回来还在', () => {
@@ -556,9 +556,10 @@ async function setup(followFetch: FollowFetch): Promise<void> {
   rt = new DemoRuntime({ store, backend: new PaperBackend(100_000), brains: { stub: stubBrain }, marketPollMs: 600_000, accountPollMs: 600_000 });
   fixtureFeed = followFetch;
   rt.okxAspReadQueue = async () => [];
-  rt.okxAspRunCli = async () => ({ code: 0, stdout: JSON.stringify({ ok: true, data: { list: [{ jobId: 'job-trader-a', providerAgentName: '交易员A' }] } }), stderr: '' });
+  rt.okxAspRunCli = async () => ({ code: 0, stdout: JSON.stringify({ ok: true, data: { list: [{ jobId: 'job-trader_b', providerAgentName: 'TraderB' }] } }), stderr: '' });
   await rt.start();
-  rt.setWorkflow({ brain: 'stub', cheap_brain: 'stub', watchlist: ['BTCUSDT'], timeframe: '15m', active_strategies: [] });
+  // 这组测的是跟单链路,不是止损底线:信号止损 0.65%,底线放到 0.5%(09-27 起默认 1%)
+  rt.setWorkflow({ brain: 'stub', cheap_brain: 'stub', watchlist: ['BTCUSDT'], timeframe: '15m', active_strategies: [], min_stop_pct: 0.5 });
   const server = createServer(rt, store);
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
   baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -588,7 +589,7 @@ async function api(method: string, path: string, body?: unknown): Promise<{ stat
     const page = JSON.parse(await response.text());
     for (const item of page.items ?? []) {
       const normalized = normalizeBridgeSignal(item.envelope?.payload, { now: Date.now(), record_id: item.record_id, backfill: page.test_backfill === true });
-      if (normalized.signal) store.traderSignals.capture({ ...normalized.signal, subscription_job_id: 'job-trader-a', session: (rt as unknown as { followSession: string }).followSession });
+      if (normalized.signal) store.traderSignals.capture({ ...normalized.signal, subscription_job_id: 'job-trader_b', session: (rt as unknown as { followSession: string }).followSession });
     }
   }
   const res = await fetch(`${baseUrl}${path}`, { method, headers: body !== undefined ? { 'content-type': 'application/json' } : {}, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -605,7 +606,7 @@ function item(recordId: number, over: Record<string, unknown> = {}, meta: Record
         signal_id: `sig_${recordId}`, symbol: 'BTCUSDT', side: 'long', source: 'telegram', market_type: 'perpetual',
         entry: { type: 'limit', price: Number(ENTRY) }, stop_loss: { price: Number(STOP) }, take_profit: [{ price: Number(TP) }],
         created_at: new Date().toISOString(),
-        metadata: { trader: '交易员A', action_type: 'open', rationale: '突破回踩', ...meta },
+        metadata: { trader: 'TraderB', action_type: 'open', rationale: '突破回踩', ...meta },
         ...over,
       },
     },
@@ -629,7 +630,7 @@ function bridge(pages: unknown[], me: Record<string, unknown> = { recent_after_i
 }
 
 async function enableFollow(mode: 'book' | 'gated' = 'copy'): Promise<void> {
-  await api('POST', '/api/follow', { enabled: true, subscriptions: { 'job-trader-a': { mode, weight: 1, enabled: true } } });
+  await api('POST', '/api/follow', { enabled: true, subscriptions: { 'job-trader_b': { mode, weight: 1, enabled: true } } });
 }
 async function drain(): Promise<void> { await api('POST', '/api/follow/pull'); }
 
@@ -750,7 +751,7 @@ function settings(over: Partial<FollowSettings> = {}, traderOver: Partial<Follow
   return {
     ...DEFAULT_FOLLOW_SETTINGS,
     enabled: true,
-    subscriptions: { 'job-trader-a': { mode: 'gated', weight: 1, enabled: true, ...traderOver } },
+    subscriptions: { 'job-trader_b': { mode: 'gated', weight: 1, enabled: true, ...traderOver } },
     ...over,
   };
 }
@@ -760,9 +761,9 @@ function sig(over: Partial<TraderSignal> = {}): TraderSignal {
     signal_id: 'sig_h', symbol: 'BTCUSDT', side: 'long', source: 'telegram',
     entry: { type: 'limit', price: Number(ENTRY) }, stop_loss: { price: Number(STOP) }, take_profit: [{ price: Number(TP) }],
     created_at: new Date(NOW).toISOString(),
-    metadata: { trader: '交易员A', action_type: 'open', rationale: '突破回踩' },
+    metadata: { trader: 'TraderB', action_type: 'open', rationale: '突破回踩' },
   }, { now: NOW });
-  return { ...r.signal!, subscription_job_id: 'job-trader-a', ...over };
+  return { ...r.signal!, subscription_job_id: 'job-trader_b', ...over };
 }
 
 function threadOf(over: Partial<StrategyThread> = {}): StrategyThread {
@@ -773,7 +774,7 @@ function threadOf(over: Partial<StrategyThread> = {}): StrategyThread {
       entry: { type: 'limit', price: ENTRY, zone: null }, stop_price: STOP, take_profits: [TP],
       qty: '0.01', margin_usdt: '200', leverage: 3, margin_mode: 'cross', now: NOW,
     }),
-    origin: 'trader:job-trader-a',
+    origin: 'trader:job-trader_b',
     trader_signal_id: 'sig_h',
     ...over,
   };
@@ -879,17 +880,17 @@ describe('R2-01/02/03/06:串行、恢复、会话边界、撤单确认', () => {
 describe('二审:P1-04 完整闸 / P1-05 入场腿过期 / P1-13 权重天花板 / P1-14 凭证残留', () => {
   it('P1-13:统计失败不许放大风险 —— manual=0.4 且上次有效权重 0.2 时,降级后仍是 0.2', () => {
     const good: TraderStatsSnapshot = {
-      rows: parseTraderStats({ by_source: { 交易员A: { resolved: 40, win_rate: 60, max_drawdown_pct: 40 } } }, NOW),
+      rows: parseTraderStats({ by_source: { TraderB: { resolved: 40, win_rate: 60, max_drawdown_pct: 40 } } }, NOW),
       fetched_at: NOW,
       error: null,
     };
     // 正常:0.4 × mult_bad 0.5 = 0.2
-    const normal = weightFor('交易员A', 0.4, good, DEFAULT_WEIGHT_THRESHOLDS, NOW);
+    const normal = weightFor('TraderB', 0.4, good, DEFAULT_WEIGHT_THRESHOLDS, NOW);
     expect(normal.weight).toBe(0.2);
     // 统计失败:只有 min(manual, 0.5) 的话是 0.4 —— **翻倍**。带上「最近一次有效权重」天花板才是 0.2。
     const failed: TraderStatsSnapshot = { ...good, error: 'HTTP 500' };
-    expect(weightFor('交易员A', 0.4, failed, DEFAULT_WEIGHT_THRESHOLDS, NOW).weight).toBe(0.4);
-    expect(weightFor('交易员A', 0.4, failed, DEFAULT_WEIGHT_THRESHOLDS, NOW, normal.weight).weight).toBe(0.2);
+    expect(weightFor('TraderB', 0.4, failed, DEFAULT_WEIGHT_THRESHOLDS, NOW).weight).toBe(0.4);
+    expect(weightFor('TraderB', 0.4, failed, DEFAULT_WEIGHT_THRESHOLDS, NOW, normal.weight).weight).toBe(0.2);
     expect(staleWeightOf(0.4, 0.2)).toBe(0.2);
     expect(staleWeightOf(1, null)).toBe(0.5);
   });
@@ -1035,7 +1036,7 @@ describe('管理动作与历史信号:follow 链路零交易所写调用', () =>
       const writes = countWrites((rt as unknown as { backend: Record<string, unknown> }).backend);
       await enableFollow(mode === 'evidence' ? 'copy' : mode);
       if (mode === 'evidence') {
-        await api('POST', '/api/follow', { enabled: true, subscriptions: { 'job-trader-a': { mode: 'evidence', weight: 1, enabled: true } } });
+        await api('POST', '/api/follow', { enabled: true, subscriptions: { 'job-trader_b': { mode: 'evidence', weight: 1, enabled: true } } });
       }
       // 补拉 → 实时 → 再投(重号)→ 空页
       await drain();
@@ -1551,7 +1552,10 @@ describe('R6-01:unknown 回执穿过真实 openThreadFromSignal/executeOpen', ()
     expect((await api('POST', `/api/follow/signals/${sid}/apply`)).status).toBe(409);
   }, 30_000);
 
-  it('建线程之后、原 catch 之外的步骤失败 → 同样 review_only + needs_reconcile 且带 thread_id', async () => {
+  // 09-26 stuck-entry:executeOpen 里 CID 落库之后、入场接口调用之前的账户读抛错,现在按「确定未发送」收掉
+  // (线程 canceled、CID 清空、意图 rejected),不再留一条永远 pending_entry 的孤儿线程。
+  // 对跟单来说就是 failed_before_send → apply_failed(可再试),不是 needs_reconcile。
+  it('建线程之后、executeOpen 发送前的账户读失败 → 确定未发送:apply_failed(可再试),线程 canceled,一张单都没发', async () => {
     const f = bridge([{ scanned_to_id: 1, items: [] }, { scanned_to_id: 901, items: [item(901)] }]);
     await setup(f.fetch);
     const sid = await pendingSignal(901);
@@ -1565,12 +1569,22 @@ describe('R6-01:unknown 回执穿过真实 openThreadFromSignal/executeOpen', ()
       if (rt!.openThreads().length > 0) throw new Error('账户读崩了');
       return (originalAccount as () => Promise<unknown>)();
     };
+    let placed = 0;
+    const originalPlace = backend['placeEntry'] as (...a: unknown[]) => Promise<unknown>;
+    backend['placeEntry'] = async (...a: unknown[]): Promise<unknown> => { placed++; return originalPlace(...a); };
     const r = await api('POST', `/api/follow/signals/${sid}/apply`);
     expect(r.status).toBe(409);
     const row = store.traderSignals.bySignalId(sid)!;
-    expect(row.status).toBe('review_only');
-    expect(row.needs_reconcile).toBe(true);
-    expect(row.thread_id).toBeTruthy();
+    expect(row.status).toBe('apply_failed');
+    expect(row.needs_reconcile).toBe(false);
+    expect(row.decision!.note).toContain('发送前异常');
+    const all = store.threads({ limit: 50 });
+    expect(all).toHaveLength(1); // 本用例只建过这一条线程
+    const t = all[0]!;
+    expect(t.status).toBe('canceled');
+    expect(t.entry_client_order_id).toBeNull();
+    expect(t.entry_submitting_since ?? null).toBeNull();
+    expect(placed).toBe(0);
   }, 30_000);
 
   it('发送后交易所明确拒单 → apply_failed(可再试),不谎称「发送前失败」', async () => {
@@ -1734,7 +1748,7 @@ describe('R7-01/02/03', () => {
       const persisted = store.thread(row.thread_id!);
       expect(persisted).not.toBeNull();
       expect(persisted!.id).toBe(row.thread_id);
-      expect(persisted!.origin).toBe('trader:job-trader-a');
+      expect(persisted!.origin).toBe('trader:job-trader_b');
     } finally {
       rt.off('thread.changed', boom);
     }

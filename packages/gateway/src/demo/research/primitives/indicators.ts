@@ -3,7 +3,7 @@
  * 因果性:compute 只读传入的 bars(调用方已切到 [0..i],最后一根已收盘),不做任何前移/后移以外的位移;
  * 一目均衡表的先行 A/B 按"当前这根能看到的云"取 displacement 根之前算出的值,迟行线额外给出 lagging_ref 做对照,均无前视。
  */
-import type { ResearchBar } from '@trading-swarm/contracts';
+import type { ResearchBar } from '@trade-gate/contracts';
 export type Bars=ResearchBar[];
 export type Args=Record<string,number>;
 export interface IndicatorArg {key:string;default:number;min:number;max:number;integer?:boolean}
@@ -18,15 +18,71 @@ export interface IndicatorSpec {
  note?:string;
 }
 
+/* ---------- 决策视图登记与数值列缓存(2026-09-26 性能,结果逐位不变) ----------
+ * 订单核/原语包装每根都把 series[s..i] 切成新数组交给原语,指标再对整个视图逐根 Number() 取价、整段重算。
+ * 这里不改任何口径(指标仍在视图 [s..i] 上从视图起点播种重算),只省掉重复劳动:
+ *  1. registerWindow(win,src,s):调用方声明 win[k]===src[s+k](同一批 bar 对象的连续切片)。登记过的视图取价走
+ *     src 的数值列(每个 bar 对象只 Number() 一次);Number(x) 是确定性的,同一对象同一字段得到同一个 double。
+ *  2. 指标结果按 (src, 视图起点 s, 视图长度, 指标名, 参数) 记忆:同一根里主线/比较线、方向门/信号/离场重复算同一条线时只算一次;
+ *     返回的数组被多个调用方共享,调用方只读不写(generic.ts / levels.ts 都只读)。
+ *  3. 视图起点 s=0(视图还没满 view 根的前段)时,PREFIX_SAFE 里的指标在整段 src 上算一次,之后每根取前缀:
+ *     这些指标都是纯前向递推/回看(下标 k 的值只由 bars[0..k] 决定,与数组总长无关),见 PREFIX_SAFE 注释与对拍测试。
+ * 没登记的数组(旧调用方、外部直接调用)走原来的逐根 Number() 路径,行为不变。 */
+interface Cols {src:Bars;n:number;first:unknown;last:unknown;open?:number[];high?:number[];low?:number[];close?:number[];volume?:number[]}
+type Field='open'|'high'|'low'|'close'|'volume';
+const colCache=new WeakMap<Bars,Cols>();
+/** 登记表是最近 WINDOW_SLOTS 个视图的环形缓冲(不用 WeakMap:每根几次登记短命数组,ephemeron 表的 GC 开销比省下的还多)。
+ * 被挤掉的视图查不到,调用方回落原始路径,只慢不错。 */
+interface Win {win:Bars|null;src:Bars;s:number}
+const WINDOW_SLOTS=16,windows:Win[]=[];let slot=0;
+let fastPath=true;
+/** 仅供对拍测试/基准:关掉后所有调用走原始路径(不查登记、不读缓存) */
+export function setIndicatorFastPath(on:boolean):void {fastPath=on;if(!on)windows.length=0;}
+/** 声明 win 是 src[s..s+win.length-1] 的连续切片(同一批 bar 对象),且登记后不再改动。返回 win 便于链式使用。 */
+export function registerWindow(win:Bars,src:Bars,s:number):Bars {
+ if(!fastPath||s<0||s+win.length>src.length)return win;
+ for(const w of windows)if(w.win===win){w.src=src;w.s=s;return win;}
+ const w={win,src,s};if(windows.length<WINDOW_SLOTS)windows.push(w);else{windows[slot]=w;slot=(slot+1)%WINDOW_SLOTS;}
+ return win;
+}
+/** 取已登记视图在源数组里的位置;未登记、源数组被改动(长度/端点对象变了)时返回 undefined,调用方回落原始路径 */
+export function windowOf(bars:Bars):{src:Bars;s:number}|undefined {
+ if(!fastPath||!bars.length)return undefined;
+ let w:Win|undefined;for(const x of windows)if(x.win===bars){w=x;break;}
+ if(!w)return undefined;
+ const e=w.s+bars.length-1;if(e>=w.src.length||w.src[w.s]!==bars[0]||w.src[e]!==bars[bars.length-1])return undefined;
+ return w;
+}
+function cols(src:Bars):Cols {
+ let c=colCache.get(src);
+ // 源数组长度或首尾对象变了(被追加/替换)就整列重建;列与 src 下标一一对应
+ if(!c||c.n!==src.length||c.first!==src[0]||c.last!==src[src.length-1]){c={src,n:src.length,first:src[0],last:src[src.length-1]};colCache.set(src,c);}
+ return c;
+}
+function col(c:Cols,f:Field):number[] {let a=c[f];if(!a){const src=c.src;a=[];for(let k=0;k<src.length;k++)a.push(N(src[k]![f]));c[f]=a;}return a;}
+/** 视图 bars 的某一列:登记过的取缓存列切片(与 bars.map(x=>Number(x[f])) 逐位相同),否则原路径 */
+function column(b:Bars,f:Field):number[] {const w=windowOf(b);if(!w)return b.map(x=>N(x[f]));return col(cols(w.src),f).slice(w.s,w.s+b.length);}
+/** 列访问器:a[off+k] 即 Number(bars[k][f])。登记过的视图直接读缓存列(不复制),否则现转一列(off=0) */
+function colView(b:Bars,f:Field):{a:number[];off:number} {const w=windowOf(b);return w?{a:col(cols(w.src),f),off:w.s}:{a:b.map(x=>N(x[f])),off:0};}
+
 /* ---------- 取价与滚动窗口工具 ---------- */
 const N=(x:unknown)=>Number(x);
-export const closeOf=(b:Bars)=>b.map(x=>N(x.close));
-export const highOf=(b:Bars)=>b.map(x=>N(x.high));
-export const lowOf=(b:Bars)=>b.map(x=>N(x.low));
-export const openOf=(b:Bars)=>b.map(x=>N(x.open));
-export const volumeOf=(b:Bars)=>b.map(x=>N(x.volume));
+export const closeOf=(b:Bars)=>column(b,'close');
+export const highOf=(b:Bars)=>column(b,'high');
+export const lowOf=(b:Bars)=>column(b,'low');
+export const openOf=(b:Bars)=>column(b,'open');
+export const volumeOf=(b:Bars)=>column(b,'volume');
 export const PRICE_SOURCES=['close','open','high','low','hl2','hlc3','ohlc4'] as const;
 export function priceSeries(bars:Bars,source:string):number[] {
+ const w=windowOf(bars);
+ if(w&&(source==='hl2'||source==='hlc3'||source==='ohlc4')){
+  // 与下面的原路径同一运算顺序(左结合相加后再除),逐位相同
+  const c=cols(w.src),h=col(c,'high'),l=col(c,'low'),o=w.s,len=bars.length,out=new Array<number>(len);
+  if(source==='hl2')for(let k=0;k<len;k++)out[k]=(h[o+k]!+l[o+k]!)/2;
+  else if(source==='hlc3'){const cl=col(c,'close');for(let k=0;k<len;k++)out[k]=(h[o+k]!+l[o+k]!+cl[o+k]!)/3;}
+  else{const op=col(c,'open'),cl=col(c,'close');for(let k=0;k<len;k++)out[k]=(op[o+k]!+h[o+k]!+l[o+k]!+cl[o+k]!)/4;}
+  return out;
+ }
  switch(source){
   case 'open':return openOf(bars);case 'high':return highOf(bars);case 'low':return lowOf(bars);
   case 'hl2':return bars.map(b=>(N(b.high)+N(b.low))/2);
@@ -82,8 +138,8 @@ export function stdevSeries(v:number[],n:number):number[] {
 }
 /** 真实波幅:第 0 根无前收,记 NaN,后续 Wilder 口径 */
 export function trSeries(bars:Bars):number[] {
- const out=nan(bars.length);
- for(let i=1;i<bars.length;i++){const b=bars[i]!,pc=N(bars[i-1]!.close);out[i]=Math.max(N(b.high)-N(b.low),Math.abs(N(b.high)-pc),Math.abs(N(b.low)-pc));}
+ const out=nan(bars.length),{a:H,off:o}=colView(bars,'high'),{a:L}=colView(bars,'low'),{a:C}=colView(bars,'close');
+ for(let i=1;i<bars.length;i++){const h=H[o+i]!,l=L[o+i]!,pc=C[o+i-1]!;out[i]=Math.max(h-l,Math.abs(h-pc),Math.abs(l-pc));}
  return out;
 }
 /** Wilder ATR:atr[n] = tr[1..n] 的均值,之后递推;首个有效下标 = n(与仓库既有 atr() 同口径) */
@@ -110,8 +166,8 @@ export function adSeries(bars:Bars):number[] {
  return out;
 }
 const dmSeries=(bars:Bars)=>{
- const plus=nan(bars.length),minus=nan(bars.length);
- for(let i=1;i<bars.length;i++){const up=N(bars[i]!.high)-N(bars[i-1]!.high),down=N(bars[i-1]!.low)-N(bars[i]!.low);
+ const plus=nan(bars.length),minus=nan(bars.length),{a:H,off:o}=colView(bars,'high'),{a:L}=colView(bars,'low');
+ for(let i=1;i<bars.length;i++){const up=H[o+i]!-H[o+i-1]!,down=L[o+i-1]!-L[o+i]!;
   plus[i]=up>down&&up>0?up:0;minus[i]=down>up&&down>0?down:0;}
  return {plus,minus};
 };
@@ -173,11 +229,11 @@ const SPECS:IndicatorSpec[]=[
    return {adx,plus_di:pdi,minus_di:mdi};}},
  {name:'supertrend',cn:'超级趋势',aliases:['supertrend','超级趋势','st'],category:'trend',args:[P(10,1,1000),arg('multiple',3,0.1,100,false)],outputs:['supertrend','direction'],
   warmup:a=>a.period!+1,
-  compute:(bars,a)=>{const n=a.period!,m=a.multiple!,atr=atrSeries(bars,n),len=bars.length,line=nan(len),dir=nan(len);
+  compute:(bars,a)=>{const n=a.period!,m=a.multiple!,atr=atrSeries(bars,n),len=bars.length,line=nan(len),dir=nan(len),{a:H,off:o}=colView(bars,'high'),{a:L}=colView(bars,'low'),{a:C}=colView(bars,'close');
    let up=NaN,low=NaN,d=1;
-   for(let i=n;i<len;i++){const b=bars[i]!,mid=(N(b.high)+N(b.low))/2,c=N(b.close),u=mid+m*atr[i]!,l=mid-m*atr[i]!;
+   for(let i=n;i<len;i++){const mid=(H[o+i]!+L[o+i]!)/2,c=C[o+i]!,u=mid+m*atr[i]!,l=mid-m*atr[i]!;
     if(i===n){up=u;low=l;d=c>=mid?1:-1;}
-    else{const pc=N(bars[i-1]!.close);up=(u<up||pc>up)?u:up;low=(l>low||pc<low)?l:low;d=c>up?1:c<low?-1:d;}
+    else{const pc=C[o+i-1]!;up=(u<up||pc>up)?u:up;low=(l>low||pc<low)?l:low;d=c>up?1:c<low?-1:d;}
     dir[i]=d;line[i]=d===1?low:up;}
    return {supertrend:line,direction:dir};}},
  {name:'psar',cn:'抛物线转向',aliases:['psar','sar','抛物线','停损转向'],category:'trend',args:[arg('step',0.02,0.001,1,false),arg('max_step',0.2,0.001,1,false)],outputs:['psar','direction'],
@@ -340,16 +396,49 @@ export function indicatorWarmup(name:string,raw?:Record<string,unknown>|null):nu
  const spec=INDICATORS[name];if(!spec)throw new Error(`unknown_indicator:${name}`);
  return Math.max(1,Math.ceil(spec.warmup(resolveArgs(name,raw))));
 }
+/** 前缀安全(prefix-safe)的指标:在 bars[0..m] 上算出的序列,等于在任意更长的 bars[0..M](M≥m)上算出的序列的前 m+1 项(逐位)。
+ * 逐个核过的依据(2026-09-26):全部只用前向递推(EMA/RMA/Wilder/累加/滚动和)或向后回看(滚动极值、i-n、i-d 位移),
+ * 没有任何倒序遍历、没有读 i 之后的下标、没有按数组总长归一化;emaSeries/rmaSeries/atrSeries/rsiSeries/kama/adx 里
+ * 「长度不足整段 NaN」的早退,对应的正是长序列里同一段本来就是 NaN 的下标(首个有效下标 ≥ 长度)。
+ * 一目均衡表先行 A/B、lagging_ref 取的是 i-d(向后位移),不是向前;vwap 按本根 open_time 的 UTC 日重置,只看自己与之前的根。
+ * 新加指标默认不在此列(走逐根重算),核过前缀一致性并加进对拍测试后再加入。 */
+export const PREFIX_SAFE=new Set(['price','sma','ema','wma','dema','tema','hma','vwma','smma','kama','macd','adx','supertrend','psar','ichimoku','aroon','vortex','chop',
+ 'rsi','stoch','stochrsi','cci','mfi','roc','willr','momentum','trix','uo','ao','elder_ray','bbands','keltner','donchian','atr','natr','stdev','obv','vwap','cmf','ad','volume_ratio','chaikin']);
+const wrap=(spec:IndicatorSpec,r:number[]|Record<string,number[]>)=>Array.isArray(r)?{[spec.outputs[0]!]:r}:r;
+/** 每个源数组一份:full=视图起点 0 时在整段源上算好的前缀安全指标;cur=当前 (s,len) 视图上算过的结果(换视图就清空) */
+interface SeriesMemo {cols:Cols;full:Map<string,Record<string,number[]>>;s:number;len:number;cur:Map<string,Record<string,number[]>>}
+const seriesMemo=new WeakMap<Bars,SeriesMemo>();
+/** 已登记视图上的指标结果(可能是整段结果,长度 ≥ bars.length,前 bars.length 项即本视图结果);未登记返回 null */
+function memoSeries(spec:IndicatorSpec,bars:Bars,raw?:Record<string,unknown>|null):Record<string,number[]>|null {
+ const w=windowOf(bars);if(!w)return null;
+ const args=resolveArgs(spec.name,raw),key=spec.name+JSON.stringify(args),len=bars.length;
+ // 源数组被追加/替换时 cols() 换新对象,记忆随之作废
+ const c=cols(w.src);let m=seriesMemo.get(w.src);if(!m||m.cols!==c){m={cols:c,full:new Map(),s:-1,len:-1,cur:new Map()};seriesMemo.set(w.src,m);}
+ if(w.s===0&&PREFIX_SAFE.has(spec.name)){
+  let full=m.full.get(key);
+  if(!full){full=wrap(spec,spec.compute(registerWindow(w.src.slice(),w.src,0),args));m.full.set(key,full);}
+  return full;
+ }
+ if(m.s!==w.s||m.len!==len){m.s=w.s;m.len=len;m.cur.clear();}
+ let r=m.cur.get(key);if(!r){r=wrap(spec,spec.compute(bars,args));m.cur.set(key,r);}
+ return r;
+}
 /** 统一成 {输出名: 序列};单输出的指标输出名为 value */
 export function indicatorSeries(name:string,bars:Bars,raw?:Record<string,unknown>|null):Record<string,number[]> {
  const spec=INDICATORS[name];if(!spec)throw new Error(`unknown_indicator:${name}`);
+ const hit=memoSeries(spec,bars,raw);
+ if(hit){const len=bars.length;return Object.fromEntries(Object.entries(hit).map(([k,v])=>[k,v.length===len?v.slice():v.slice(0,len)]));}
  const r=spec.compute(bars,resolveArgs(name,raw));
  return Array.isArray(r)?{[spec.outputs[0]!]:r}:r;
 }
-/** 取一条线;output 缺失或不认识时回落到主输出 */
+/** 取一条线;output 缺失或不认识时回落到主输出。
+ * 登记过的视图返回记忆里的共享数组(长度 = bars.length),调用方只读不写。 */
 export function indicatorLine(name:string,bars:Bars,raw?:Record<string,unknown>|null,output?:string):number[] {
- const spec=INDICATORS[name]!,all=indicatorSeries(name,bars,raw);
+ const spec=INDICATORS[name];if(!spec)throw new Error(`unknown_indicator:${name}`);
  const key=output&&spec.outputs.includes(output)?output:spec.outputs[0]!;
+ const hit=memoSeries(spec,bars,raw);
+ if(hit){const v=hit[key]??hit[spec.outputs[0]!]!;return v.length===bars.length?v:v.slice(0,bars.length);}
+ const all=indicatorSeries(name,bars,raw);
  return all[key]??all[spec.outputs[0]!]!;
 }
 /** 单个指标内部的快慢周期约束(fast < slow),供 checkIR 的 ordered 检查复用 */

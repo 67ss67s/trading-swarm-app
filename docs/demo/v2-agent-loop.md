@@ -126,7 +126,7 @@ interface ChatMessage {
 
 ## 6. 对话(主会话)
 
-`pi -p --session-id <main> --session-dir ~/.trading-swarm/demo/sessions`(或 claude `--resume`);系统提示 = 角色 + 工具清单 + 当前状态摘要(每轮重新注入,带 as_of)。工具调用契约:模型回复中若含一行 `@@tool {"name":"…","args":{…}}`,gateway 执行后把 `@@result {...}` 作为下一条用户消息喂回,最多 4 轮;无工具行即为最终回复。工具:`get_state` / `list_threads` / `get_thread{id}` / `propose_thread{symbol, side, entry, stop_price, take_profits, thesis}`(走与扫描相同的闸和 sizing,source=chat,auto_approve 关时挂待确认)/ `close_thread{id}` / `set_workflow{patch}` / `run_scan{symbol?}` / `run_info`。动钱工具只到「提议」,确认在 UI。
+`pi -p --session-id <main> --session-dir ~/.trade-gate/demo/sessions`(或 claude `--resume`);系统提示 = 角色 + 工具清单 + 当前状态摘要(每轮重新注入,带 as_of)。工具调用契约:模型回复中若含一行 `@@tool {"name":"…","args":{…}}`,gateway 执行后把 `@@result {...}` 作为下一条用户消息喂回,最多 4 轮;无工具行即为最终回复。工具:`get_state` / `list_threads` / `get_thread{id}` / `propose_thread{symbol, side, entry, stop_price, take_profits, thesis}`(走与扫描相同的闸和 sizing,source=chat,auto_approve 关时挂待确认)/ `close_thread{id}` / `set_workflow{patch}` / `run_scan{symbol?}` / `run_info`。动钱工具只到「提议」,确认在 UI。
 
 ## 7. 前端(对齐 8794 交易页)
 
@@ -147,9 +147,9 @@ interface ChatMessage {
 没抄:按读派生线程(我们持久化线程,只重推导状态,因为线程承载的是 agent 的计划——论点、入场区、失效条件,交易所里没有这些);attention 桶的十几种代码(只留 PROTECTION_MISSING / ORDER_UNKNOWN / CLOSE_FAILED);TWAP;多 TP 阶梯分配。
 8794 没有而这里新加的:日亏停(`daily_loss_stop_pct`,按 UTC 日初权益算)、最多同时线程数、K 线收盘驱动的持仓复查。
 
-## 10. 对抗评审(2026-09-03,内部评审记录)的处理
+## 10. Codex 对抗 review(2026-09-03,`.codex-reports/demo-v2-review.md`)的处理
 
-外部评审 判 **NO-GO**(8 P0 / 13 P1 / 4 P2),核心两类:把不确定事实写成终态;审批/暂停/紧急停/手动单没有重闸。当场修掉的:
+Codex 判 **NO-GO**(8 P0 / 13 P1 / 4 P2),核心两类:把不确定事实写成终态;审批/暂停/紧急停/手动单没有重闸。当场修掉的:
 - 未知不判终态:入场单状态不明 → 线程保持待入场 + `ORDER_UNKNOWN`,巡检按 clientOrderId 持续核对,连续 4 次查不到且无仓才判 canceled;止损传输断连/超时即使回报 failed 也按 unknown:优先按 clientAlgoId 查算法单,查到视为已提交,明确查不到才用同一 ID 重发一次(重复 ID 拒绝视为已提交),重发仍失败/未知才补偿平仓;查询不确定则保持 in_position + PROTECTION_MISSING 等巡检;仅明确交易所拒绝且非既有排除码才作废保护验证记录;补偿平仓失败 → 线程不关,`CLOSE_FAILED` 巡检;撤入场单失败 → `CANCEL_UNKNOWN` 保持待入场;紧急停撤单/平仓失败的币 → `HALT_INCOMPLETE` 不判终态。
 - 重闸:提议通过后**重新拉账户与标记价**再 sizing;发单前再查一次紧急停/暂停/日亏停/线程上限/同币外部持仓;杠杆/保证金模式设置失败即放弃入场;审批加单飞 + 重查 halted/paused/线程状态;`paused` 进 gate。
 - 归属:pending 线程只有**自己的入场单**成交才转持仓中,同币出现外部仓位 → `EXTERNAL_POSITION` 不挂保护;止损巡检要匹配我们的 CID 或止损价(±0.5%);部分成交 → 转持仓中并撤余量,qty 用已成交量。
@@ -161,7 +161,7 @@ interface ChatMessage {
 - 轮询:行情/账户轮询单飞。
 未修(记入待办):CID 唯一索引与事务内分配;线程保存的乐观 CAS;Rust `close_position` 在双向持仓模式的语义;symbol 级 `cancelAll` 会撤外部挂单;规则缓存 TTL;`chat.close_thread` 直接动钱(用户在对话里下的指令,演示版接受);approve 绑定 plan hash。
 
-## 11. 复查(内部评审记录)后的第二批收口
+## 11. Codex 复查(`.codex-reports/demo-v2-recheck.md`)后的第二批收口
 
 复查结论 FIXED 1 / PARTIAL 17 / NOT_FIXED 7 + 8 个新缺陷,复盘在 `docs/demo/retro-2026-09-03.md`。本批修的:日内开仓计数排除当前线程;`entry_lookup_misses`/`leg_seq` 进线程契约,查不到入场单**永不自动撤**只升 ORDER_UNKNOWN;线程找回订单/终态时同步解冻或收口意图;紧急停期间不挂保护、`HALT_INCOMPLETE` 每轮重试撤单+平仓;平仓只认 `closed=true` 或新鲜账户证明已平;`ENTRY_REMAINDER` 每轮重试撤余量且不被保护流程清掉;binance-cli 写类命令超时一律 ambiguous、"已不存在"只认 -2011/-2013(Rust 后端同);减仓只在成交后改本地数量;暂停期间任何扫描都不排队;sizing 实际风险超预算 5% 即拒;对话的提议一律待确认、平仓变成待确认意图(审批入口支持 close);CID 用 sha1(thread.id) 前缀 + 线程 `leg_seq`;规则缓存 10 分钟、非 TRADING 拒单;Rust 回环校验严格化、`close_position` 双向持仓按侧平仓。
 仍未做(属 A2):账户级单写 actor / execution epoch;CAS + plan hash;多源持续对账;RPC 通道隔离;精确 CID 撤单;十进制定点;鉴权。

@@ -1,4 +1,4 @@
-import type { ResearchBar, StrategyIR } from '@trading-swarm/contracts';
+import type { ResearchBar, StrategyIR } from '@trade-gate/contracts';
 import { node } from '../../../../src/demo/research/strategy.js';
 import { candidateSnapshot } from '../../../../src/demo/research/judge/candidate.js';
 import { AtomicCallBudget, JudgeDecisionStore, buildJudgeState, type JudgeInput, type JudgeRuntime } from '../../../../src/demo/research/judge/index.js';

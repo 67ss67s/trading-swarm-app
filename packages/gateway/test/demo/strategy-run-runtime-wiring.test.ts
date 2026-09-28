@@ -8,6 +8,7 @@ import { policyToIR } from '../../src/demo/research/strategy.js';
 import { SYNTH_POLICY } from '../../src/demo/strategy-candidate.js';
 import { sizeRunOrder, type RunCandidate } from '../../src/demo/strategy-run-orders.js';
 import { runOrigin, type StrategyRun } from '../../src/demo/strategy-run.js';
+import { SIZING_SYSTEM } from '../../src/demo/sizing-agent.js';
 import type { Kline } from '../../src/demo/types.js';
 
 // R14/R19 runtime 接线:只用 PaperBackend 与进程内行情桩,不起定时器/端口,不碰真实交易所或付费模型。
@@ -19,7 +20,7 @@ function bars(): Kline[] {
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => { while (cleanups.length) await cleanups.pop()!(); vi.restoreAllMocks(); });
 
-async function setup(opts: { risk_pct?: number; customize?: (ir: ReturnType<typeof policyToIR>) => void } = {}) {
+async function setup(opts: { risk_pct?: number; customize?: (ir: ReturnType<typeof policyToIR>) => void; sizing_agent?: 'off' | 'advise' | 'apply' } = {}) {
   const market = await import('../../src/demo/market.js');
   vi.spyOn(Date, 'now').mockReturnValue(T0 + 101 * H + 5000);
   vi.spyOn(market, 'fetchKlines').mockImplementation(async (_symbol, tf) => {
@@ -35,7 +36,7 @@ async function setup(opts: { risk_pct?: number; customize?: (ir: ReturnType<type
   const s = service.create({ name: '接线测试', symbol: 'BTCUSDT', timeframe: '1h', strategy_ir: ir });
   const backend = new PaperBackend(10000), calls = vi.fn(() => '{"decision":"follow","reason":"x"}');
   const rt = new DemoRuntime({ store, backend, brains: { stub: stubBrain(calls) } });
-  rt.workflow = { ...rt.workflow, brain: 'stub', cheap_brain: 'stub', timeframe: '1h', watchlist: ['BTCUSDT'], markets: ['spot', 'perp'], auto_approve: false, risk_pct: '0.1', leverage: 3, sizing_agent: 'apply', strategy_council: 'off', entry_style: 'free' };
+  rt.workflow = { ...rt.workflow, brain: 'stub', cheap_brain: 'stub', timeframe: '1h', watchlist: ['BTCUSDT'], markets: ['spot', 'perp'], auto_approve: false, risk_pct: '0.1', leverage: 3, sizing_agent: opts.sizing_agent ?? 'apply', strategy_council: 'off', entry_style: 'free' };
   rt.markets.set('BTCUSDT', await market.fetchMarketView('BTCUSDT', '1h', 'perp'));
   const runner = rt.strategyRuns();
   cleanups.push(async () => { await rt.stop(); state.close(); });
@@ -128,5 +129,92 @@ describe('strategyRuns() R14/R19 依赖接线', () => {
     expect(await reconcile(f.run, 'cand_1', t.id)).toBeNull();
     f.store.saveThread({ ...t, origin: 'strategy_run:other' });
     expect(await reconcile(f.run, 'cand_1', t.id)).toBeNull();
+  });
+});
+
+describe('§9.56 执行层接到策略运行', () => {
+  const pm = (system: string) => system === SIZING_SYSTEM ? '{"risk_multiplier":0.5,"allow_min_lot_overshoot":false,"reason":"同簇仓位偏多"}' : '{"decision":"follow","reason":"x"}';
+
+  it('固定风险的运行也按组合经理倍率算仓位;波动率目标不问', async () => {
+    const off = await setup({ risk_pct: 1, sizing_agent: 'off' });
+    off.run.status = 'running'; off.runner.store.save(off.run);
+    const base = await off.runner.deps.open(off.run, candidate(off.run, { size_weight: undefined }), 'auto');
+    expect(base.outcome).toBe('opened');
+    const baseQty = Number(off.store.thread(base.thread_id!)!.qty);
+
+    const on = await setup({ risk_pct: 1, sizing_agent: 'apply' });
+    on.calls.mockImplementation(pm as never);
+    on.run.status = 'running'; on.runner.store.save(on.run);
+    const half = await on.runner.deps.open(on.run, candidate(on.run, { size_weight: undefined }), 'auto');
+    expect(half.outcome).toBe('opened');
+    const t = on.store.thread(half.thread_id!)!;
+    expect(Number(t.qty)).toBeCloseTo(baseQty / 2, 1);
+    const intent = on.store.intentsForThread(t.id).find(i => i.kind === 'open')!;
+    expect(intent.sizing.agent).toMatchObject({ multiplier: 0.5, applied: true });
+    // 仓位意见看到的是这条运行自己的 risk_pct
+    expect(on.store.episode(intent.episode_id)?.sizing_evidence?.['risk_pct']).toBe('1');
+
+    const sized = await setup({ risk_pct: 1, sizing_agent: 'apply' });
+    sized.calls.mockImplementation(pm as never);
+    sized.run.status = 'running'; sized.runner.store.save(sized.run);
+    expect((await sized.runner.deps.openSized!(sized.run, candidate(sized.run), 'auto')).outcome).toBe('opened');
+    expect(sized.calls.mock.calls.some(args => (args as unknown[])[0] === SIZING_SYSTEM)).toBe(false);
+  });
+
+  it('止损太近被执行层拒单,结果带层、原因码和原样闸结果,不发单', async () => {
+    const f = await setup({ sizing_agent: 'off' });
+    f.run.status = 'running'; f.runner.store.save(f.run);
+    const send = vi.spyOn(f.backend, 'placeEntry');
+    // 103 的入场、102.85 的止损 = 0.15%,和 09-26 SOL 那四个候选一样
+    const r = await f.runner.deps.open(f.run, candidate(f.run, { size_weight: undefined, stop: 102.85, target: 103.6, take_profits: [{ price: 103.6, size_pct: 1 }] }), 'auto');
+    expect(r).toMatchObject({ outcome: 'rejected', layer: 'gate', code: 'stop_distance' });
+    // 百分比模式(默认)只有一行止损距离,不出 ATR 那一行
+    expect((r as { gates?: { name: string; code?: string }[] }).gates?.map(g => g.code)).toEqual(['stop_distance']);
+    expect(r.reason).toContain('允许 1%–5%');
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  // 行情桩:1h 每根高低差 1.6,ATR14 ≈ 1.7(约 1.65% of 103)
+  it('ATR 模式:按 stop_floor_atr_tf 那根的 ATR 判,原因码 stop_atr;百分比底线不再生效', async () => {
+    const f = await setup({ sizing_agent: 'off' });
+    f.run.status = 'running'; f.runner.store.save(f.run);
+    f.rt.setWorkflow({ stop_floor_mode: 'atr', stop_floor_atr_tf: '1h', min_stop_atr: 1 });
+    // 103 → 102.2 = 0.78%,不到 0.5×ATR
+    const tight = await f.runner.deps.open(f.run, candidate(f.run, { size_weight: undefined, stop: 102.2, target: 105, take_profits: [{ price: 105, size_pct: 1 }] }), 'auto');
+    expect(tight).toMatchObject({ outcome: 'rejected', layer: 'gate', code: 'stop_atr' });
+    expect(tight.reason).toMatch(/×ATR\(下限 1×1h ATR/);
+    // 0.97% 在百分比模式会被 1% 挡;ATR 模式把倍数降到 0.5 就放行,说明百分比底线没在判
+    f.rt.setWorkflow({ min_stop_atr: 0.5 });
+    const ok = await f.runner.deps.open(f.run, candidate(f.run, { size_weight: undefined, stop: 102, target: 106, take_profits: [{ price: 106, size_pct: 1 }] }), 'auto');
+    expect(ok.outcome).toBe('opened');
+  });
+
+  it('ATR 模式但 K 线取不到:改按百分比判,原因里写明', async () => {
+    const f = await setup({ sizing_agent: 'off' });
+    f.run.status = 'running'; f.runner.store.save(f.run);
+    f.rt.setWorkflow({ stop_floor_mode: 'atr', stop_floor_atr_tf: '4h', min_stop_atr: 1 });
+    const market = await import('../../src/demo/market.js');
+    vi.mocked(market.fetchKlines).mockRejectedValue(new Error('网络断了'));
+    const r = await f.runner.deps.open(f.run, candidate(f.run, { size_weight: undefined, stop: 102.2, target: 105, take_profits: [{ price: 105, size_pct: 1 }] }), 'auto');
+    expect(r).toMatchObject({ outcome: 'rejected', layer: 'gate', code: 'stop_distance' });
+    expect(r.reason).toContain('ATR 不可用,改按百分比');
+  });
+
+  it('净盈亏比不够被执行层拒单;没有止盈目标的候选不判净盈亏比', async () => {
+    const f = await setup({ sizing_agent: 'off' });
+    f.run.status = 'running'; f.runner.store.save(f.run);
+    const r = await f.runner.deps.open(f.run, candidate(f.run, { size_weight: undefined, target: 104, take_profits: [{ price: 104, size_pct: 1 }] }), 'auto');
+    expect(r).toMatchObject({ outcome: 'rejected', code: 'min_net_rr' });
+    const noTarget = await f.runner.deps.open(f.run, candidate(f.run, { size_weight: undefined, target: null, take_profits: undefined, symbol: 'BTCUSDT' }), 'auto');
+    expect(noTarget.outcome).toBe('opened');
+  });
+
+  it('执行层下限跟着 workflow 走', async () => {
+    const f = await setup({ sizing_agent: 'off' });
+    f.run.status = 'running'; f.runner.store.save(f.run);
+    f.rt.setWorkflow({ min_stop_pct: 2 });
+    const r = await f.runner.deps.open(f.run, candidate(f.run, { size_weight: undefined }), 'auto');
+    expect(r).toMatchObject({ outcome: 'rejected', code: 'stop_distance' });
+    expect(r.reason).toContain('允许 2%–5%');
   });
 });

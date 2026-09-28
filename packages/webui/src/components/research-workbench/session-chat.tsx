@@ -254,7 +254,7 @@ export function SessionSidebar({
           <History />
         </Button>
         {onOpenMatrix ? (
-          <Button size="xs" variant="ghost" onClick={onOpenMatrix} title={t('矩阵研究')}>
+          <Button size="xs" variant="ghost" onClick={onOpenMatrix} title={t('批量验证')}>
             <Grid3x3 />
           </Button>
         ) : null}
@@ -316,9 +316,9 @@ export function SessionSidebar({
             <span className="num ml-auto text-[10px] text-muted-foreground">{runCount}</span>
           </button>
           {onOpenMatrix ? (
-            <button type="button" onClick={onOpenMatrix} className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[11.5px] hover:bg-accent/60" title={t('资产 × 周期 × 策略的矩阵研究,在右栏打开')}>
+            <button type="button" onClick={onOpenMatrix} className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[11.5px] hover:bg-accent/60" title={t('几个币 × 几个周期 × 几种策略一次性回测,在右栏打开')}>
               <Grid3x3 className="size-3 shrink-0 text-muted-foreground" />
-              <span className="truncate">{t('矩阵研究')}</span>
+              <span className="truncate">{t('批量验证')}</span>
             </button>
           ) : null}
         </div>
@@ -547,7 +547,7 @@ function BlockView({ block, ctx }: { block: ResearchBlock; ctx: BlockCtx }) {
           <FlaskConical className="size-3 text-primary" />
           <span>{t('这一步创建了一次回测')}</span>
           <span className="num ml-auto text-[10px] text-muted-foreground">{block.run_id.slice(0, 8)}</span>
-        </button>{ctx.onOpenSettings ? <button type="button" className="mb-3 text-xs text-primary hover:underline" onClick={() => ctx.onOpenSettings?.(block.run_id)}>设置 · 修改规则 · 查看版本</button> : null}</div>
+        </button>{ctx.onOpenSettings ? <button type="button" className="mb-3 text-xs text-primary hover:underline" onClick={() => ctx.onOpenSettings?.(block.run_id)}>{t('设置 · 修改规则 · 查看版本')}</button> : null}</div>
       );
     case 'data_gap':
       return <DataGapBlock metric={block.metric} availability={block.availability} note={block.note} />;

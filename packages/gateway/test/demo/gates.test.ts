@@ -90,7 +90,7 @@ describe('evaluateGates', () => {
     expect(gate(results, '止损在正确一侧').passed).toBe(false);
   });
 
-  it('stop distance below the minimum (0.3%) fails "止损距离"', () => {
+  it('stop distance below the minimum (1%) fails "止损距离"', () => {
     const j = mkJudgment({ proposal: { direction: 'long', entry: 'market', limit_price: null, entry_zone: null, stop_price: '76950', take_profit_price: '79000', take_profits: ['79000'], rationale: 'r' } }); // ~0.065% away
     const results = evaluateGates(j, mkCtx());
     expect(gate(results, '止损距离').passed).toBe(false);
@@ -102,9 +102,11 @@ describe('evaluateGates', () => {
     expect(gate(results, '止损距离').passed).toBe(false);
   });
 
-  it('stop distance within [0.3%, 5%] passes "止损距离"', () => {
-    const results = evaluateGates(mkJudgment(), mkCtx()); // stop 76300 vs mark 77000 ≈ 0.91%
-    expect(gate(results, '止损距离').passed).toBe(true);
+  it('stop distance within [1%, 5%] passes "止损距离"; 0.91% is now under the 1% floor', () => {
+    // 09-27 起默认底线 1%:76300 对 77000 ≈ 0.91% 不够,76000 ≈ 1.30% 放行
+    expect(gate(evaluateGates(mkJudgment(), mkCtx()), '止损距离').passed).toBe(false);
+    const j = mkJudgment({ proposal: { direction: 'long', entry: 'market', limit_price: null, entry_zone: null, stop_price: '76000', take_profit_price: '79000', take_profits: ['79000'], rationale: 'r' } });
+    expect(gate(evaluateGates(j, mkCtx()), '止损距离').passed).toBe(true);
   });
 
   it('confidence below 0.4 fails "信心下限"', () => {

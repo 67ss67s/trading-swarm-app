@@ -7,6 +7,8 @@
  * 真实数据 → 引擎快照的映射在 components/floor-v4/snapshot.ts(纯函数,有测试)。
  * 不新增后端接口:审批走 /api/intents/:id/confirm-token + approve/reject,紧急停止走 /api/halt,
  * 派活见 components/floor-v4/tasks.ts,运行策略复用我的策略的 RunDialog。
+ * §9.55:「和它对话」不再跳页,在场景里弹 FloorAgentChat(与 Agent 页同一条规范线程);agent 在回你时,它的小人按「干活」画,
+ * 对话框关着时回复到了,它头上冒一句并弹 toast。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -27,9 +29,15 @@ import { ROLES, ROLE_ORDER } from '@/components/floor-v4/engine-b/roles';
 import { THEMES, THEME_ORDER, isThemeId } from '@/components/floor-v4/engine-b/themes';
 import { buildFloorModel, type FeedRow, type FloorModel, type FloorTask, type Role } from '@/components/floor-v4/snapshot';
 import { coinTask, parseCommand, realTasks, type RealTask, type TaskContext } from '@/components/floor-v4/tasks';
+import { FloorAgentChat } from '@/components/floor-v4/agent-chat';
+import { JudgeLiveTicker } from '@/components/judge-live';
+import { StatusTag } from '@/components/tour/status-tag';
+import { chatStateText, useAgents } from '@/api/agents';
 import '@/components/floor-v4/floor-v4.css';
 import { fmtPrice, relativeTime, useNow } from '@/lib/format';
+import { friendlyError } from '@/lib/edition';
 import { t, useLang } from '@/lib/i18n';
+import { st as serverText } from '@/lib/server-text-en';
 
 const LAYOUT_KEY = 'tg.floor.v4.layout';
 const THEME_KEY = 'tg.floor.v4.theme';
@@ -66,6 +74,11 @@ export function FloorV4Page({ connected = true }: { connected?: boolean }) {
   const [layout, setLayoutState] = useState<Layout>(() => load(LAYOUT_KEY, isLayout, 'b'));
   const [theme, setThemeState] = useState<UiTheme>(() => load(THEME_KEY, isThemeId, 'study'));
   const [tasks, setTasks] = useState<Partial<Record<Role, FloorTask>>>({});
+  // §9.55 楼层里的对话框:开着哪个 agent
+  const [chatRole, setChatRole] = useState<Role | null>(null);
+  const chatRoleRef = useRef<Role | null>(null);
+  chatRoleRef.current = chatRole;
+  const agentsQ = useAgents();
   const [card, setCard] = useState<Card>(null);
   const [runOpen, setRunOpen] = useState(false);
   const [consoleOpen, setConsoleOpen] = useState(false);
@@ -92,6 +105,15 @@ export function FloorV4Page({ connected = true }: { connected?: boolean }) {
   const modelsQ = useModels();
 
   const runningIds = useMemo(() => activeRunIds(runsQ.data?.runs), [runsQ.data]);
+  // agent 正在回你(排队/想/调工具)= 它在干活:并进 tasks 让小人动起来;手动派的活优先
+  const chatTasks = useMemo(() => {
+    const out: Partial<Record<Role, FloorTask>> = {};
+    for (const a of agentsQ.data?.agents ?? []) {
+      if (a.chat.state === 'queued' || a.chat.state === 'thinking' || a.chat.state === 'tool') out[a.role as Role] = { id: `chat-${a.role}`, label: chatStateText(a.chat) || t('回你消息') };
+    }
+    return out;
+  }, [agentsQ.data]);
+  const allTasks = useMemo(() => ({ ...chatTasks, ...tasks }), [chatTasks, tasks]);
   const model: FloorModel = useMemo(
     () =>
       buildFloorModel({
@@ -108,12 +130,12 @@ export function FloorV4Page({ connected = true }: { connected?: boolean }) {
         runningStrategyIds: runningIds,
         history: historyQ.data ?? null,
         btcKlines: btcQ.data?.klines ?? null,
-        tasks,
+        tasks: allTasks,
         episodes: episodesQ.data ?? null,
         agentStrategy: agentStrategyQ.data ?? null,
         models: modelsQ.data ?? null,
       }),
-    [now, botsQ.data, activityQ.data, overviewQ.data, executionQ.data, portfolioQ.data, riskQ.data, evoQ.data, intentsQ.data, strategiesQ.data, runningIds, historyQ.data, btcQ.data, tasks, episodesQ.data, agentStrategyQ.data, modelsQ.data],
+    [now, botsQ.data, activityQ.data, overviewQ.data, executionQ.data, portfolioQ.data, riskQ.data, evoQ.data, intentsQ.data, strategiesQ.data, runningIds, historyQ.data, btcQ.data, allTasks, episodesQ.data, agentStrategyQ.data, modelsQ.data],
   );
   // 引擎第一次 setData 会把已有交接记成「看过」;等名册和活动流(信封的两个来源)都回来再喂,否则后到的旧交接会全飞一遍信封。
   // overview 可能很慢(账户读取走执行通道),不等它。
@@ -199,7 +221,7 @@ export function FloorV4Page({ connected = true }: { connected?: boolean }) {
           }
           case 'brief': {
             const r = await qc.fetchQuery({ queryKey: ['captain', 'brief'], queryFn: api.captainBrief, staleTime: 30_000 });
-            toast(r.brief?.headline ?? t('今天还没有值班简报'), r.brief ? { description: t('待阅交接 {h} · 风控 {r} · 今日花费 ¥{c}', { h: r.brief.pending_handoffs.count, r: r.brief.risk.level, c: r.brief.total_cost_cny.toFixed(2) }) } : undefined);
+            toast(serverText(r.brief?.headline) ?? t('今天还没有值班简报'), r.brief ? { description: t('待阅交接 {h} · 风控 {r} · 今日花费 ¥{c}', { h: r.brief.pending_handoffs.count, r: r.brief.risk.level, c: r.brief.total_cost_cny.toFixed(2) }) } : undefined);
             break;
           }
           case 'exposure': {
@@ -211,7 +233,7 @@ export function FloorV4Page({ connected = true }: { connected?: boolean }) {
           case 'risk': {
             await qc.invalidateQueries({ queryKey: ['risk'] });
             const r = await qc.fetchQuery({ queryKey: ['risk', 'alerts', 'open'], queryFn: () => api.riskAlerts('open') });
-            toast(t('风控等级 {l} · {n} 条开着的告警', { l: r.level, n: r.alerts.length }), r.alerts[0] ? { description: r.alerts[0].title } : undefined);
+            toast(t('风控等级 {l} · {n} 条开着的告警', { l: r.level, n: r.alerts.length }), r.alerts[0] ? { description: serverText(r.alerts[0].title) } : undefined);
             break;
           }
         }
@@ -230,20 +252,27 @@ export function FloorV4Page({ connected = true }: { connected?: boolean }) {
     [qc],
   );
 
-  const chat = useCallback(async (role: Role) => {
-    // 同旧楼层「和它对话」:新建一个对着该角色的会话,记为当前会话,跳 Agent 页
-    try {
-      const r = await api.createChatSession(undefined, role);
-      try {
-        window.localStorage.setItem('tg.chat.session', r.session.id);
-      } catch {
-        /* ignore */
-      }
-      window.location.hash = 'agent';
-    } catch (e) {
-      toast.error(t('开不了会话:{msg}', { msg: e instanceof Error ? e.message : String(e) }));
-    }
+  // §9.55「和它对话」:就地弹对话框(该 agent 的规范线程),镜头推过去
+  const chat = useCallback((role: Role) => {
+    setChatRole(role);
+    engineRef.current?.focus(role);
   }, []);
+
+  // 对话框关着 / 开着别人时,某个 agent 回完了:它头上冒一句 + toast 带「打开」
+  const prevChat = useRef<Map<string, string>>(new Map());
+  useEffect(() => {
+    const prev = prevChat.current;
+    for (const a of agentsQ.data?.agents ?? []) {
+      const was = prev.get(a.role);
+      const busyBefore = was === 'queued' || was === 'thinking' || was === 'tool';
+      if (busyBefore && a.chat.state === 'idle' && chatRoleRef.current !== a.role) {
+        const r = a.role as Role;
+        engineRef.current?.catchDrop(r, t('回你了'));
+        toast(t('{c} 回你了', { c: a.callsign }), { description: a.last_text?.slice(0, 80) ?? undefined, action: { label: t('打开'), onClick: () => setChatRole(r) } });
+      }
+      prev.set(a.role, a.chat.state);
+    }
+  }, [agentsQ.data]);
 
   const openMailbox = useCallback(() => {
     const m = modelRef.current;
@@ -303,7 +332,7 @@ export function FloorV4Page({ connected = true }: { connected?: boolean }) {
     const sel = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('sel');
     const selTimer = sel && (ROLE_ORDER as readonly string[]).includes(sel) ? window.setTimeout(() => eng.focus(sel as Role), 400) : 0;
     // 开发态调试钩子(截图脚本用);生产包里没有
-    if (import.meta.env.DEV) (window as unknown as { __floorV4?: unknown }).__floorV4 = { engine: eng, qc, openCard: setCard, openHalt: () => setHaltOpen(true), model: () => modelRef.current };
+    if (import.meta.env.DEV) (window as unknown as { __floorV4?: unknown }).__floorV4 = { engine: eng, qc, openCard: setCard, openChat: setChatRole, openHalt: () => setHaltOpen(true), model: () => modelRef.current };
     return () => {
       window.clearTimeout(selTimer);
       eng.destroy();
@@ -341,7 +370,7 @@ export function FloorV4Page({ connected = true }: { connected?: boolean }) {
       await qc.invalidateQueries({ queryKey: ['overview'] });
       setHaltOpen(false);
     } catch (e) {
-      toast.error(t('紧急停止没成功'), { description: e instanceof Error ? e.message : String(e) });
+      toast.error(t('紧急停止没成功'), { description: friendlyError(e instanceof Error ? e.message : String(e)) });
     } finally {
       setHaltBusy(false);
     }
@@ -426,6 +455,10 @@ export function FloorV4Page({ connected = true }: { connected?: boolean }) {
     const onKey = (e: KeyboardEvent) => {
       const tgt = e.target as HTMLElement | null;
       if (tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.tagName === 'SELECT' || tgt.isContentEditable)) return;
+      if (e.key === 'Escape' && chatRoleRef.current) {
+        setChatRole(null);
+        return;
+      }
       if (document.querySelector('[role="dialog"][data-state="open"]')) return;
       if (e.key === '`' || e.key === '~') {
         e.preventDefault();
@@ -544,7 +577,7 @@ export function FloorV4Page({ connected = true }: { connected?: boolean }) {
       </header>
 
       <main className="stage">
-        <div ref={sceneRef} key={layout} className={`scene ${layout}`}>
+        <div ref={sceneRef} key={layout} className={`scene ${layout}`} data-tour="floor-scene">
           <canvas ref={canvasRef} />
           {layout === 'b' ? (
             <div className="keys">
@@ -563,6 +596,9 @@ export function FloorV4Page({ connected = true }: { connected?: boolean }) {
             />
           ) : null}
           {cardHandoff ? <HandoffCard h={cardHandoff} onClose={() => setCard(null)} /> : null}
+          {chatRole ? (
+            <FloorAgentChat role={chatRole} onClose={() => setChatRole(null)} />
+          ) : null}
           {consoleOpen ? <PixelConsole ctx={taskCtx} onClose={() => setConsoleOpen(false)} onRun={(r, task) => void runTask(r, task)} onFocus={(r) => engineRef.current?.focus(r)} onTheme={setTheme} /> : null}
         </div>
 
@@ -616,6 +652,13 @@ export function FloorV4Page({ connected = true }: { connected?: boolean }) {
                 </div>
               </div>
             ) : null}
+          </section>
+          {/* THREAD 判断桌:Jev 实盘判断流(docs/design/jev-live-2026-09-25.md);点一条 = 和 THREAD 聊这条 */}
+          <section className="blk fv4-shad judgeblk">
+            <h3>
+              <span className="cs" style={{ color: ROLES.thread_manager.color }}>THREAD</span> {t('判断桌 · Jev 实盘判断')} <StatusTag kind="live" className="ml-1 align-middle" />
+            </h3>
+            <JudgeLiveTicker limit={4} onSelect={() => chat('thread_manager')} />
           </section>
           <section className="blk feedblk">
             <h3>

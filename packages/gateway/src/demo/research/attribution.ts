@@ -1,4 +1,4 @@
-import type { ResearchAttribution,ResearchRequest,StrategyIR } from '@trading-swarm/contracts';
+import type { ResearchAttribution,ResearchRequest,StrategyIR } from '@trade-gate/contracts';
 import type { ResearchStore,RunRow } from './store.js';
 import { hash,clone } from './primitives.js';
 import { policyToIR } from './strategy.js';

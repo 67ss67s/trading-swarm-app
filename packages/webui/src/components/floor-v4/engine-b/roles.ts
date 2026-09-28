@@ -35,7 +35,7 @@ export const ROLES: Record<Role, RoleInfo> = {
   portfolio_manager: info({ role: 'portfolio_manager', callsign: 'BOOK', title: 'Portfolio Manager', desk: '组合台 · 账本墙', color: '#f4a261', page: 'trade', pageLabel: '交易', shape: 'boxy' }),
   risk_sentinel: info({ role: 'risk_sentinel', callsign: 'SENTINEL', title: 'Risk Sentinel', desk: '风控哨台 · 金库门', color: '#ff5d8f', page: 'settings', pageLabel: '设置 · 风控', shape: 'wide' }),
   executor: info({ role: 'executor', callsign: 'EXEC', title: 'Executor', desk: '底楼 · 交易台', color: '#4fd1c5', page: 'agent', pageLabel: 'Agent · 执行', shape: 'blob' }),
-  asp_agent: info({ role: 'asp_agent', callsign: 'MARKET', title: 'ASP Agent', desk: '侧楼 · 信号小铺', color: '#7fd1ff', page: 'market', pageLabel: '信号市场', shape: 'wide' }),
+  asp_agent: info({ role: 'asp_agent', callsign: 'MARKET', title: 'ASP Agent', desk: '侧楼 · 信号小铺', color: '#7fd1ff', page: 'market', pageLabel: 'OKX.AI', shape: 'wide' }),
   reviewer: info({ role: 'reviewer', callsign: 'AUDIT', title: 'Reviewer', desk: '侧楼 · 复盘图书馆', color: '#ffd166', page: 'history', pageLabel: '复盘', shape: 'tall' }),
 };
 

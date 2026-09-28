@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { validate } from '@trading-swarm/contracts';
+import { validate } from '@trade-gate/contracts';
 import { computeSnapshot, DEFAULT_PORTFOLIO_POLICY, evaluateCapacity, type CapacityInputs, type CapacityRules } from '../../src/demo/portfolio.js';
 import { blocksNewRisk, evaluateRisk } from '../../src/demo/risk.js';
 import { RiskStore } from '../../src/demo/team-store.js';

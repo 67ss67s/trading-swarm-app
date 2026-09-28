@@ -23,6 +23,8 @@ export interface FakeOkxServer {
   calls: Record<string, number>;
   /** 收到的请求(含 query),断言 bar/limit/after 透传用。 */
   requests: FakeOkxRequest[];
+  /** 按路径强制回某个 HTTP 状态(限频 / 熔断测试用);delete 掉就恢复正常 */
+  failStatus: Record<string, number>;
   resetCalls(): void;
   close(): Promise<void>;
 }
@@ -107,6 +109,7 @@ export function startFakeOkxServer(opts: FakeOkxOptions = {}): Promise<FakeOkxSe
   const total = opts.totalCandles ?? 1000;
   const basePrice = opts.basePrice ?? 81_000;
   const calls: Record<string, number> = {};
+  const failStatus: Record<string, number> = {};
   const requests: FakeOkxRequest[] = [];
 
   /**
@@ -139,6 +142,11 @@ export function startFakeOkxServer(opts: FakeOkxOptions = {}): Promise<FakeOkxSe
         const path = url.pathname;
         calls[path] = (calls[path] ?? 0) + 1;
         requests.push({ path, query: q });
+        if (failStatus[path]) {
+          res.writeHead(failStatus[path]!, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ code: '50011', msg: 'Too Many Requests' }));
+          return;
+        }
         const instId = q['instId'] ?? 'BTC-USDT-SWAP';
         const now = anchorTs + 30_000;
 
@@ -219,6 +227,8 @@ export function startFakeOkxServer(opts: FakeOkxOptions = {}): Promise<FakeOkxSe
         }
 
         if (path === '/api/v5/market/tickers') {
+          // 基差读取已改为批量 ticker,缺现货的夹具也要覆盖同一入口。
+          if (opts.missingBasisSide === 'spot' && q['instType'] === 'SPOT') return send([]);
           if (q['instType'] === 'SPOT') return send(FAKE_SPOT_INSTRUMENTS.map(i => ({ instType: 'SPOT', instId: i.instId, ...(TICKER[i.instId] ?? TICKER['BTC-USDT']!), ts: String(now) })));
           return send(FAKE_INSTRUMENTS.map((i) => ({ instType: 'SWAP', instId: i.instId, ...(TICKER[i.instId] ?? TICKER['BTC-USDT-SWAP']!), ts: String(now) })));
         }
@@ -244,8 +254,10 @@ export function startFakeOkxServer(opts: FakeOkxOptions = {}): Promise<FakeOkxSe
         anchorTs,
         calls,
         requests,
+        failStatus,
         resetCalls: () => {
           for (const k of Object.keys(calls)) delete calls[k];
+          for (const k of Object.keys(failStatus)) delete failStatus[k];
           requests.length = 0;
         },
         close: () => new Promise<void>((r) => server.close(() => r())),

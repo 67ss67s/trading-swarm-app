@@ -1,6 +1,6 @@
 // 研究图表模板(charts.ts)与答案挑图:金额换算、分界线、柱标签、散点点数、挑图上限、模型只能调序与写说明
 import { afterEach, describe, expect, it } from "vitest";
-import type { BacktestAsset, BacktestReport, BacktestTrade } from "@trading-swarm/contracts";
+import type { BacktestAsset, BacktestReport, BacktestTrade } from "@trade-gate/contracts";
 import { openStateDb } from "../../../../src/state-db.js";
 import { LoopStore, DEFAULT_BUDGET } from "../../../../src/demo/research/loop/store.js";
 import { Budget } from "../../../../src/demo/research/loop/budget.js";

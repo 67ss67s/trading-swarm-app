@@ -1,5 +1,5 @@
 import {CcxtMarket,publicExchange} from './market-ccxt.js';
-import type { ResearchDataset } from '@trading-swarm/contracts';
+import type { ResearchDataset } from '@trade-gate/contracts';
 import { fetchKlines, marketExchange, tfToMs } from '../market.js';
 import type { ResearchStore } from './store.js';
 export interface MarketDatasetInput {exchange?:unknown;symbol?:unknown;timeframe?:unknown;from_ms?:unknown;to_ms?:unknown}

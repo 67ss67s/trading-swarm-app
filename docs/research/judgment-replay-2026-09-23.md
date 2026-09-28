@@ -106,10 +106,10 @@ token 按「字符数/3」估:平均每次输入约 2090 token(system 4408 字�
 
 按授权上界(GLM ≤ ¥3、DeepSeek ≤ ¥6)定的运行时硬停:实时计量同样是字符/3 口径,所以把实时上限定成上界的 1/3。GLM 实时 ¥1.0、140 次;DeepSeek 实时累计 ¥2.0(现货那一轮先停在 ¥1.25)、700 次。并发 4 的情况下,预计 GLM 约 6 分钟,DeepSeek 约 25 分钟。
 
-执行命令(实验库 `~/.trading-swarm-okx/research/judgment-replay/jr.sqlite` 已冻结好两个 manifest,decisions 为空):
+执行命令(实验库 `~/.trade-gate-okx/research/judgment-replay/jr.sqlite` 已冻结好两个 manifest,decisions 为空):
 
 ```bash
-cd ~/Desktop/trading-swarm-okx/packages/gateway
+cd <repo>/packages/gateway
 S=scripts/research-judgment/judgment-replay.ts; export JR_ALLOW_REAL_MODEL=1
 npx jiti $S run --manifest jr-spot-prod-cd24-2e7a0cc2 --arm B  --brain glm      --allow-real --sample 130 --max-calls 140 --max-cny 1.0  --concurrency 4
 npx jiti $S run --manifest jr-spot-prod-cd24-2e7a0cc2 --arm B2 --brain deepseek --allow-real --sample 400 --max-calls 420 --max-cny 1.25 --concurrency 4
@@ -123,7 +123,7 @@ npx jiti $S report --manifest jr-spot-prod-cd24-2e7a0cc2 --md spot.md; npx jiti 
 ## 9. 已知局限(读结果前先看)
 
 1. **训练记忆风险。** 提示词里有绝对日期和绝对价格(生产上下文就是这样)。下跌段 2025-09→2026-03 很可能在 GLM / DeepSeek 的训练语料里,模型可能「记得」后来的走势;几何段 2026-06→09 相对安全一些。如果模型只在下跌段显著好于随机,要先怀疑这一条。去掉日期、把价格归一化能缓解,但那样就不再是生产 harness,所以这一版没做,可以作为 research 变体再加。
-2. **生产上下文本身有两处缺陷,被原样继承。** 一是「1h 最近 4 根」对低价币按 `toFixed(0)` 打印,DOGE / XRP 显示成 `O0 H0 L0 C0`(`market.ts tfFeatures.last_bars`)。二是主周期就是 1h 时,1h 结构行出现两次(E3 / E4,窗口 60 与 120 根)。这两处属于 另一工作线 的范围,本实验没动,建议修。
+2. **生产上下文本身有两处缺陷,被原样继承。** 一是「1h 最近 4 根」对低价币按 `toFixed(0)` 打印,DOGE / XRP 显示成 `O0 H0 L0 C0`(`market.ts tfFeatures.last_bars`)。二是主周期就是 1h 时,1h 结构行出现两次(E3 / E4,窗口 60 与 120 根)。这两处属于 jacky-24 的范围,本实验没动,建议修。
 3. 事件都按独立虚拟单结算,没有账户层的容量和每日开仓约束;结果回答的是「挑单」,不是「账户曲线」。
 4. 样本量:GLM 只有 130 个事件。按几何实验室的经验,配对差的标准差在 0.7–1.8R 量级,所以 130 个只能看出约 0.3R 以上的差距;DeepSeek 400 个可以看到约 0.15–0.2R。
 5. 现货数据是 OKX 现货,永续是 OKX 永续成交价加 OKX 资金费,不是币安。

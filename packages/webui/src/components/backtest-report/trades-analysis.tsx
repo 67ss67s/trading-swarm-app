@@ -3,7 +3,7 @@
  * 直方图:bins 长度 = counts + 1 时按区间边界读;等长时按区间左端点读。
  */
 import { useMemo } from 'react';
-import type { BacktestAsset, BacktestPlanStats, BacktestTrade } from '@trading-swarm/contracts';
+import type { BacktestAsset, BacktestPlanStats, BacktestTrade } from '@trade-gate/contracts';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { EmptyNote, Section } from './performance';

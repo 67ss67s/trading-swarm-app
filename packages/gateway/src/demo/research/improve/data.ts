@@ -10,7 +10,7 @@
  *   训练段再按根数等分成 4 折滚动前推(连续不重叠,余数给最后一折)。验证/留出段的预热向前借(借的是更早的行情,只算指标,不算成绩)。
  *   参考资产 = 资产池里 bar 最多的那个(并列取池里靠前的),其余资产按 close_time 对齐到同一组边界。
  */
-import type { ResearchBar, ResearchDataset } from '@trading-swarm/contracts';
+import type { ResearchBar, ResearchDataset } from '@trade-gate/contracts';
 import type { ResearchStore } from '../store.js';
 import type { ResearchService } from '../service.js';
 import { okxLoader, okxPerpLoader, normalizeSymbol, WARMUP_BARS, type AssetPerpInput, type BarsLoader } from '../backtest-report.js';

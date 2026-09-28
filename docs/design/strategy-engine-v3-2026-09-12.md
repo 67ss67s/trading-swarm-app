@@ -45,7 +45,7 @@ net_R = gross_R − (fee + slippage_amount + funding) / D
 
 首个训练窗60天，此后训练起点固定，训练终点逐步扩张。每个测试窗20天，只纳入完整测试窗。训练末端至测试起点留 `horizon_bars×tf_ms` 的 purge；两段测试之间再留相同 embargo。训练/OOS样本资格均在入场时按预定最大horizon判定：入场≥窗口起点且预定horizon结束<窗口终点。不能用实际止盈/止损退出时间筛样本，否则窗尾只保留快赢交易而删掉慢亏交易。
 
-参数候选仅在每折训练数据中按 net expectancy 排名（至少30个训练样本）；只记获选候选在该折测试窗的净收益。原始候选值、失败及无结果候选均计入 family trial count，不能只记赢家。生产默认持久到 `~/.trading-swarm/demo/lab-trials.sqlite`，同 manifest/候选幂等；注入离线 loader 而未注入持久计数器时，只能报告本次计数，不能代表全部历史研究次数。
+参数候选仅在每折训练数据中按 net expectancy 排名（至少30个训练样本）；只记获选候选在该折测试窗的净收益。原始候选值、失败及无结果候选均计入 family trial count，不能只记赢家。生产默认持久到 `~/.trade-gate/demo/lab-trials.sqlite`，同 manifest/候选幂等；注入离线 loader 而未注入持久计数器时，只能报告本次计数，不能代表全部历史研究次数。
 
 `is_expectancy` 报首个训练窗净期望，`oos_expectancy/oos_net_expectancy/oos_n` 报样本外净值。position 默认48个日线bar的 purge 为48天，90天不足60+48+20，故本次没有 OOS 窗；这不是实现把它判为亏损。
 
@@ -82,7 +82,7 @@ OOS 按决策时日线分 `trend`(bull/bear)、`range`、`high_vol`(volatile)，
 
 ## 5. 上线边界与已知未完成接点
 
-1. 用户独占文件清单之外的 `package.json`、`team-agents.ts`、`strategy-loop.ts`、`judgment-ledger.ts` 未修改，补丁放在 内部评审记录 等待允许/主线接入。当前可直接 `node scripts/lab-cache.mjs`，根 `npm run lab` 尚未注册。
+1. 用户独占文件清单之外的 `package.json`、`team-agents.ts`、`strategy-loop.ts`、`judgment-ledger.ts` 未修改，补丁放在 `.codex-reports/strategy-engine-integration.patch` 等待允许/主线接入。当前可直接 `node scripts/lab-cache.mjs`，根 `npm run lab` 尚未注册。
 2. 旧定时 labAutopilot 仍丢弃扩展 OOS 字段；新 Lab 路由能写全。旧自动探针排序还需改为仅按训练选择；当前 runExperiment 对未验证探针以 n=0 兼容阻断旧门，真实oos_n留在 replay。此兼容保护不能替代主线接线。
 3. 旧线上 shadow 结算仍只有gross；新paper门因此安全拒绝，直到shadow净统计接入。降级仍沿用原 strategy-loop 的 tradeCard 口径，本包没有改写该文件。
 4. source已写入列，但旧 `JudgmentLedgerStore.list/count` 未默认过滤online，回放行仍可能出现在旧线上页面/汇总。启用三腿回放前必须应用source查询隔离接点，不能把“有source字段”当成“所有消费者已隔离”。
@@ -113,7 +113,7 @@ OOS 按决策时日线分 `trend`(bull/bear)、`range`、`high_vol`(volatile)，
 |range_mean_reversion|mean_reversion|4|4|-0.3534|-1.9271|0|不足/不可得|不足/不可得|不足/不可得|
 |funding_oi_extreme|derivatives|0|0|不足/不可得|不足/不可得|0|不足/不可得|不足/不可得|不足/不可得|
 
-完整执行manifest、缓存摘要和分桶见 内部评审记录。每族setup合计：trend=1221；其余族分别见表。OOS不足显示null，没有改成零收益。
+完整执行manifest、缓存摘要和分桶见 `.codex-reports/strategy-engine-lab.json`。每族setup合计：trend=1221；其余族分别见表。OOS不足显示null，没有改成零收益。
 
 ## P1b：独立影子、版本健康与有效样本（2026-09-12）
 

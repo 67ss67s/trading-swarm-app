@@ -4,7 +4,7 @@
  * 实验 = 冻结 manifest(策略 id/version/content_hash 的清单 × 数据窗口 × 结算参数 × 代码版本)→ 对每个 symbol 用
  * funnel.ts 的机械前瞻期望(同一份 K 线缓存、同一套结算)算出每个策略版本的 setups / 胜率 / 期望 R →
  * 结果冻结进 bot_run.result,并交接 strategy_lab → gate_captain(kind result)。**不改任何策略、不晋升、不写 eval_stats**
- * (评审稿 §6.4:统计要绑确切版本,现行 updateEvalStats 写 head 会错配,先不写)。
+ * (Codex 稿 §6.4:统计要绑确切版本,现行 updateEvalStats 写 head 会错配,先不写)。
  *
  * 节奏:每 7 天,或累计 ≥ 10 笔新平仓;手动可触发;同一 manifest 哈希 24h 内不重复跑。
  * 这是「研究记录」,不是「策略已验证」——机械筛选的正期望 ≠ 含模型出入场的策略成绩(§6.3),summary 里写明。
@@ -208,7 +208,7 @@ export async function runExperiment(m: ExperimentManifest, deps: RunExperimentDe
   const trialCounts = new Map<string, number>();
   let trialDb: DatabaseSync | null = null;
   if (!deps.record_trials && !deps.loadSeries) {
-    const dir = join(homedir(), '.trading-swarm', 'demo'); mkdirSync(dir, { recursive: true });
+    const dir = join(homedir(), '.trade-gate', 'demo'); mkdirSync(dir, { recursive: true });
     trialDb = new DatabaseSync(join(dir, 'lab-trials.sqlite'));
     trialDb.exec('CREATE TABLE IF NOT EXISTS demo_strategy_trials(family TEXT NOT NULL, trial_key TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY(family, trial_key))');
   }
@@ -220,7 +220,7 @@ export async function runExperiment(m: ExperimentManifest, deps: RunExperimentDe
       trialCounts.set(family, deps.record_trials ? deps.record_trials(family, keys) : trialDb ? Number((trialDb.prepare('SELECT count(*) AS n FROM demo_strategy_trials WHERE family = ?').get(family) as { n: number }).n) : keys.length);
     }
   } finally { trialDb?.close(); }
-  const candidateSymbolsRaw = deps.universe_candidates ?? (deps.loadSeries ? m.symbols : readdirSync(join(homedir(), '.trading-swarm', 'demo', 'klines')).filter(f => f.endsWith('-1d.json') && !f.startsWith('FAKE')).map(f => f.slice(0, -8)));
+  const candidateSymbolsRaw = deps.universe_candidates ?? (deps.loadSeries ? m.symbols : readdirSync(join(homedir(), '.trade-gate', 'demo', 'klines')).filter(f => f.endsWith('-1d.json') && !f.startsWith('FAKE')).map(f => f.slice(0, -8)));
   const candidateSymbols = [...new Set(candidateSymbolsRaw)].sort();
   const errors: { symbol: string; error: string }[] = [];
   const preloaded = new Map<string, Awaited<ReturnType<typeof load>>>();

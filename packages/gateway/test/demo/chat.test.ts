@@ -183,7 +183,8 @@ describe('v3.8 chat sessions and execute gating', () => {
   it('store: sessions are created/listed/updated/deleted; messages are scoped per session; narration is shared; default cannot be deleted', () => {
     const state = openStateDb(':memory:');
     const store = new DemoStore(state);
-    expect(store.chatSessions().map((s) => s.id)).toEqual(['default']);
+    expect(store.chatSessions()).toHaveLength(9);
+    expect(store.chatSessions().every((s) => s.canonical)).toBe(true);
     const a = store.createChatSession('BTC 讨论', 1000);
     let t = Date.now() + 60_000; // 默认会话由迁移建在「现在」,新消息要比它晚才能排到前面
     const m = (id: string, text: string, sid: string | null, kind: 'chat' | 'narration' = 'chat') => ({ id, at: (t += 1000), role: 'user' as const, text, tool_calls: [], episode_id: null, kind, session_id: sid });
@@ -199,9 +200,10 @@ describe('v3.8 chat sessions and execute gating', () => {
     expect(sessions.find((s) => s.id === a.id)).toMatchObject({ message_count: 1, last_text: 'hello A', can_execute: false });
     expect(store.updateChatSession(a.id, { can_execute: true, title: '改名' })).toMatchObject({ can_execute: true, title: '改名' });
     expect(store.updateChatSession(a.id, { archived: true })!.archived).toBe(true);
-    expect(store.chatSessions().map((s) => s.id)).toEqual(['default']);
-    expect(store.chatSessions({ include_archived: true })).toHaveLength(2);
-    expect(store.deleteChatSession('default')).toBe(false);
+    expect(store.chatSessions()).toHaveLength(9);
+    expect(store.chatSessions().every((s) => s.canonical)).toBe(true);
+    expect(store.chatSessions({ include_archived: true })).toHaveLength(10);
+    expect(() => store.deleteChatSession('default')).toThrow('规范会话不能删除');
     expect(store.deleteChatSession(a.id)).toBe(true);
     expect(store.chat(50, 'chat', a.id)).toEqual([]);
     store.clearChat('default');

@@ -1,4 +1,4 @@
-import { demo } from '@trading-swarm/gateway';
+import { demo } from '@trade-gate/gateway';
 import { mkdir, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -266,7 +266,7 @@ export async function runEvaluation(options: RunOptions): Promise<{ manifest: Ru
   });
   const manifest: RunManifest = {
     version: 1,
-    harness: '@trading-swarm/eval-b',
+    harness: '@trade-gate/eval-b',
     cases_dir: casesDir,
     brain: brain.name,
     prompt_version: demo.PROMPT_VERSION,

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://trading-swarm.dev/schema/intent.json",
+  "$id": "https://trade-gate.dev/schema/intent.json",
   "title": "Intent",
   "description": "动钱的唯一提议记录(设计 §5.1)。模型/UI/Exit DSL 只能提议;经济字段在 ExecutableOrderPlan 里物化并哈希;状态只按 transitions/intent_status.json 迁移。",
   "type": "object",

@@ -8,7 +8,7 @@ import { mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import type { ResearchBar } from '@trading-swarm/contracts';
+import type { ResearchBar } from '@trade-gate/contracts';
 import type { FundingPoint, FundingSeries, MmrTier, OrderBar } from '../orders/types.js';
 import { configureOkxProxy } from '../../okx-proxy.js';
 import { timeframeMillis } from '../strategy.js';
@@ -55,7 +55,7 @@ export function okxBar(tf: string): string {
   const bar = map[tf]; if (!bar) throw new Error(`timeframe_unsupported: ${tf}`); return bar;
 }
 // ---------- sqlite 缓存 ----------
-export const defaultMarketDbPath = () => process.env.TG_RESEARCH_MARKET_DB ?? join(homedir(), '.trading-swarm', 'research', 'market-cache.sqlite');
+export const defaultMarketDbPath = () => process.env.TG_RESEARCH_MARKET_DB ?? join(homedir(), '.trade-gate', 'research', 'market-cache.sqlite');
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS candles (inst TEXT NOT NULL, kind TEXT NOT NULL CHECK (kind IN ('trade','mark')), tf TEXT NOT NULL, open_time INTEGER NOT NULL, o REAL NOT NULL, h REAL NOT NULL, l REAL NOT NULL, c REAL NOT NULL, v REAL NOT NULL, PRIMARY KEY (inst, kind, tf, open_time)) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS funding (inst TEXT NOT NULL, source TEXT NOT NULL CHECK (source IN ('okx','binance_proxy')), ts INTEGER NOT NULL, rate REAL NOT NULL, PRIMARY KEY (inst, source, ts)) WITHOUT ROWID;

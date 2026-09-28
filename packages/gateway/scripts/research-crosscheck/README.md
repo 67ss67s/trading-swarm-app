@@ -3,7 +3,7 @@
 先构建 gateway，运行 Node 导出同一 OHLCV、donchian 参数、逐笔成交和 TS 结构输出；Python 只在 `/tmp` venv，不进生产依赖。脚本不会联网或下单。
 
 ```sh
-npm run build -w @trading-swarm/gateway
+npm run build -w @trade-gate/gateway
 node packages/gateway/scripts/research-crosscheck/export-fixture.mjs /tmp/research-r3-crosscheck
 python3 -m venv /tmp/research-r3-python
 /tmp/research-r3-python/bin/pip install smartmoneyconcepts backtesting empyrical

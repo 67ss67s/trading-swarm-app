@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { OctagonAlert } from 'lucide-react';
+import { Lock, OctagonAlert } from 'lucide-react';
 import {
   CommandDialog,
   CommandEmpty,
@@ -10,6 +10,7 @@ import {
   CommandSeparator,
 } from '@/components/ui/command';
 import { NAV, type Page } from '@/lib/nav';
+import { lockReason } from '@/lib/edition';
 import { t } from '@/lib/i18n';
 
 interface CommandMenuProps {
@@ -33,6 +34,8 @@ export function CommandMenu({ open, onOpenChange, onNavigate, halted, onOpenHalt
     return () => document.removeEventListener('keydown', onKey);
   }, [open, onOpenChange]);
 
+  // 评审版:紧急停止 / 解除都锁住(会平掉演示仓位),条目保留但置灰,悬停看原因
+  const haltLock = lockReason('emergency_stop');
   const run = (fn: () => void) => {
     onOpenChange(false);
     fn();
@@ -53,9 +56,16 @@ export function CommandMenu({ open, onOpenChange, onNavigate, halted, onOpenHalt
         </CommandGroup>
         <CommandSeparator />
         <CommandGroup heading={t('操作')}>
-          <CommandItem onSelect={() => run(halted ? onOpenResumeHalt : onOpenHalt)}>
-            <OctagonAlert /> {halted ? t('解除紧急停止') : t('紧急停止')}
-          </CommandItem>
+          {haltLock ? (
+            <CommandItem disabled title={haltLock} data-judge-lock="emergency_stop">
+              <OctagonAlert /> {halted ? t('解除紧急停止') : t('紧急停止')}
+              <Lock className="ml-auto" />
+            </CommandItem>
+          ) : (
+            <CommandItem onSelect={() => run(halted ? onOpenResumeHalt : onOpenHalt)}>
+              <OctagonAlert /> {halted ? t('解除紧急停止') : t('紧急停止')}
+            </CommandItem>
+          )}
         </CommandGroup>
       </CommandList>
     </CommandDialog>

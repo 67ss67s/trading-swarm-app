@@ -6,12 +6,12 @@ rust-version.workspace = true
 license.workspace = true
 
 [[bin]]
-name = "tswarm-rest-probe"
-path = "src/bin/tswarm-rest-probe.rs"
+name = "tgate-rest-probe"
+path = "src/bin/tgate-rest-probe.rs"
 
 [[bin]]
-name = "tswarm-demo-exec"
-path = "src/bin/tswarm-demo-exec.rs"
+name = "tgate-demo-exec"
+path = "src/bin/tgate-demo-exec.rs"
 
 [dependencies]
 anyhow.workspace = true

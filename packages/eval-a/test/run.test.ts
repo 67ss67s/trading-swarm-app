@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { demo } from '@trading-swarm/gateway';
+import { demo } from '@trade-gate/gateway';
 import { buildReport, cacheKey, filterCases, loadOnlyIds, ResponseCache, runCases, runEpisode, writeJson, writeReport } from '../src/index.js';
 import { synthCases } from './helpers/synthetic.js';
 

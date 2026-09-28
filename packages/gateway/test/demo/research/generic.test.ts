@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { ResearchBar } from '@trading-swarm/contracts';
+import type { ResearchBar } from '@trade-gate/contracts';
 import { registry } from '../../../src/demo/research/primitives/index.js';
 import { indicatorLine } from '../../../src/demo/research/primitives/indicators.js';
 import { checkIR, defaultIR, node } from '../../../src/demo/research/strategy.js';

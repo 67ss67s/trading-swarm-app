@@ -30,8 +30,8 @@
 
 ## 补充:MCP TS SDK 对 Binance 鉴权流程的支持(2026-09-02 本机验证)
 - `@modelcontextprotocol/sdk@1.30.0`(npm latest)的 `client/auth.js` 已实现 **CIMD**:当 AS 元数据 `client_id_metadata_document_supported === true` 且 provider 提供 `clientMetadataUrl`(必须 HTTPS、非根路径)时,直接用该 URL 作为 `client_id`,跳过动态注册——正好匹配 Binance 的 AS 元数据。
-- 需要实现的 `OAuthClientProvider`:`redirectUrl`、`clientMetadata`、`clientMetadataUrl?`、`clientInformation()`、`tokens()/saveTokens()`、`redirectToAuthorization(url)`、`saveCodeVerifier()/codeVerifier()`、`invalidateCredentials?(scope)`、`prepareTokenRequest?`。gate 用文件持久化(`~/.trading-swarm/oauth/binance.json`,0600)。
-- 待 P0 实测的两条路:①CIMD——需要公网托管一份 client 元数据 JSON(可放 <bridge-domain>,内容含 client_name / redirect_uris=[http://127.0.0.1:<port>/oauth/callback] / token_endpoint_auth_method=none / grant_types / response_types);②若 Binance 接受任意 client_id + 回环 redirect,则免托管。哪条通了写进 WP1 报告。
+- 需要实现的 `OAuthClientProvider`:`redirectUrl`、`clientMetadata`、`clientMetadataUrl?`、`clientInformation()`、`tokens()/saveTokens()`、`redirectToAuthorization(url)`、`saveCodeVerifier()/codeVerifier()`、`invalidateCredentials?(scope)`、`prepareTokenRequest?`。gate 用文件持久化(`~/.trade-gate/oauth/binance.json`,0600)。
+- 待 P0 实测的两条路:①CIMD——需要公网托管一份 client 元数据 JSON(可放 bridge.example.com,内容含 client_name / redirect_uris=[http://127.0.0.1:<port>/oauth/callback] / token_endpoint_auth_method=none / grant_types / response_types);②若 Binance 接受任意 client_id + 回环 redirect,则免托管。哪条通了写进 WP1 报告。
 - 本机 npm 缓存目录被 root 文件污染,`npm install` 需加 `--cache <其他目录>` 或先 `sudo chown -R 501:20 ~/.npm`(实施 session 第一天会撞到)。
 
 ## MCP 与传统 API key 的自由度对比(2026-09-02 口径;"未知"= 拿到 token 跑 tools/list 前无法确认)

@@ -21,9 +21,11 @@ import { brokenRoles, MODEL_ROLES, okConnectionCount, roleCard } from '@/compone
 import { RoleCard } from '@/components/models/role-card';
 import { useModels } from '@/components/models/use-models';
 import { Pane, Workspace } from '@/components/pane';
+import { JudgeLock } from '@/components/judge-lock';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { t } from '@/lib/i18n';
+import { friendlyError } from '@/lib/edition';
+import { t, listSep } from '@/lib/i18n';
 
 /** 当前默认主脑 / 副脑的名字:从回退到它的角色的 effective 里取(没有角色回退时不知道,显示 —) */
 function defaultNames(view: ModelsView): { main: string; cheap: string } {
@@ -81,7 +83,7 @@ export function ModelsPage() {
             </div>
           ) : q.isError || !view ? (
             <p className="p-3 text-[12px] text-destructive">
-              {t('加载失败')}:{q.error instanceof Error ? q.error.message : String(q.error ?? '')}
+              {t('加载失败')}:{friendlyError(q.error instanceof Error ? q.error.message : String(q.error ?? ''))}
               <span className="ml-1 text-muted-foreground">{t('(网关可能还没接 /api/models)')}</span>
             </p>
           ) : (
@@ -97,7 +99,7 @@ export function ModelsPage() {
               </div>
               {broken.length > 0 ? (
                 <div className="border-b border-destructive/30 bg-destructive/10 px-3 py-1.5 text-[11px] text-destructive">
-                  {t('这些 agent 的连接失效了,调用会直接报错(不会静默回退):{roles}', { roles: broken.map((r) => roleCard(r).title).join('、') })}
+                  {t('这些 agent 的连接失效了,调用会直接报错(不会静默回退):{roles}', { roles: broken.map((r) => roleCard(r).title).join(listSep()) })}
                 </div>
               ) : null}
               <div className="grid gap-3 p-3 md:grid-cols-2 xl:grid-cols-3" data-testid="role-cards">
@@ -120,10 +122,12 @@ export function ModelsPage() {
           title={t('已保存的连接')}
           hint={t('{ok} / {n} 个可用', { ok: okConnectionCount(view), n: view.connections.length })}
           actions={
-            <Button size="xs" variant="outline" onClick={openAdd}>
-              <Plus />
-              {t('添加连接')}
-            </Button>
+            <JudgeLock feature="model_connection_edit">
+              <Button size="xs" variant="outline" onClick={openAdd}>
+                <Plus />
+                {t('添加连接')}
+              </Button>
+            </JudgeLock>
           }
         >
           <ConnectionList

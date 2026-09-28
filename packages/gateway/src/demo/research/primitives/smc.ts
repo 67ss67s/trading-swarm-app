@@ -27,7 +27,7 @@
  * 回测逐根调用时窗口每次右移一根,只需在链尾推进一步;窗口起点早于已有链时从窗口起点重建。
  * 同一根的状态只依赖链起点到该根的 K 线(因果),截断未来 bar 不改变此前任何输出(见 test/demo/research/smc.test.ts)。
  */
-import { schemas, type ResearchBar } from '@trading-swarm/contracts';
+import { schemas, type ResearchBar } from '@trade-gate/contracts';
 import { registry, type Primitive, type PrimitiveContext, type PrimitiveValue } from './registry.js';
 
 export type Scope = 'internal' | 'swing';

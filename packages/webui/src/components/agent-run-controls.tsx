@@ -91,7 +91,7 @@ export function AgentSwitch({ paused, halted }: { paused: boolean; halted: boole
   const resetBudget = useMutation({ mutationFn: api.resetModelBudget, onSuccess: () => { void qc.invalidateQueries({ queryKey: ['execution'] }); toast.success(t('额度暂停已解除；未重放历史交易')); }, onError: (e) => toast.error(String(e)) });
   const resetSettlement = useMutation({ mutationFn: api.resetSettlementRetries, onSuccess: () => toast.success(t('已恢复结算查询；每笔最多重试 3 次')), onError: (e) => toast.error(String(e)) });
 
-  // 先把 Executor 拉起来并确认成功,再切免批;任一步失败都不切(review #4:两条请求并发会留下半开状态)
+  // 先把 Executor 拉起来并确认成功,再切免批;任一步失败都不切(codex-review sol #4:两条请求并发会留下半开状态)
   const enableAuto = async () => {
     if (!bots.data) { toast.error(t('团队状态还没加载,再点一次')); return; }
     if (executor && !executor.enabled) {

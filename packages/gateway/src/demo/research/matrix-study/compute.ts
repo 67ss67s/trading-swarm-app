@@ -4,12 +4,13 @@
  * 有效试验数只作敏感性报告,门槛只用保守值。
  */
 import { hash } from '../primitives.js';
+import type { TierBoard } from './scorecard.js';
 import { averageCorrelation, causeOf, dsrOf, effectiveByCorrelation, pairedDelta, selectionGates, sharpeVariance, verdictOf } from './stats.js';
-import { FAILURE_CAUSES, type CellResult, type DevResult, type FailureCause, type GateRow, type MatrixCell, type MatrixConclusion, type MatrixFinalist, type MatrixManifest, type MatrixProtocol, type TrialLedger } from './types.js';
+import { FAILURE_CAUSES, type CellResult, type JudgeStageState, type DevResult, type FailureCause, type GateRow, type MatrixCell, type MatrixConclusion, type MatrixFinalist, type MatrixManifest, type MatrixProtocol, type TrialLedger } from './types.js';
 
 export interface TrialRec {
   trial_id: string; cell_id: string; variant_id: string; param: string; parent_trial_id: string | null; generation: number;
-  config_hash: string; ir_hash: string; ir: import('@trading-swarm/contracts').StrategyIR; vol_target?: { annual: number; days: number };
+  config_hash: string; ir_hash: string; ir: import('@trade-gate/contracts').StrategyIR; vol_target?: { annual: number; days: number };
   dev: DevResult | null; error: string | null; status: 'evaluated' | 'failed' | 'budget_skipped';
 }
 export interface JudgedTrial extends TrialRec { gates: GateRow[]; dsr: number | null; verdict: 'pass' | 'near' | 'fail'; cause: FailureCause | null }
@@ -51,14 +52,30 @@ export const ledgerHash = (l: TrialLedger, trials: JudgedTrial[]) => hash({ l: {
 
 /** 判断出错(error + uncertain)占候选的上限;超过即视为判断不可用 */
 export const JUDGE_ERROR_MAX = 0.5;
-export function cellResults(m: MatrixManifest, trials: JudgedTrial[], stopNote: string | null): Record<string, CellResult> {
+/**
+ * 两段式(candidates)下每个可评估 code_judge 格的状态:第一阶段没结束 = pending;入选补跑 = rerun;其余 not_candidate。
+ * all 模式 / 旧研究返回空表。
+ */
+export function judgeStageMarks(m: MatrixManifest, st: JudgeStageState | undefined | null): Map<string, 'pending' | 'not_candidate' | 'rerun'> {
+  const out = new Map<string, 'pending' | 'not_candidate' | 'rerun'>();
+  if (m.judge_stage?.mode !== 'candidates') return out;
+  const picked = new Set((st?.selected ?? []).map((x) => x.cell_id)), done = !!st && st.status !== 'pending';
+  for (const c of m.cells) if (c.arm === 'code_judge' && c.applicability === 'applicable') out.set(c.id, !done ? 'pending' : picked.has(c.id) ? 'rerun' : 'not_candidate');
+  return out;
+}
+/** 没补跑 Jev 的 code_judge 格(结论、三档、Jev 效果都不统计) */
+export const judgeSkipped = (marks: Map<string, 'pending' | 'not_candidate' | 'rerun'>) => new Set([...marks].filter(([, v]) => v !== 'rerun').map(([k]) => k));
+
+export function cellResults(m: MatrixManifest, trials: JudgedTrial[], stopNote: string | null, marks: Map<string, 'pending' | 'not_candidate' | 'rerun'> = new Map()): Record<string, CellResult> {
   const out: Record<string, CellResult> = {}, byCell = new Map<string, JudgedTrial[]>();
   for (const t of trials) { const a = byCell.get(t.cell_id) ?? []; a.push(t); byCell.set(t.cell_id, a); }
   for (const c of m.cells) {
+    const mark = marks.get(c.id);
+    if (mark && mark !== 'rerun') { out[c.id] = { cell_id: c.id, verdict: 'ineligible', cause: null, best_trial_id: null, selection: null, train: null, gates: [{ name: mark === 'pending' ? 'judge_stage:pending' : 'judge_stage:not_candidate', ok: false, value: null }], dsr: null, evaluated: 0, judge_delta: null, judge_stage: mark }; continue; }
     if (c.applicability !== 'applicable') { out[c.id] = { cell_id: c.id, verdict: 'ineligible', cause: null, best_trial_id: null, selection: null, train: null, gates: [], dsr: null, evaluated: 0, judge_delta: null }; continue; }
     const ts = (byCell.get(c.id) ?? []).sort(better), best = ts[0];
-    if (!best) { out[c.id] = { cell_id: c.id, verdict: 'fail', cause: 'insufficient_evidence', best_trial_id: null, selection: null, train: null, gates: [{ name: stopNote ?? 'not_evaluated', ok: false, value: null }], dsr: null, evaluated: 0, judge_delta: null }; continue; }
-    out[c.id] = { cell_id: c.id, verdict: best.verdict, cause: best.cause, best_trial_id: best.trial_id, selection: best.dev?.selection ?? null, train: best.dev?.train ?? null, gates: best.gates, dsr: best.dsr, evaluated: ts.filter((t) => t.dev).length, judge_delta: null };
+    if (!best) { out[c.id] = { cell_id: c.id, verdict: 'fail', cause: 'insufficient_evidence', best_trial_id: null, selection: null, train: null, gates: [{ name: stopNote ?? 'not_evaluated', ok: false, value: null }], dsr: null, evaluated: 0, judge_delta: null, ...(mark ? { judge_stage: mark } : {}) }; continue; }
+    out[c.id] = { cell_id: c.id, verdict: best.verdict, cause: best.cause, best_trial_id: best.trial_id, selection: best.dev?.selection ?? null, train: best.dev?.train ?? null, gates: best.gates, dsr: best.dsr, evaluated: ts.filter((t) => t.dev).length, judge_delta: null, ...(mark ? { judge_stage: mark } : {}) };
   }
   // code_judge 相对同格 code 臂:同一参数变体的选择段日收益配对差
   for (const c of m.cells) {
@@ -77,17 +94,26 @@ export function cellResults(m: MatrixManifest, trials: JudgedTrial[], stopNote: 
 }
 
 const CAUSE_TEXT: Record<FailureCause, string> = { cost_dominated: '费用吃掉', insufficient_evidence: '样本不足', unsupported_execution: '执行不支持', underperform_hold: '跑输持有' };
-export function conclusionOf(m: MatrixManifest, cells: Record<string, CellResult>, finalists: MatrixFinalist[]): MatrixConclusion {
+/** board 缺省(旧调用)时结论与 v1 完全一致;给了 board 就补「候补 N 组」与三档计数,kind 不变 */
+export function conclusionOf(m: MatrixManifest, cells: Record<string, CellResult>, finalists: MatrixFinalist[], board?: Pick<TierBoard, 'candidate_trial_ids' | 'tiers'>): MatrixConclusion {
   const causes = Object.fromEntries(FAILURE_CAUSES.map((c) => [c, 0])) as Record<FailureCause, number>;
   for (const r of Object.values(cells)) if (r.verdict !== 'ineligible' && r.verdict !== 'pass' && r.cause) causes[r.cause]++;
   for (const f of finalists) if (f.passed === false && f.cause) causes[f.cause]++;
   const na = m.cells.filter((c: MatrixCell) => c.applicability === 'not_applicable').length, ro = m.cells.filter((c) => c.applicability === 'research_only').length;
-  const passed = finalists.filter((f) => f.passed === true), applicable = m.cells.length - na - ro;
+  // 两段式:没补跑 Jev 的 code_judge 格不算「可评估格子」,结论只统计补跑过的
+  const stage = m.judge_stage?.mode === 'candidates', marks = Object.values(cells).map((r) => r.judge_stage).filter(Boolean);
+  const rerun = marks.filter((x) => x === 'rerun').length, skippedJ = marks.length - rerun;
+  const passed = finalists.filter((f) => f.passed === true), applicable = m.cells.length - na - ro - (stage ? skippedJ : 0);
+  const stageText = stage ? `(Jev 两段式:只对候补测了 Jev,补跑 ${rerun} 格${skippedJ ? `,另 ${skippedJ} 格没补跑` : ''})` : '';
   const dist = FAILURE_CAUSES.filter((c) => causes[c]).map((c) => `${CAUSE_TEXT[c]} ${causes[c]}`).join('、') || '无';
   const mode = m.spec.protocol.evidence_mode === 'historical_replay' ? '(历史回放:这段历史已被人看过,只能算回放证据,进实盘前还要前向验证)' : '';
   const famText = (fam: string) => { const my = (m.my_strategies ?? []).find((x) => `my:${x.strategy_id}@v${x.version}` === fam); return my ? `「${my.name}」v${my.version}` : fam; };
+  const nc = board?.candidate_trial_ids.length ?? 0;
+  const cand = nc ? `候补 ${nc} 组(只差样本数 / 显著性,可先用模拟盘观察;候补不算通过)` : '';
   const text = passed.length
-    ? `${passed.length} 条策略在留出段通过 Holm 校正检验:${passed.map((f) => `${f.symbol} ${f.timeframe} ${famText(f.family)}/${f.side}/${f.arm}`).join(';')}。其余不合格主因:${dist}${mode}`
-    : `没有找到通过门槛的策略。${applicable} 个可评估格子${finalists.length ? `、${finalists.length} 个 finalist 在留出段未通过` : ''};主因分布:${dist};另有 ${na} 格不适用、${ro} 格仅研究(3m/5m)${mode}`;
-  return { kind: passed.length ? 'passed' : 'no_candidate', finalist_ids: passed.map((f) => f.id), causes, not_applicable: na, research_only: ro, text };
+    ? `${passed.length} 条策略在留出段通过 Holm 校正检验:${passed.map((f) => `${f.symbol} ${f.timeframe} ${famText(f.family)}/${f.side}/${f.arm}`).join(';')}。${cand ? `另有${cand}。` : ''}其余不合格主因:${dist}${stageText}${mode}`
+    : nc
+      ? `没有能直接上实盘的策略,但有 ${nc} 组值得先用模拟盘看看:${cand}。${applicable} 个可评估格子${finalists.length ? `、${finalists.length} 个 finalist 在留出段未通过` : ''};主因分布:${dist};另有 ${na} 格不适用、${ro} 格仅研究(3m/5m)${stageText}${mode}`
+      : `没有找到通过门槛的策略。${applicable} 个可评估格子${finalists.length ? `、${finalists.length} 个 finalist 在留出段未通过` : ''};主因分布:${dist};另有 ${na} 格不适用、${ro} 格仅研究(3m/5m)${stageText}${mode}`;
+  return { kind: passed.length ? 'passed' : 'no_candidate', finalist_ids: passed.map((f) => f.id), causes, not_applicable: na, research_only: ro, text, ...(board ? { paper_candidates: nc, paper_candidate_trial_ids: [...board.candidate_trial_ids], tiers: { ...board.tiers } } : {}), ...(stage ? { judge_stage: { mode: 'candidates' as const, rerun_cells: rerun, eligible: rerun, skipped_cells: skippedJ } } : {}) };
 }

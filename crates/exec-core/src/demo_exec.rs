@@ -1,4 +1,4 @@
-//! `tswarm-demo-exec` 的核心逻辑 —— `docs/demo/README.md` §4 协议的 op 分发。
+//! `tgate-demo-exec` 的核心逻辑 —— `docs/demo/README.md` §4 协议的 op 分发。
 //!
 //! `DemoExec` 只包一个 [`BinanceRest`](crate::binance::rest::BinanceRest)(base URL 由
 //! bin 硬编码到 `FAPI_DEMO`,本模块不关心)。`handle` 是唯一入口,bin 把 stdin 每一行
@@ -174,7 +174,7 @@ const DEFAULT_INCOME_LIMIT: i64 = 100;
 /// 币安「保证金模式已经是目标模式」的业务码 —— 不是失败,调用方按已达成处理。
 const MARGIN_TYPE_UNCHANGED_CODE: i64 = -4046;
 
-/// `tswarm-demo-exec` 的执行核心。只持有一个 [`BinanceRest`],不做任何进程内状态。
+/// `tgate-demo-exec` 的执行核心。只持有一个 [`BinanceRest`],不做任何进程内状态。
 pub struct DemoExec {
     rest: BinanceRest,
 }

@@ -1,5 +1,5 @@
 import { HORIZON_POLICY, inferHorizon, type StrategyHorizon } from './horizon.js';
-// 策略库(docs/design/strategy-library-2026-09-05.md;决定稿 §2 E/F;调研 Part 2)。
+// 策略库(docs/design/strategy-library-2026-09-05.md;决定稿 §2 E/F;Codex 调研 Part 2)。
 //
 // 一条策略是一个**不可变的版本化对象**:触发(纯函数,哪些事件才唤醒它)+ 清单(代码必须能算出来的
 // 证据)+ 规则(模型只能在这些边里选)+ 参数(带范围,改一个就是新版本 + 新 hash)+ 评测统计。
@@ -17,6 +17,7 @@ import type { ScanThresholds } from './review-metrics.js';
 import { MIN_BARS as REVERSION_MIN_BARS, reversionStats, type ReversionStats } from './reversion-stats.js';
 import { INDICATOR_SETS } from './routes-indicators.js';
 import type { DailyRegime, Kline, MarketView, TriggerHit, TriggerKind } from './types.js';
+import { flagLabel, noWord, yesWord } from './output-language.js';
 
 export const EVENT_SUBKINDS = ['fomc', 'cpi', 'nfp', 'ppi', 'pce', 'gdp', 'claims', 'retail', 'unlock', 'listing', 'delisting', 'hack', 'etf_flow', 'regulation', 'upgrade', 'funding_extreme', 'vol_spike', 'unclassified'] as const;
 export type EventSubkind = typeof EVENT_SUBKINDS[number];
@@ -622,9 +623,9 @@ export const STRATEGY_EVIDENCE: Record<string, StrategyEvidenceFn> = {
       `带宽 90 根分位 ${rank === null ? 'n/a' : `${rank.toFixed(0)}%`}(门槛 ≤ ${rankMax}%)`,
       `ATR% 90 根分位 ${atrRank === null ? 'n/a' : `${atrRank.toFixed(0)}%`}`,
       `squeeze ${last?.on ? '开' : '关'},已连续 ${barsOn} 根(门槛 ≥ ${barsMin} 根)`,
-      `压缩成立=${compressed ? '是' : '否'}`,
+      `${flagLabel('压缩成立')}${compressed ? yesWord() : noWord()}`,
       `当根量比 ${volRatio === null ? 'n/a' : volRatio.toFixed(2)}(扩张门槛 ≥ ${spikeMin})`,
-      `扩张成立=${compressed && volRatio !== null && volRatio >= spikeMin ? '是' : '否'}(还需同根出现突破)`,
+      `${flagLabel('扩张成立')}${compressed && volRatio !== null && volRatio >= spikeMin ? yesWord() : noWord()}(还需同根出现突破)`,
     ].join(';');
     return [{ label: '压缩→扩张清单(代码计算)', value, observed_at: bars[bars.length - 1]?.close_time ?? inp.now, source: 'indicatorSnapshot()+squeeze()' }];
   },
@@ -645,7 +646,7 @@ export const STRATEGY_EVIDENCE: Record<string, StrategyEvidenceFn> = {
     const value = [
       `当前费率 ${curPct.toFixed(4)}%(绝对值门槛 ${absMin}%)`,
       samples ? `30 天样本 ${samples} 次,均值 ${((m ?? 0) * 100).toFixed(4)}%,标准差 ${((sd ?? 0) * 100).toFixed(4)}%,z=${z === null ? 'n/a' : z.toFixed(2)}(门槛 ${zMin})` : '30 天历史不可得,z 无法计算',
-      `极值成立=${extreme ? '是' : '否'}`,
+      `${flagLabel('极值成立')}${extreme ? yesWord() : noWord()}`,
       `OI 较 1h 前 ${oi === null ? 'n/a' : `${oi >= 0 ? '+' : ''}${oi.toFixed(2)}%`}(确认门槛 ±${oiMin}%,下降→fade,上升→只顺势限价)`,
       `距下次结算 ${minsToFunding} 分钟(${val(spec, 'minutes_before_funding', 30)} 分钟内不新开)`,
     ].join(';');
@@ -676,7 +677,7 @@ export const STRATEGY_EVIDENCE: Record<string, StrategyEvidenceFn> = {
           `价距 EMA20 ${dev === null ? 'n/a' : `${dev >= 0 ? '+' : ''}${dev.toFixed(2)} ATR`}(门槛 ${devMin} ATR,${dev !== null && dev > 0 ? '在上方→只考虑做空' : '在下方→只考虑做多'})`,
           `ADX14 ${adx === null ? 'n/a' : adx.toFixed(1)}(上限 ${adxMax})`,
           `日线状态 ${inp.daily_regime?.regime ?? 'n/a'}`,
-          `震荡成立=${ranging ? '是' : '否'};偏离成立=${dev !== null && Math.abs(dev) >= devMin ? '是' : '否'}`,
+          `${flagLabel('震荡成立')}${ranging ? yesWord() : noWord()};${flagLabel('偏离成立')}${dev !== null && Math.abs(dev) >= devMin ? yesWord() : noWord()}`,
         ].join(';'),
         observed_at: base.last_open_time,
         source: 'indicatorSnapshot()+dailyRegime()',

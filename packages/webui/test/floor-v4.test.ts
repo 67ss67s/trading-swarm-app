@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ActivityItem, BotHandoff, BotsResponse, DemoIntent, HistoryResponse, Kline, Overview, PortfolioSnapshotResponse } from '../src/api/types';
 import type { EvoDailyResponse } from '../src/api/evolution';
-import type { ResearchStrategy } from '@trading-swarm/contracts';
+import type { ResearchStrategy } from '@trade-gate/contracts';
 import { btcVol1h, buildDeco, buildEvoRows, buildFloorModel, deriveMeetings, evoRoleOf, pickStrategy, pnlToday, presenceToStatus, riskToWeather, toSnapshotA } from '../src/components/floor-v4/snapshot';
 import { coinTask, normSym, parseCommand, realTasks, type TaskContext } from '../src/components/floor-v4/tasks';
 

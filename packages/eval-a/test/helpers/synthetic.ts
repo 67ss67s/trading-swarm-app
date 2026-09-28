@@ -1,7 +1,7 @@
 // Offline, deterministic kline source for tests: a seeded random walk with slow waves so the stub
 // sees trends, pullbacks and breakouts. Two decimals like Binance USDⓈ-M majors.
 
-import { demo } from '@trading-swarm/gateway';
+import { demo } from '@trade-gate/gateway';
 import type { KlineSource } from '../../src/binance.js';
 import type { EvalCase, GenOptions, Kline } from '../../src/index.js';
 import { generateCases, seededRng } from '../../src/index.js';

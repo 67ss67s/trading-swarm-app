@@ -4,7 +4,7 @@
  */
 import { useState } from 'react';
 import { ChevronDown, CircleAlert, Info } from 'lucide-react';
-import type { BacktestMetrics, BacktestScore } from '@trading-swarm/contracts';
+import type { BacktestMetrics, BacktestScore } from '@trade-gate/contracts';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { AnimatePresence, motion } from '@/components/research-workbench/motion';

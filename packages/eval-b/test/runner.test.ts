@@ -10,7 +10,7 @@ import { minimalCase, syntheticKlines } from './helpers.js';
 
 describe('offline stub gate', () => {
   it('runs a small case set with all hard invariants passing and no market network', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'trading-swarm-eval-b-'));
+    const root = await mkdtemp(path.join(tmpdir(), 'trade-gate-eval-b-'));
     const start = Date.UTC(2025, 11, 1);
     const from = start + 25 * 86_400_000;
     const data: HistoricalData = {
@@ -40,7 +40,7 @@ describe('offline stub gate', () => {
   });
 
   it('repairs one invalid model response and records both attempts', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'trading-swarm-eval-b-repair-'));
+    const root = await mkdtemp(path.join(tmpdir(), 'trade-gate-eval-b-repair-'));
     let calls = 0;
     const brain = {
       name: 'repair-test',

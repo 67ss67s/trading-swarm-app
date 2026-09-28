@@ -3,7 +3,7 @@
 // 每个案例 1 次模型调用;--max 控制上限(默认 3)。
 //   npx jiti packages/gateway/scripts/research-reflection-eval.ts [--model zai/glm-5.3] [--max 3] [--only 4d23af81,7f53fe31]
 import { readFileSync } from 'node:fs';
-import type { BacktestReport } from '@trading-swarm/contracts';
+import type { BacktestReport } from '@trade-gate/contracts';
 import { piBrain, type Brain } from '../src/demo/brain.js';
 import { openStateDb } from '../src/state-db.js';
 import { LoopStore, DEFAULT_BUDGET } from '../src/demo/research/loop/store.js';

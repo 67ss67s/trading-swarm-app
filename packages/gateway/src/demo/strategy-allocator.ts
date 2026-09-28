@@ -1,7 +1,7 @@
 /**
  * 策略自动轮换 allocator(设计 §4;契约 docs/demo/v3-ui-contract.md §9.35)。
  *
- * 背景(内部评审记录 §4 第 7 条):策略闭环 v2 能把一条策略自动推到
+ * 背景(Codex `.codex-reports/merge-review-0912.md` §4 第 7 条):策略闭环 v2 能把一条策略自动推到
  * paper,但**推到 paper 之后没人把它放进票池**——agent 实际上永远只跑 breakout_retest。这个缺口
  * 「不能靠把模型直接接 setWorkflow 弥补」:票池是钱的开关,只能由代码按可复核的规则决定。
  *
@@ -172,7 +172,7 @@ export function correlationKey(spec: StrategySpec): string {
 /**
  * 这条策略(**这个版本**)可用的净期望,按 regime → 全样本 → 样本外逐档取。
  *
- * 09-12 回归修复:字段名对齐新的回放形状(`lab.net.expectancy_r`、
+ * 09-12 回归修复:字段名对齐 astra 的新回放形状(`lab.net.expectancy_r`、
  * `lab.regime.{trend,range,high_vol}.net_expectancy`,见 replay-stats.ts `summarizeReplay`),
  * regime 键按 {@link REGIME_BUCKET} 从 daily regime 映射过来;**毛值那一档(`lab_stats.expectancy_r`)
  * 直接删掉** —— 没扣费的数字不能决定钱往哪走。

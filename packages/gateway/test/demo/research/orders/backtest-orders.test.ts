@@ -1,6 +1,6 @@
 /** 全窗口回测接订单周期执行核(WP-F 第二阶段):现货多头限价 no_fill/替换/结转、永续空头 3 倍(资金费、标记价强平)、篮子两腿走执行核、不带 order 块不变。 */
 import { afterEach, describe, it, expect } from 'vitest';
-import { validate, type StrategyIR } from '@trading-swarm/contracts';
+import { validate, type StrategyIR } from '@trade-gate/contracts';
 import { openStateDb } from '../../../../src/state-db.js';
 import { ResearchStore } from '../../../../src/demo/research/store.js';
 import { ResearchService } from '../../../../src/demo/research/service.js';
@@ -29,7 +29,8 @@ describe('全窗口回测 × 订单周期执行核', { timeout: 180000 }, () => 
     // 远限价(回撤 1.5 ATR)+ 长时效 → 未成交被新信号替换、到期 no_fill;成交后同向新信号 → 结转
     const ir = spotIR({ direction: 'long', market: 'spot', entry: { type: 'limit', price: node('atr_offset_level', { atr_period: 14, multiple: 1.5 }), expiry_bars: 12 }, take_profits: [{ source: node('indicator_level', { indicator: 'bbands', output: 'upper' }) }], min_rr: 0.5 });
     expect(checkIR(ir, '1d').ok).toBe(true);
-    const r = await runBacktestReport({ store, service, loader: loader() }, { strategy_ir: ir, timeframe: '1d', ...W, meta });
+    // 2026-09-27 执行层:本用例验证限价 no_fill/替换/结转的计划周期,与执行层无关;3×ATR 止损约 5.5–6.3% 超过执行层止损上限 5%、布林上轨止盈的净盈亏比多在 0.6–1.0,缺省阈值会把全部计划挡掉(stop_too_wide + min_net_rr),传 null,不按执行层挡单
+    const r = await runBacktestReport({ store, service, loader: loader() }, { strategy_ir: ir, timeframe: '1d', ...W, meta, execution_thresholds: null });
     expect(validate('research-backtest', r).ok).toBe(true);
     expect(r.engine_version).toBe(ORDERS_ENGINE_VERSION);
     expect(r.execution).toMatchObject({ market: 'spot', leverage: 1, fee_rate: 0.001 });
@@ -122,7 +123,8 @@ describe('全窗口回测 × 订单周期执行核', { timeout: 180000 }, () => 
     expect(basket.status).toBe('completed'); expect(basket.engine_version).toBe(ORDERS_ENGINE_VERSION);
     const legs = await Promise.all(['BTCUSDT', 'ETHUSDT'].map(async (sym) => {
       const asset = r.assets.find((a) => a.key === sym)!, d = store.dataset(asset.data!.dataset_id!), got = await perpLoader()(sym, '1d', { from_ms: d.bars[0]!.open_time, to_ms: d.bars.at(-1)!.close_time });
-      return orderExecutor({ symbol: sym, dataset: d, dataset_id: asset.data!.dataset_id!, ir, execution: { ...DEFAULT_EXECUTION, initial_cash: '5000' }, order_gate: orderGateFor(ir), timeframe: '1d', from_ms: basket.window!.from_ms, to_ms: basket.window!.to_ms, cache: new Map(), check: () => {}, fees: { taker: '0.0005', maker: '0.0002' }, perp: { mark: got.perp!.mark, funding: got.perp!.funding, tiers: got.perp!.tiers, max_lever: 100 } });
+      // 2026-09-27 执行层:报告按冻结的阈值快照跑执行核,两腿复算必须用同一份快照(r.execution_gate.thresholds)才可比
+      return orderExecutor({ symbol: sym, dataset: d, dataset_id: asset.data!.dataset_id!, ir, execution: { ...DEFAULT_EXECUTION, initial_cash: '5000' }, order_gate: { ...orderGateFor(ir), execution_thresholds: r.execution_gate!.thresholds }, timeframe: '1d', from_ms: basket.window!.from_ms, to_ms: basket.window!.to_ms, cache: new Map(), check: () => {}, fees: { taker: '0.0005', maker: '0.0002' }, perp: { mark: got.perp!.mark, funding: got.perp!.funding, tiers: got.perp!.tiers, max_lever: 100 } });
     }));
     expect(basket.equity.at(-1)!.equity).toBeCloseTo(legs[0]!.equity.at(-1)!.equity + legs[1]!.equity.at(-1)!.equity, 6);
     expect(basket.metrics!.trades).toBe(legs[0]!.trades.length + legs[1]!.trades.length);

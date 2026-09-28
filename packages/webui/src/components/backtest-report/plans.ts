@@ -2,7 +2,7 @@
  * 逐笔计划(research-orders.json 的 BacktestPlan)的辅助:
  * BacktestAsset 之后会带可选 plans / plan_stats(契约还没落,这里按可选字段读,旧报告没有就是 undefined)。
  */
-import type { BacktestAsset, BacktestPlan, BacktestPlanEventKind, BacktestPlanStats } from '@trading-swarm/contracts';
+import type { BacktestAsset, BacktestPlan, BacktestPlanEventKind, BacktestPlanStats } from '@trade-gate/contracts';
 import { tmap } from '@/lib/i18n';
 
 export type AssetWithPlans = BacktestAsset & { plans?: BacktestPlan[] | null; plan_stats?: BacktestPlanStats | null };

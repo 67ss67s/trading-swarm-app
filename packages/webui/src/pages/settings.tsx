@@ -13,13 +13,14 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { OctagonAlert } from 'lucide-react';
 import { api } from '@/api/client';
 import { CliCommandsCard } from '@/components/cli-commands-card';
-import { FloorAppearanceCard } from '@/components/floor/appearance-card';
 import { WorkflowForm } from '@/components/workflow-form';
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { JudgeLock } from '@/components/judge-lock';
 import { Pane, StatCell, Workspace } from '@/components/pane';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
+import { friendlyError, IS_JUDGE } from '@/lib/edition';
 import { backendLabel } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { t } from '@/lib/i18n';
@@ -69,7 +70,7 @@ export function SettingsPage() {
             </div>
           ) : overviewQ.isError ? (
             <p className="p-3 text-[12px] text-destructive">
-              {t('加载失败')}:{overviewQ.error instanceof Error ? overviewQ.error.message : String(overviewQ.error)}
+              {t('加载失败')}:{friendlyError(overviewQ.error instanceof Error ? overviewQ.error.message : String(overviewQ.error))}
             </p>
           ) : (
             <div className="divide-y">
@@ -85,15 +86,17 @@ export function SettingsPage() {
           )}
           <Separator />
           <div className="flex flex-wrap items-center gap-3 p-3">
-            <Button
-              variant={halted ? 'destructive' : 'outline'}
-              size="sm"
-              className={cn(!halted && 'border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive')}
-              onClick={() => (halted ? setResumeOpen(true) : setHaltOpen(true))}
-            >
-              <OctagonAlert data-slot="icon" />
-              {halted ? t('解除紧急停止') : t('紧急停止')}
-            </Button>
+            <JudgeLock feature="emergency_stop">
+              <Button
+                variant={halted ? 'destructive' : 'outline'}
+                size="sm"
+                className={cn(!halted && 'border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive')}
+                onClick={() => (halted ? setResumeOpen(true) : setHaltOpen(true))}
+              >
+                <OctagonAlert data-slot="icon" />
+                {halted ? t('解除紧急停止') : t('紧急停止')}
+              </Button>
+            </JudgeLock>
             <p className="max-w-md text-[11px] text-muted-foreground">
               {halted
                 ? t('现在是紧急停止,不会再开新仓,直到你手动解除。')
@@ -114,17 +117,16 @@ export function SettingsPage() {
         </Pane>
       </Workspace>
 
-      <Workspace className="shrink-0">
-        <Pane title={t('CLI 启动命令')} hint={t('每台机器都不一样:别名、代理前缀、绝对路径都行,改完立刻生效')}>
-          <CliCommandsCard />
-        </Pane>
-      </Workspace>
+      {/* 评审版不露出本机 CLI 启动命令与路径(整块不渲染) */}
+      {IS_JUDGE ? null : (
+        <Workspace className="shrink-0">
+          <Pane title={t('CLI 启动命令')} hint={t('每台机器都不一样:别名、代理前缀、绝对路径都行,改完立刻生效')}>
+            <CliCommandsCard />
+          </Pane>
+        </Workspace>
+      )}
 
-      <Workspace className="shrink-0">
-        <Pane title={t('楼层外观')} hint={t('配色、文案、每个角色的像素小人;只存本机,不影响任何交易行为')}>
-          <FloorAppearanceCard />
-        </Pane>
-      </Workspace>
+      {/* 外观卡只配旧楼层(#floor-legacy);旧楼层所有版本都已下线,这张卡也不再放 */}
 
       <Workspace className="flex h-[640px] shrink-0 flex-col">
         <Pane title={t('风控与自动化')} hint={t('观察列表和盯盘节奏在「观察列表」页改;交易市场、杠杆、保证金模式在「接入」页改')} className="min-h-0 flex-1" contentClassName="min-h-0">

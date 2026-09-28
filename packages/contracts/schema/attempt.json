@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://trading-swarm.dev/schema/attempt.json",
+  "$id": "https://trade-gate.dev/schema/attempt.json",
   "title": "ExecutionAttempt",
   "description": "一次对交易所的写调用(设计 §5.1)。clientOrderId 与完整订单指纹在调用前持久化(stage=before_submit);同 id 重发必须是交易所级幂等,否则不重发;结果 unknown 非终态,由 reconciler 按 clientOrderId 收敛。",
   "type": "object",

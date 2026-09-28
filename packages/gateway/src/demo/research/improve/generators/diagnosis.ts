@@ -34,7 +34,7 @@
  *     - 有 regime:去掉 regime                       方向门过严,放宽
  * 不在表里的诊断(exit_mix / assets / no_metrics / info 级别)不产生候选。
  */
-import type { StrategyIR } from '@trading-swarm/contracts';
+import type { StrategyIR } from '@trade-gate/contracts';
 import { node } from '../../strategy.js';
 import type { CandidateGenerator, GeneratorContext } from '../types.js';
 import { appendExit, appendSignal, nodesOf, removeNode, replaceNode, scalePeriods, setParam, type Proposal } from './params.js';

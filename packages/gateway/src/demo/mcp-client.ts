@@ -71,7 +71,7 @@ export class McpHttpClient {
     this.url = opts.url;
     this.token = opts.token;
     this.fetchImpl = opts.fetchImpl ?? fetch;
-    this.clientName = opts.clientName ?? 'trading-swarm';
+    this.clientName = opts.clientName ?? 'trade-gate';
     this.timeoutMs = opts.timeoutMs ?? 30_000;
   }
 

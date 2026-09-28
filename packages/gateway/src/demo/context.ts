@@ -1,6 +1,7 @@
 import { RR_PROMPT } from './rr-prompt.js';
-import { evaluateHoldingReview, renderAtrChoices, type HoldingReview, type HoldingInputs } from './holding-policy.js';
-import { HORIZON_POLICY, threadHorizon, reviewTimeframe } from './horizon.js';
+import { DEFAULT_EXECUTION_THRESHOLDS, renderStopFloor, type ExecutionThresholds } from './execution-policy.js';
+import { evaluateHoldingReview, renderAtrChoices, renderFreeAtrChoices, type HoldingReview, type HoldingInputs } from './holding-policy.js';
+import { HORIZON_POLICY, inferHorizon, threadHorizon, reviewTimeframe } from './horizon.js';
 import type { CouncilResult, CouncilReview } from './strategy-council.js';
 import { entryStyleAdvice, pendingEntryMetrics, type EntryStyle, type EntryStyleAdvice, type PendingEntryMetrics } from './entry-policy.js';
 // EpisodeBuilder + ContextBuilder (docs/demo/README.md §5.2–5.3, v2-agent-loop.md §5). One function
@@ -22,8 +23,9 @@ import type { Kline } from './types.js';
 // 把它变成静态依赖,info.test.ts「设好 env 再动态 import info.js」的写法就会拿到冻结的真实地址。
 // 窗口起点在这里手算一行(和 events.ts eventStartAt 同义),别为省一行把整条依赖拉回来。
 import type { EventStats, MarketEvent } from './events.js';
+import { flagWords } from './output-language.js';
 
-export const PROMPT_VERSION = 'demo-playbook-v11.1-ohlc'; // v11.1(09-23): 「最近 4 根」OHLC 小数跟价格走(低价币之前全是 0)+ 同周期结构行去重;user 文本变了所以升号 // v11(09-12 P1-16): 规则 2b/2c 的派生数标注从「只给证据编号」改成「必须写字段级公式」,语义变了就必须换版本号 —— 它是 eval 回答的缓存键(eval-a/run.ts、eval-b/runner.ts),而 context_hash 只覆盖 user 侧文本、不含 system_text,不升号的话旧格式的缓存回答会被复用、在新口径下全判成幻觉 // v7.1: scan:stale 节点的允许集写进任务行(stale 变体越图 PROPOSE 3/266) // v7: 失效价越过从「必须 EXIT」降为「可以 EXIT」(带确认口径),只有止损是硬离场
+export const PROMPT_VERSION = 'demo-playbook-v11.2-stopfloor'; // v11.2(09-27): 规则 5 的止损底线从写死的 0.3%–5% 改成按执行层当前模式给数(默认至少 1%),没绑策略的扫盘多一条「止损底线」计划证据 // v11.1(09-23): 「最近 4 根」OHLC 小数跟价格走(低价币之前全是 0)+ 同周期结构行去重;user 文本变了所以升号 // v11(09-12 P1-16): 规则 2b/2c 的派生数标注从「只给证据编号」改成「必须写字段级公式」,语义变了就必须换版本号 —— 它是 eval 回答的缓存键(eval-a/run.ts、eval-b/runner.ts),而 context_hash 只覆盖 user 侧文本、不含 system_text,不升号的话旧格式的缓存回答会被复用、在新口径下全判成幻觉 // v7.1: scan:stale 节点的允许集写进任务行(stale 变体越图 PROPOSE 3/266) // v7: 失效价越过从「必须 EXIT」降为「可以 EXIT」(带确认口径),只有止损是硬离场
 
 export interface EpisodeInputs {
   verified_event?: HoldingInputs['event'];
@@ -77,6 +79,11 @@ export interface EpisodeInputs {
   events?: MarketEvent[];
   /** subkind → 同类历史聚合(eventStats);缺就不给先验,不编。 */
   event_stats?: Record<string, EventStats>;
+  /**
+   * 09-27 §9.56 执行层止损底线(workflow)和本币 stop_floor_atr_tf 那根 ATR 占价格的百分比。
+   * 不传(eval 旧用例)= 按默认底线(至少 1%)写进规则。
+   */
+  stop_floor?: { thresholds: ExecutionThresholds; atr_pct: number | null };
 }
 
 /** 证据装载明细的版本号;形状变了就 bump(前端按它判断能不能画细节)。 */
@@ -85,7 +92,7 @@ export const EVIDENCE_PLAN_VERSION = 'ep-v2';
 /**
  * §9.36(P1-11)**公共最小集**:不管启用哪条策略都会装的那一批证据,**显式固定下来**。
  *
- * 评审的原话是「context 开头仍无条件装每个 features 周期的 EMA20/50、ATR、极值、量比……
+ * Codex 的原话是「context 开头仍无条件装每个 features 周期的 EMA20/50、ATR、极值、量比……
  * 这不是『没有策略要的指标不进 prompt』。如确有公共最小集例外,需显式固定范围和契约」。
  * 这里就是那个范围:它是判断的**地板**(没有它模型连「现在什么价、什么结构」都说不出),
  * 但它**不随 evidence 请求膨胀** —— evidence 点名带进来的额外周期不再自动获得结构行,
@@ -204,7 +211,7 @@ export function buildContext(inp: EpisodeInputs): BuiltContext {
   // 09-12 §5 减黑盒:边装证据边记一行明细(要了没装上的也记),最后连同 hash 一起落进 episode。
   const planItems: EvidencePlanItem[] = [];
   // §9.36 公共最小集:结构行只给主周期 + 1h/4h(+ 持仓线程自己的论点/确认周期)。
-  // evidence 请求带进来的额外周期**不再**顺带拿到一整行结构 —— 那正是评审指出的「无条件装」。
+  // evidence 请求带进来的额外周期**不再**顺带拿到一整行结构 —— 那正是 Codex 说的「无条件装」。
   const structureTfs = new Set(
     publicStructureTfs(inp.features[0]?.tf ?? '15m', inp.thread
       ? inp.thread.holding_plan
@@ -456,9 +463,14 @@ export function buildContext(inp: EpisodeInputs): BuiltContext {
   const node = nodeFor(inp.mode === 'review' ? inp.thread : null, inp.halted, marketStale, inp.watch_only === true);
   const allowed: string[] = allowedActions(node).filter((action) => !holdingReview || holdingReview.allowed_actions.includes(action));
   if (inp.mode === 'scan' && inp.strategies?.length) add('plan', '可选ATR尺度', renderAtrChoices(inp.features, inp.strategies), inp.now, 'holding-policy', false);
+  // 没绑策略也要告诉模型能选哪些 ATR 周期:以前不给,模型照 playbook 选 15m,入场检查只认 1h/4h,提议整条作废(09-26 评审站一天 94 次)
+  else if (inp.mode === 'scan' && inp.features[0]) add('plan', '可选ATR尺度', renderFreeAtrChoices(inp.features, inferHorizon(inp.features[0].tf), inp.features[0].tf), inp.now, 'holding-policy', false);
+  // 执行层的止损底线(按当前模式给具体数):代码在开仓检查和发送前都会按它拒单。没绑策略时单独列一条,让模型下单前就知道
+  const floorText = renderStopFloor(inp.stop_floor?.thresholds ?? DEFAULT_EXECUTION_THRESHOLDS, inp.stop_floor?.atr_pct ?? null, inp.symbol);
+  if (inp.mode === 'scan' && !inp.strategies?.length) add('plan', '止损底线(代码核验)', `${floorText}。和上面的 ATR 尺度两条都要满足,按更宽的那条放;止损放在结构位之外,够不到底线就等更好的位置,不要把止损挪到没有结构意义的地方去凑数。`, inp.now, 'execution-policy', false);
 
-  const system = [
-    '你是 trading-swarm 的判断模块。你不是聊天助手,不做寒暄。你只在被事件唤醒时读一次新鲜状态,维护一个交易论点(thesis),并输出一个有限的判断。',
+  const system = flagWords([
+    '你是 trade-gate 的判断模块。你不是聊天助手,不做寒暄。你只在被事件唤醒时读一次新鲜状态,维护一个交易论点(thesis),并输出一个有限的判断。',
     '硬红线:',
     '1. 数量、杠杆、风险预算由代码决定,你只给方向、入场方式(市价或限价区间)、止损价、止盈价(可给 1-2 个)和理由。',
     '2. 只能引用下面登记过的证据编号(E1、E2…);每条 reason 末尾必须用 [E3] 这种形式标注依据,没有依据的话不要写这条理由。',
@@ -467,7 +479,7 @@ export function buildContext(inp: EpisodeInputs): BuiltContext {
     '3. 没有足够优势就输出 NO_TRADE 或 WATCH,这是正常且重要的结果,不要为了"有动作"而交易。',
     '4. 标了 STALE 的证据不能作为 PROPOSE 的依据;信息员的候选只是线索,不是理由。',
     '4b. 标了「记忆」的证据是过去批准的教训/偏好/事实,只能用来调整倾向与信心,不能覆盖现场行情与账户数据;记忆里的价格、盈亏数字不是行情数字,不要当作当前价位引用。',
-    '5. 止损价必须在入场价的另一侧:做多止损 < 入场价,做空止损 > 入场价;距离在入场价的 0.3% 到 5% 之间。限价入场时 limit_price 放在 entry_zone 靠近现价的一端。',
+    `5. 止损价必须在入场价的另一侧:做多止损 < 入场价,做空止损 > 入场价;按入场价算,${floorText}。限价入场时 limit_price 放在 entry_zone 靠近现价的一端。`,
     '6. 只输出一个 JSON 对象,不要 markdown,不要解释文字。所有文字字段用简体中文,面向没有看过代码的交易员。',
     '7. 扫描先按「可用策略」(没有策略块时按 playbook)判断是否符合 PROPOSE 条件。清单里的「收破突破位」比较前 20 根(不含当根)的高/低点;「回踩确认=是」时应按当前启用策略考虑 PROPOSE,符合条件才给出 proposal,不符合则在 reasons 里写清缺少的条件。未满足 PROPOSE 条件时,WATCH/NO_TRADE 分界以「扫描清单(代码计算)」为准,不要自己重算:watch_eligible=是(策略确认周期同向、价距对应突破位在追单上限以内、回踩尚未确认)才可以 WATCH;watch_eligible=否 则 NO_TRADE。回踩已确认时不要退回 WATCH。理由必须引用这条清单证据的编号。',
     ...(holdingReview ? ['8. 以持仓动作闸(代码计算)的允许动作作为最终边界，旧持仓度量只用于解释。论点和失效条件在入场固定，HOLD不能重写。普通反向针先观察恢复与本周期结构；巨大振幅不等于已证实的黑天鹅。必须引用持仓动作闸证据。required_action硬止损必须EXIT；未授权的退出不执行。'] : ['8. 持仓复查以「持仓度量(代码计算)」为准,规则是不对称的:触及风险底线必须离场,结构证据可以支持提前离场,不设必须先亏到某个 R 才准离场的门槛。\n   ① 必须 EXIT:度量写明最近一根已收盘 K 线「已越过止损一侧」。此时无条件离场,不能用等待反弹的理由 HOLD 或 REDUCE。止损是唯一的硬离场线。\n   ② 可以 EXIT(由你判断):a)「失效确认=是」(失效价被连续越过达到确认口径),或 b)「论点趋势翻转=是」(当前线程 horizon 指定复查/确认周期的 EMA20-vs-EMA50 方向与持仓方向相反),或 c)「结构转弱=是」且浮盈 ≤ 0R。失效价只越过一根、深度不足确认口径时不是①,也不必走:看本 horizon 结构是否仍完好(复查/确认周期同向、价在本周期 EMA20 有利侧)再定;记忆里若有用户关于失效确认的偏好(如要几根、要多深),优先按偏好判。理由必须同时引用这条度量证据和一条支持离场的结构证据的编号。\n   ③ HOLD:论点未破且未触发①时默认持有;若②或④成立,可以依据证据选择相应降风险动作。\n   ④ 可以 REDUCE:未触发①、浮盈 ≥ +1R 且「结构转弱=是」时可以减半。\n   ⑤ INVALIDATE 只用于挂单未成交的线程;持仓中要走用 EXIT。以上复查理由必须引用这条度量证据的编号。']),
@@ -476,7 +488,9 @@ export function buildContext(inp: EpisodeInputs): BuiltContext {
       ? [
           '9. 只能用可用策略；PROPOSE须填strategy_id和proposal.risk_plan，按可选ATR尺度选择，结构失效价invalidation_price必填且在入场不利侧与硬止损之间。代码核验实际止损宽度及扣成本净RR>=1.5，不达标等待更好入场，不为凑RR推远目标。',
         ]
-      : []),
+      : inp.mode === 'scan'
+        ? ['9. PROPOSE 须填 proposal.risk_plan:atr_timeframe 只能从「可选ATR尺度」里选,止损至少是所选周期 ATR 的下限倍数,同时不低于「止损底线(代码核验)」;代码会核验止损宽度和扣成本后的净RR>=1.5,不达标就等更好的入场,不要为凑RR推远目标。']
+        : []),
     ...(inp.strategy_council && inp.strategy_council.mode === 'require'
       ? ['9b. 策略议会共识是开仓前置:「策略议会(代码汇总)」共识=否时不能 PROPOSE(只能 WATCH / NO_TRADE,把缺的票写进 watch_conditions);共识=是时 PROPOSE 的方向必须与共识一致,strategy_id 必须是同意方之一;理由必须引用这条证据编号。弃权=该策略没被唤醒或没有裁决实现,不是反对。']
       : inp.strategy_council
@@ -493,7 +507,7 @@ export function buildContext(inp: EpisodeInputs): BuiltContext {
     ...(activeStrategies.length ? ['可用策略:', renderStrategies(activeStrategies), ''] : []),
     activeStrategies.length ? '补充说明(用户写的,不覆盖策略):' : `Playbook(${PROMPT_VERSION}):`,
     inp.playbook_text,
-  ].join('\n');
+  ].join('\n'));
 
   const lines: string[] = [];
   const trig = inp.trigger.kind === 'kline_close' || inp.trigger.kind === 'scan' ? 'K 线收盘扫描' : inp.trigger.kind === 'manual' ? '手动触发' : inp.trigger.kind === 'thread_review' || inp.trigger.kind === 'position_review' ? '线程复查' : inp.trigger.kind === 'order_filled' ? '入场成交后复查' : inp.trigger.kind === 'info_update' ? '信息员更新后复查' : inp.trigger.kind === 'chat' ? '对话中触发' : inp.trigger.kind;

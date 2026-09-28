@@ -1,4 +1,4 @@
-import type { ResearchDataset, ResearchRequest, ResearchStudy } from '@trading-swarm/contracts';
+import type { ResearchDataset, ResearchRequest, ResearchStudy } from '@trade-gate/contracts';
 export const T0=Date.UTC(2025,0,1),STEP=3600000;
 export function fixture():ResearchDataset {
   let price=100;

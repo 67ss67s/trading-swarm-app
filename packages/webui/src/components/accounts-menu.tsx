@@ -17,10 +17,12 @@ import { toast } from 'sonner';
 import { api } from '@/api/client';
 import type { ExecutionView, OkxSetupRequest, OkxStatus } from '@/api/types';
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { JudgeLock } from '@/components/judge-lock';
 import { useExecutionQuery } from '@/components/connect/use-execution';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { friendlyError, lockReason } from '@/lib/edition';
 import { acctLvLabel } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { t } from '@/lib/i18n';
@@ -45,15 +47,16 @@ export function OkxConnectForm({ view, demo, onDone }: { view: ExecutionView | u
     mutationFn: api.okxInstall,
     onSuccess: (res) => {
       void qc.invalidateQueries({ queryKey: ['execution'] });
-      res.ok ? toast.success(t('okx CLI 装好了')) : toast.error(t('安装失败'), { description: res.log_tail });
+      res.ok ? toast.success(t('okx CLI 装好了')) : toast.error(t('安装失败'), { description: friendlyError(res.log_tail) });
     },
-    onError: (e: Error) => toast.error(t('安装失败'), { description: e.message }),
+    onError: (e: Error) => toast.error(t('安装失败'), { description: friendlyError(e.message) }),
   });
   // 凭证不进 TanStack 的 mutation 缓存(variables 会留到 reset/GC):自己管 pending,发送前就清空表单,
-  // 请求结束立刻丢掉 payload 引用(review #3)。
+  // 请求结束立刻丢掉 payload 引用(codex-review sol #3)。
   const [pending, setPending] = useState(false);
+  const credLock = lockReason('exchange_credentials');
   const submit = async () => {
-    if (!ready || pending) return;
+    if (!ready || pending || credLock) return;
     let body: OkxSetupRequest | null = { ...form, demo, name: demo ? 'okx-demo' : 'okx-live' };
     setForm({ api_key: '', secret_key: '', passphrase: '' });
     setPending(true);
@@ -62,9 +65,9 @@ export function OkxConnectForm({ view, demo, onDone }: { view: ExecutionView | u
       void qc.invalidateQueries({ queryKey: ['execution'] });
       void qc.invalidateQueries({ queryKey: ['okx'] });
       if (res.credentials_ok) { toast.success(t('OKX 连上了:{p}', { p: res.profile })); onDone?.(); }
-      else toast.error(t('凭证写进去了,但查账户失败'), { description: res.error ?? '' });
+      else toast.error(t('凭证写进去了,但查账户失败'), { description: friendlyError(res.error ?? '') });
     } catch (e) {
-      toast.error(t('连接失败'), { description: e instanceof Error ? e.message : String(e) });
+      toast.error(t('连接失败'), { description: friendlyError(e instanceof Error ? e.message : String(e)) });
     } finally {
       body = null;
       setPending(false);
@@ -76,10 +79,12 @@ export function OkxConnectForm({ view, demo, onDone }: { view: ExecutionView | u
     return (
       <div className="flex items-center gap-2 text-[11px]">
         <span className="text-muted-foreground">{t('交易组件还没就绪')}</span>
-        <Button size="xs" variant="outline" disabled={install.isPending} onClick={() => install.mutate()}>
-          {install.isPending ? <Loader2 data-slot="icon" className="animate-spin" /> : null}
-          {install.isPending ? t('安装中,约一分钟…') : t('一键安装')}
-        </Button>
+        <JudgeLock feature="exchange_credentials">
+          <Button size="xs" variant="outline" disabled={install.isPending} onClick={() => install.mutate()}>
+            {install.isPending ? <Loader2 data-slot="icon" className="animate-spin" /> : null}
+            {install.isPending ? t('安装中,约一分钟…') : t('一键安装')}
+          </Button>
+        </JudgeLock>
       </div>
     );
   }
@@ -96,14 +101,16 @@ export function OkxConnectForm({ view, demo, onDone }: { view: ExecutionView | u
         {demo ? t('去 OKX 建模拟盘 API key') : t('去 OKX 建实盘 API key')}
         <ExternalLink className="size-3" />
       </a>
-      <Input className="h-7 text-[11px]" placeholder="API key" autoComplete="off" value={form.api_key} onChange={(e) => setForm({ ...form, api_key: e.target.value })} />
-      <Input className="h-7 text-[11px]" placeholder="Secret key" type="password" autoComplete="off" value={form.secret_key} onChange={(e) => setForm({ ...form, secret_key: e.target.value })} />
+      <Input className="h-7 text-[11px]" placeholder="API key" autoComplete="off" disabled={!!credLock} title={credLock ?? undefined} value={form.api_key} onChange={(e) => setForm({ ...form, api_key: e.target.value })} />
+      <Input className="h-7 text-[11px]" placeholder="Secret key" type="password" autoComplete="off" disabled={!!credLock} title={credLock ?? undefined} value={form.secret_key} onChange={(e) => setForm({ ...form, secret_key: e.target.value })} />
       <div className="flex gap-1.5">
-        <Input className="h-7 flex-1 text-[11px]" placeholder="Passphrase" type="password" autoComplete="off" value={form.passphrase} onChange={(e) => setForm({ ...form, passphrase: e.target.value })} />
-        <Button type="submit" size="xs" disabled={!ready || pending}>
-          {pending ? <Loader2 data-slot="icon" className="animate-spin" /> : null}
-          {t('连接')}
-        </Button>
+        <Input className="h-7 flex-1 text-[11px]" placeholder="Passphrase" type="password" autoComplete="off" disabled={!!credLock} title={credLock ?? undefined} value={form.passphrase} onChange={(e) => setForm({ ...form, passphrase: e.target.value })} />
+        <JudgeLock feature="exchange_credentials">
+          <Button type="submit" size="xs" disabled={!ready || pending}>
+            {pending ? <Loader2 data-slot="icon" className="animate-spin" /> : null}
+            {t('连接')}
+          </Button>
+        </JudgeLock>
       </div>
       <p className="text-[10px] text-muted-foreground">{demo ? t('key 只留在本机,网关和模型都不留。模拟盘随便玩。') : t('key 只留在本机,网关和模型都不留。权限勾「读取 + 交易」就够,不要提币。')}</p>
     </form>
@@ -132,12 +139,12 @@ export function OkxSection({ view }: { view: ExecutionView | undefined }) {
   const use = useMutation({
     mutationFn: api.okxUse,
     onSuccess: (st) => { refresh(st); toast.success(t('已切到 {p}', { p: st.profile ?? '' })); },
-    onError: (e: Error) => toast.error(t('切换失败'), { description: e.message }),
+    onError: (e: Error) => toast.error(t('切换失败'), { description: friendlyError(e.message) }),
   });
   const remove = useMutation({
     mutationFn: api.okxRemove,
     onSuccess: (st) => { refresh(st); setConfirmRemove(null); toast.success(t('已断开')); },
-    onError: (e: Error) => toast.error(t('断开失败'), { description: e.message }),
+    onError: (e: Error) => toast.error(t('断开失败'), { description: friendlyError(e.message) }),
   });
 
   return (
@@ -163,9 +170,9 @@ export function OkxSection({ view }: { view: ExecutionView | undefined }) {
             <span className={cn('num', active ? 'text-up' : 'text-muted-foreground')}>{active ? t('当前使用') : t('已连,未启用')}</span>
             <span className="num text-muted-foreground">{slot.name}</span>
             <span className="ml-auto flex gap-1">
-              {!slot.is_default ? <Button size="xs" variant="outline" disabled={use.isPending} onClick={() => use.mutate(slot.name)}>{t('切到这个')}</Button> : null}
-              <Button size="xs" variant="ghost" onClick={() => setEditing(true)}>{t('换 key')}</Button>
-              <Button size="xs" variant="ghost" className="text-destructive" onClick={() => setConfirmRemove(slot.name)}>{t('断开')}</Button>
+              {!slot.is_default ? <JudgeLock feature="execution_channel"><Button size="xs" variant="outline" disabled={use.isPending} onClick={() => use.mutate(slot.name)}>{t('切到这个')}</Button></JudgeLock> : null}
+              <JudgeLock feature="exchange_credentials"><Button size="xs" variant="ghost" onClick={() => setEditing(true)}>{t('换 key')}</Button></JudgeLock>
+              <JudgeLock feature="exchange_credentials"><Button size="xs" variant="ghost" className="text-destructive" onClick={() => setConfirmRemove(slot.name)}>{t('断开')}</Button></JudgeLock>
             </span>
           </div>
         ) : (
@@ -210,16 +217,16 @@ export function WalletSection() {
       setSession(res.session_id);
       poll.mutate(res.session_id);
     },
-    onError: (e: Error) => toast.error(t('发起登录失败'), { description: e.message }),
+    onError: (e: Error) => toast.error(t('发起登录失败'), { description: friendlyError(e.message) }),
   });
   const logout = useMutation({
     mutationFn: api.walletLogout,
     onSuccess: (res) => { qc.setQueryData(['wallet'], res); void qc.invalidateQueries({ queryKey: ['okx'] }); toast.success(t('钱包已断开')); },
     // 报错也刷一次真实状态:CLI 可能已经登出了只是回执没解析好(2026-09-20 用户碰到过)
-    onError: (e: Error) => { void qc.invalidateQueries({ queryKey: ['wallet'] }); toast.error(t('断开失败'), { description: e.message }); },
+    onError: (e: Error) => { void qc.invalidateQueries({ queryKey: ['wallet'] }); toast.error(t('断开失败'), { description: friendlyError(e.message) }); },
   });
   // 登录页在别的标签页完成,网关那边一轮 poll 超时就再来一轮,直到连上或用户放弃。
-  // 每轮之间隔 2s,连续失败 5 次就停(review #5:别把 onchainos 起成死循环)。
+  // 每轮之间隔 2s,连续失败 5 次就停(codex-review sol #5:别把 onchainos 起成死循环)。
   const failures = useRef(0);
   useEffect(() => {
     if (!session || poll.isPending || w?.logged_in) return;
@@ -242,12 +249,14 @@ export function WalletSection() {
         )}
         <span className="ml-auto">
           {w?.logged_in ? (
-            <Button size="xs" variant="ghost" disabled={logout.isPending} onClick={() => logout.mutate()}>{t('断开')}</Button>
+            <JudgeLock feature="wallet_connect"><Button size="xs" variant="ghost" disabled={logout.isPending} onClick={() => logout.mutate()}>{t('断开')}</Button></JudgeLock>
           ) : (
-            <Button size="xs" variant="outline" disabled={busy || w?.installed === false} onClick={() => login.mutate()}>
-              {busy ? <Loader2 data-slot="icon" className="animate-spin" /> : null}
-              {busy ? t('等你在浏览器里登录…') : t('连接')}
-            </Button>
+            <JudgeLock feature="wallet_connect">
+              <Button size="xs" variant="outline" disabled={busy || w?.installed === false} onClick={() => login.mutate()}>
+                {busy ? <Loader2 data-slot="icon" className="animate-spin" /> : null}
+                {busy ? t('等你在浏览器里登录…') : t('连接')}
+              </Button>
+            </JudgeLock>
           )}
         </span>
       </div>
@@ -267,7 +276,7 @@ function shortAddr(a: string): string { return a.length > 16 ? `${a.slice(0, 8)}
 function WalletAssetsBlock() {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ['wallet', 'assets'], queryFn: () => api.walletAssets(), refetchInterval: 120_000, retry: 0 });
-  const refresh = useMutation({ mutationFn: () => api.walletAssets(true), onSuccess: (res) => qc.setQueryData(['wallet', 'assets'], res), onError: (e: Error) => toast.error(e.message) });
+  const refresh = useMutation({ mutationFn: () => api.walletAssets(true), onSuccess: (res) => qc.setQueryData(['wallet', 'assets'], res), onError: (e: Error) => toast.error(friendlyError(e.message)) });
   const [showAddr, setShowAddr] = useState(false);
   const a = q.data;
   if (!a) return <div className="mt-1.5 text-[10.5px] text-muted-foreground">{q.isError ? t('资产读不到') : t('读资产…')}</div>;
@@ -313,7 +322,7 @@ export function McpSection({ show }: { show: boolean }) {
   const reg = useMutation({
     mutationFn: api.okxMcpRegister,
     onSuccess: (res) => { qc.setQueryData(['okx', 'mcp'], res); toast.success(res.registered_in_claude ? t('已挂到 Claude Code') : t('没挂上')); },
-    onError: (e: Error) => toast.error(t('挂接失败'), { description: e.message }),
+    onError: (e: Error) => toast.error(t('挂接失败'), { description: friendlyError(e.message) }),
   });
   if (!show) return null;
   const m = q.data ?? null;
@@ -324,10 +333,12 @@ export function McpSection({ show }: { show: boolean }) {
         <span className="font-medium">OKX MCP</span>
         <span className="text-muted-foreground">{m?.registered_in_claude ? t('Claude Code 里可用') : m?.cli_available ? t('还没挂到 Claude Code') : t('还没装,点挂接会一并安装')}</span>
         {m && !m.registered_in_claude ? (
-          <Button size="xs" variant="outline" className="ml-auto" disabled={reg.isPending} onClick={() => reg.mutate()}>
-            {reg.isPending ? <Loader2 data-slot="icon" className="animate-spin" /> : null}
-            {t('挂接')}
-          </Button>
+          <JudgeLock feature="exchange_credentials" className="ml-auto">
+            <Button size="xs" variant="outline" className="ml-auto" disabled={reg.isPending} onClick={() => reg.mutate()}>
+              {reg.isPending ? <Loader2 data-slot="icon" className="animate-spin" /> : null}
+              {t('挂接')}
+            </Button>
+          </JudgeLock>
         ) : null}
       </div>
       <p className="mt-1 text-[10px] text-muted-foreground">{t('网关下单不经过 MCP(直接 spawn CLI 本地签名);MCP 是给 Claude Code 里的 agent 查账户、下单用的同一套 key。')}</p>

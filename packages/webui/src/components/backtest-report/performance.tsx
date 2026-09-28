@@ -2,7 +2,7 @@
  * Performance tab:按年收益、月度热力图(年 × 月)、回撤水下图、样本内 vs 样本外对照、各资产横比。
  */
 import { useMemo } from 'react';
-import type { BacktestAsset, BacktestPeriodReturn, BacktestReport } from '@trading-swarm/contracts';
+import type { BacktestAsset, BacktestPeriodReturn, BacktestReport } from '@trade-gate/contracts';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { UnderwaterChart } from './charts';

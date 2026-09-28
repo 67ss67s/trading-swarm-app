@@ -149,13 +149,13 @@ function SelectedAgentBody({ agent, profile, onOpen, m, meta, loop, models }: { 
             {m.callsign}
           </div>
           <div className="text-[10px] text-[var(--of-ink)]">{m.title}</div>
-          <div className="text-[10px] text-[var(--of-ink-dim)]">{profile.name}</div>
+          <div className="text-[10px] text-[var(--of-ink-dim)]">{t(profile.name)}</div>
         </div>
       </div>
       <div className="mt-2 flex items-center gap-1 text-[10px]">
         <i className={cn('of-dot', `of-dot-${agent.presence.state}`)} />
         <span>{PRESENCE_LABEL[agent.presence.state]}</span>
-        <span className="text-[var(--of-ink-dim)]">{agent.presence.action ?? (agent.enabled ? '' : profile.note ?? t('还没接线'))}</span>
+        <span className="text-[var(--of-ink-dim)]">{agent.presence.action ?? (agent.enabled ? '' : (profile.note ? t(profile.note) : t('还没接线')))}</span>
       </div>
       <dl className="mt-2 space-y-1 text-[9px] leading-3.5">
         {brain ? (
@@ -210,11 +210,11 @@ function SelectedAgentBody({ agent, profile, onOpen, m, meta, loop, models }: { 
         )}
         <div>
           <dt className="inline text-[var(--of-ink-faint)]">{t('负责')} · </dt>
-          <dd className="inline text-[var(--of-ink-dim)]">{profile.description}</dd>
+          <dd className="inline text-[var(--of-ink-dim)]">{t(profile.description)}</dd>
         </div>
         <div>
           <dt className="inline text-[var(--of-ink-faint)]">{t('边界')} · </dt>
-          <dd className="inline text-[var(--of-ink-dim)]">{profile.approval_boundary}</dd>
+          <dd className="inline text-[var(--of-ink-dim)]">{t(profile.approval_boundary)}</dd>
         </div>
         <div>
           <dt className="inline text-[var(--of-ink-faint)]">{t('能力')} · </dt>

@@ -7,7 +7,7 @@
  */
 import type { IChartApi, IPrimitivePaneRenderer, IPrimitivePaneView, ISeriesApi, ISeriesPrimitive, SeriesAttachedParameter, Time } from 'lightweight-charts';
 import type { CanvasRenderingTarget2D } from 'fancy-canvas';
-import type { SmcOverlay } from '@trading-swarm/contracts';
+import type { SmcOverlay } from '@trade-gate/contracts';
 import { hexAlpha } from './format';
 
 export type SmcLayerKey = 'structure' | 'blocks' | 'fvg' | 'zones' | 'levels';

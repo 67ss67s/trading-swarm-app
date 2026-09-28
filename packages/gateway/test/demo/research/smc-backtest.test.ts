@@ -1,6 +1,6 @@
 /** SMC 订单周期策略走全窗口回测 + 回放 overlay=smc(合成数据,只做工程验证)。 */
 import { afterEach, describe, it, expect } from 'vitest';
-import { validate, type StrategyIR } from '@trading-swarm/contracts';
+import { validate, type StrategyIR } from '@trade-gate/contracts';
 import { openStateDb } from '../../../src/state-db.js';
 import { ResearchStore } from '../../../src/demo/research/store.js';
 import { ResearchService } from '../../../src/demo/research/service.js';

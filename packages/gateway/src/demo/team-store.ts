@@ -122,7 +122,7 @@ export class RiskStore {
   }
 
   /**
-   * 用一轮评估结果对齐库里的开放告警(评审稿 §4.4 的 latch 语义):
+   * 用一轮评估结果对齐库里的开放告警(Codex 稿 §4.4 的 latch 语义):
    *   - 新指纹 → 插入(opened);
    *   - 已有指纹 → 更新 last_seen/count,clean_streak 归零,recovery_ready 归零;
    *   - 不在结果里的开放告警:clean_streak+1;warn/info 连续 3 轮干净 → 自动 resolved(滞回,防 80% 边界抖动);

@@ -3,7 +3,7 @@
  * (components/backtest-report/report-view.tsx 的 BacktestReportView / BacktestReportById)。
  * 集中在这一个文件里接,WP-C 的签名变了只改这里。
  */
-import type { BacktestReport } from '@trading-swarm/contracts';
+import type { BacktestReport } from '@trade-gate/contracts';
 import { researchApi } from '@/api/client';
 import { BacktestReportById, BacktestReportView, type BacktestReportHeaderConfig } from '@/components/backtest-report/report-view';
 import { detailHash, reportHash } from './model';

@@ -17,14 +17,18 @@
 //   · ATR 门槛用 `atrPctFloor(tf)`(review-metrics.ts 的分周期表);
 //   · 追单上限、回踩量比、日线 range 量比取自 `breakout_retest` 的参数默认值。
 //
-// 与实盘不一致、而且是**故意**的地方:突破位有两个定义,funnel 两个都算。
-//   `self`  = `tfFeatures.swing_high_20`,即**含当前这根**的 20 根最高价 —— 这正是 `scanChecklist`
-//             今天用的那个。因为 close ≤ high ≤ max(high),`last_close > swing_high_20` 恒为假,
-//             所以"回踩确认"在代码口径下**永远不可能成立**(见文档第 1 节)。
-//   `prior` = 不含当前这根的前 20 根最高价 —— triggers.ts 的 `breakout` 触发器用的就是这个
-//             (它比的是 `prev_tf.swing_high_20`)。这才是"收盘突破"的正常含义。
+//   · 现行规则(`CURRENT_THRESHOLDS`)的追单上限 / 回踩量比 / 突破窗口直接 import review-metrics.ts 的
+//     `CHASE_ATR_MAX` / `RETEST_VOL_MIN` / `BREAKOUT_WINDOW`,不抄数字;`funnel.test.ts` 逐根断言
+//     funnel 的现行口径与 `scanChecklist` 在同一组 K 线上判定一致。
+//
+// 突破位有两种口径(`breakout_level`):
+//   `prior` = 收破与追单距离都按前 20 根(不含当根,`swing_high_20_prev`)—— `scanChecklist`(09-27 起
+//             追单距离也量到这里)、triggers.ts、entry-policy.ts 追单闸共用的口径,现行规则用它。
+//   `self`  = 收破与距离都比含当根的 20 根最高价 —— 2026-09-05 之前 `scanChecklist` 的旧 bug:
+//             close ≤ high ≤ max(high),`last_close > swing_high_20` 恒为假,"回踩确认"永远不成立
+//             (见文档第 1 节)。只留作复现/对照,不再是现行规则。
 
-import { atrPctFloor } from './review-metrics.js';
+import { atrPctFloor, BREAKOUT_WINDOW, CHASE_ATR_MAX, RETEST_VOL_MIN } from './review-metrics.js';
 import { dailyRegime, ema, fetchFundingRateHistory, marketExchange, tfToMs } from './market.js';
 import { loadOkxInstruments } from './market-okx.js';
 import { lastClosedIndex, loadKlines, loadFunding } from './backtest.js';
@@ -80,7 +84,7 @@ export interface FunnelThresholds {
   trend_mode: 'both' | 'h1_veto';
   /** h1_veto 下,4h 反向且距 4h EMA20 超过这么多 ATR 才算否决。 */
   h4_veto_atr: number;
-  /** 突破位口径:`self` = 含当前根(scanChecklist 现行,恒不可达);`prior` = 前 20 根。 */
+  /** 突破位口径(见文件头):`prior` = 前 20 根(scanChecklist 现行);`self` = 旧 bug(含当根,收破恒不可达),只作对照。 */
   breakout_level: 'self' | 'prior';
   /** 突破视为"仍然有效"的回看根数(1 = 只认最近这一根收破)。 */
   breakout_window: number;
@@ -92,16 +96,20 @@ export interface FunnelThresholds {
   require_trend_regime: boolean;
 }
 
-/** 现行规则:`scanChecklist` + `breakout_retest` v1 参数默认值。 */
+/**
+ * 现行规则:`scanChecklist` 原样 + `breakout_retest` v1 参数默认值。前五项(ATR 分周期表、1h/4h 同向、
+ * 追单距离、收破窗口、当根量比)与 scanChecklist 一一对应;资金费率与日线状态两条来自 playbook
+ * 文字规则(scanChecklist 不算它们,模型按规则读)。
+ */
 export const CURRENT_THRESHOLDS: FunnelThresholds = {
   atr_floor_mult: 1,
-  chase_atr_max: 1.5,
-  retest_vol_min: 1,
+  chase_atr_max: CHASE_ATR_MAX,
+  retest_vol_min: RETEST_VOL_MIN,
   vol_mode: 'current',
   trend_mode: 'both',
   h4_veto_atr: 1,
-  breakout_level: 'self',
-  breakout_window: 1,
+  breakout_level: 'prior',
+  breakout_window: BREAKOUT_WINDOW,
   range_vol_min: 1.5,
   funding_abs_max: 0.05,
   require_trend_regime: false,
@@ -128,9 +136,9 @@ export interface ConditionEval {
   pass: Record<ConditionKey, boolean>;
   /** 七条全过 = 本该 PROPOSE。 */
   joint: boolean;
-  /** 距突破位多少 ATR(按 dir)。 */
+  /** 距突破位多少 ATR(按 dir + breakout_level;prior 口径与 scanChecklist 的 dist_to_break_atr 一致)。 */
   dist_atr: number;
-  /** 该根参照的突破位价格(按 dir + breakout_level 口径)。 */
+  /** 该根的突破位价格(按 dir + breakout_level;prior 口径与实盘 freezeEntryBasis 一致),前瞻结算的止损锚。 */
   level: number;
   /** WATCH 口径:1h/4h 同向 且 在射程内 且 回踩尚未确认。 */
   watch_eligible: boolean;
@@ -162,7 +170,7 @@ export function evaluateBar(m: BarMetrics, th: FunnelThresholds): ConditionEval 
       ? long
         ? m.close > m.hi20
         : m.close < m.lo20 // 恒为假:close ≤ high ≤ hi20(见文件头注释)
-      : since >= 0 && since < th.breakout_window;
+      : since >= 0 && since < th.breakout_window; // = scanChecklist 的 beyond / brokeWithin(近 window 根内有一根收破其前 20 根)
   const breakVol = long ? m.break_vol_up : m.break_vol_down;
   const volOk = m.vol_ratio >= th.retest_vol_min || (th.vol_mode === 'either' && breakVol !== null && since >= 0 && since < th.breakout_window && breakVol >= th.retest_vol_min);
 
@@ -440,45 +448,45 @@ export interface LadderRung {
 }
 
 /**
- * 阶梯是**单调**的:每一级都只是把某个门槛放松,不会把原本通过的根挡掉,所以联合通过数只能升不能降
- * (`funnel.test.ts` 断言这一点)。两处刻意的设计保证了这条性质:
+ * 阶梯是**单调**的:每一级都在现行规则(`prior` 口径)上只把某个门槛放松,不会把原本通过的根挡掉,
+ * 所以联合通过数只能升不能降(`funnel.test.ts` 断言这一点)。两处刻意的设计保证了这条性质:
  *   · `vol_mode: 'either'` 是"当前根 **或** 突破那根达标",不是"改成只看突破那根";
  *   · `trend_mode: 'h1_veto'` 在 1h/4h 同向时给出与 `both` 完全相同的方向。
- * 唯一不算"放宽"的是 `fix`:把突破位从恒不可达的 self 口径换成 prior 口径 —— 它是修 bug,
- * 而且 prior 口径是 self 口径的超集(hi20 = max(hi20_prev, 本根 high) ≥ hi20_prev)。
+ * 旧版这里有一级 `fix`(F:把收破基准从 self 换成前 20 根),各级都叠在它上面。scanChecklist 早已改成比前 20 根,
+ * 现行规则本身就是修过的口径(09-27 起追单距离也量前 20 根),那一级与现行完全相同,所以删掉;
+ * 各级直接叠在现行规则上,key 去掉了 `fix+` 前缀。
  */
 export const LADDER: LadderRung[] = [
   { key: 'current', label: '现行规则(scanChecklist 原样)', patch: {} },
-  { key: 'fix', label: 'F:突破位改用前 20 根(不含当根)', patch: { breakout_level: 'prior' } },
-  { key: 'fix+atr', label: 'F + ATR 门槛 ×0.5', patch: { breakout_level: 'prior', atr_floor_mult: 0.5 } },
-  { key: 'fix+chase2', label: 'F + 距突破位 ≤ 2.0 ATR', patch: { breakout_level: 'prior', chase_atr_max: 2 } },
-  { key: 'fix+vol08', label: 'F + 量比 ≥ 0.8', patch: { breakout_level: 'prior', retest_vol_min: 0.8 } },
-  { key: 'fix+volbreak', label: 'F + 量比只在突破那根查', patch: { breakout_level: 'prior', vol_mode: 'either' } },
-  { key: 'fix+h1', label: 'F + 只看 1h(4h 强烈反向才否决)', patch: { breakout_level: 'prior', trend_mode: 'h1_veto' } },
-  { key: 'fix+win12', label: 'F + 回踩窗口放宽到 12 根', patch: { breakout_level: 'prior', breakout_window: 12 } },
-  { key: 'fix+win12+volbreak', label: 'F + 窗口 12 根 + 量比查突破那根', patch: { breakout_level: 'prior', breakout_window: 12, vol_mode: 'either' } },
-  { key: 'fix+win12+volbreak+atr', label: 'F + 窗口 12 + 量比突破根 + ATR ×0.5', patch: { breakout_level: 'prior', breakout_window: 12, vol_mode: 'either', atr_floor_mult: 0.5 } },
+  { key: 'atr', label: '现行 + ATR 门槛 ×0.5', patch: { atr_floor_mult: 0.5 } },
+  { key: 'chase2', label: '现行 + 距突破位 ≤ 2.0 ATR', patch: { chase_atr_max: 2 } },
+  { key: 'vol08', label: '现行 + 量比 ≥ 0.8', patch: { retest_vol_min: 0.8 } },
+  { key: 'volbreak', label: '现行 + 量比当根或突破那根达标即可', patch: { vol_mode: 'either' } },
+  { key: 'h1', label: '现行 + 只看 1h(4h 强烈反向才否决)', patch: { trend_mode: 'h1_veto' } },
+  { key: 'win12', label: '现行 + 回踩窗口放宽到 12 根', patch: { breakout_window: 12 } },
+  { key: 'win12+volbreak', label: '现行 + 窗口 12 根 + 量比查突破那根', patch: { breakout_window: 12, vol_mode: 'either' } },
+  { key: 'win12+volbreak+atr', label: '现行 + 窗口 12 + 量比突破根 + ATR ×0.5', patch: { breakout_window: 12, vol_mode: 'either', atr_floor_mult: 0.5 } },
   {
-    key: 'fix+win12+volbreak+atr+h1',
-    label: 'F + 窗口 12 + 量比突破根 + ATR ×0.5 + 只看 1h',
-    patch: { breakout_level: 'prior', breakout_window: 12, vol_mode: 'either', atr_floor_mult: 0.5, trend_mode: 'h1_veto' },
+    key: 'win12+volbreak+atr+h1',
+    label: '现行 + 窗口 12 + 量比突破根 + ATR ×0.5 + 只看 1h',
+    patch: { breakout_window: 12, vol_mode: 'either', atr_floor_mult: 0.5, trend_mode: 'h1_veto' },
   },
   {
     key: 'all',
     label: '全部放宽(再加 chase 2.0 / range 量比 1.0)',
-    patch: { breakout_level: 'prior', breakout_window: 12, vol_mode: 'either', atr_floor_mult: 0.5, trend_mode: 'h1_veto', chase_atr_max: 2, range_vol_min: 1 },
+    patch: { breakout_window: 12, vol_mode: 'either', atr_floor_mult: 0.5, trend_mode: 'h1_veto', chase_atr_max: 2, range_vol_min: 1 },
   },
 ];
 
 /**
- * 质量变体:都建立在 `fix+win12+volbreak` 这个"能出单"的底座上,一次只动一个旋钮,
+ * 质量变体:都建立在阶梯 `win12+volbreak` 这个"能出单"的底座上,一次只动一个旋钮,
  * 回答的是另一个问题 —— **怎么把出来的单子变成正期望**(阶梯回答的是"有没有单子")。
  * 这些变体里有收紧的(量比 1.5、追单 0.8 ATR),所以它们**不满足**阶梯的单调性,单独一组。
  */
-export const RECOMMENDED_BASE: Partial<FunnelThresholds> = { breakout_level: 'prior', breakout_window: 12, vol_mode: 'either' };
+export const RECOMMENDED_BASE: Partial<FunnelThresholds> = { breakout_window: 12, vol_mode: 'either' };
 
 export const VARIANTS: LadderRung[] = [
-  { key: 'v-base', label: '底座:F + 窗口 12 + 量比查突破那根', patch: { ...RECOMMENDED_BASE } },
+  { key: 'v-base', label: '底座:现行 + 窗口 12 + 量比查突破那根', patch: { ...RECOMMENDED_BASE } },
   { key: 'v-vol15', label: '底座 + 突破那根量比 ≥ 1.5', patch: { ...RECOMMENDED_BASE, retest_vol_min: 1.5 } },
   { key: 'v-vol20', label: '底座 + 突破那根量比 ≥ 2.0', patch: { ...RECOMMENDED_BASE, retest_vol_min: 2 } },
   { key: 'v-chase08', label: '底座 + 只在距突破位 ≤ 0.8 ATR 处入场', patch: { ...RECOMMENDED_BASE, chase_atr_max: 0.8 } },
@@ -532,14 +540,15 @@ export interface FunnelSymbol {
   weeks: number;
   conditions: ConditionRow[];
   /**
-   * 同样的边际分析,但底座换成"突破位用前 20 根"。现行口径下 `breakout` 恒为假,于是它一个人
-   * 吃掉全部杀伤、其余六条的边际杀伤必然是 0 —— 那张表只证明了根因,证明不了"第二凶手是谁"。
+   * 兼容字段。原意是"底座换成突破位用前 20 根"的边际分析(旧现行口径 self 下 `breakout` 恒为假,
+   * `conditions` 只能证明根因)。现行规则已是修过的口径,所以它与 `conditions` 相同;只有调用方
+   * 用 `thresholds.breakout_level: 'self'` 复现旧 bug 时,它才换成 `prior` 口径单独算。
    */
   conditions_fixed: ConditionRow[];
   joint: number;
   setups: number;
   per_week: number;
-  /** 参考口径:WATCH 资格、现行"回踩确认"、prior 口径下"最近一根收破"。 */
+  /** 参考口径:WATCH 资格、现行"回踩确认"、"最近一根收破其前 20 根"。 */
   watch_eligible: number;
   retest_confirmed: number;
   breakout_prior_last_bar: number;
@@ -597,7 +606,7 @@ export function funnelForSeries(symbol: string, s: SeriesBundle, from: number, t
   };
   const evals = metrics.map((m) => evaluateBar(m, th0));
   const conditions = conditionsFor(th0);
-  const conditionsFixed = conditionsFor({ ...th0, breakout_level: 'prior' });
+  const conditionsFixed = th0.breakout_level === 'self' ? conditionsFor({ ...th0, breakout_level: 'prior' }) : conditions;
 
   const runRungs = (rungs: LadderRung[]): LadderRow[] =>
     rungs.map((rung) => {

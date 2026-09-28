@@ -1,3 +1,7 @@
+import { pickSnapshotAsOf, waitForMarketRead } from '@/api/market-adapt';
+import { JudgeLock } from '@/components/judge-lock';
+import { friendlyError } from '@/lib/edition';
+import { CacheNote, cachePollMs } from './cache-note';
 /**
  * 「市场」栏:搜 OKX.AI 上的 ASP 服务(`service-match` 直通)、看详情、试用 / 订阅。
  * 订阅确认弹窗是我们自己画的;网关跑 `create-subscribe`,**不带任何 autotrade 参数**,
@@ -28,7 +32,7 @@ import { cn } from '@/lib/utils';
 import { t } from '@/lib/i18n';
 import { EmptyNote, ErrorNote, MODE_HINT, fmtServicePrice, fmtTrial, fmtUsdt, isSubscriptionService } from './shared';
 
-const DEFAULT_KEYWORDS = '信号 signal 合约 perp';
+const DEFAULT_KEYWORDS = '信号 signal 合约 perp'; // i18n-ignore(OKX.AI 目录搜索词,服务标题多为中文,中英都要)
 
 function aspUrl(agentId: string): string {
   return `https://www.okx.ai/agents/${encodeURIComponent(agentId)}`;
@@ -89,13 +93,17 @@ function ServiceCard({ s, onDetail, onSubscribe }: { s: MarketService; onDetail:
           {subscribable && !s.is_subscribing ? (
             <>
               {trial ? (
-                <Button size="xs" variant="outline" onClick={() => onSubscribe(true)}>
-                  {t('试用')}
-                </Button>
+                <JudgeLock feature="asp_subscribe">
+                  <Button size="xs" variant="outline" onClick={() => onSubscribe(true)}>
+                    {t('试用')}
+                  </Button>
+                </JudgeLock>
               ) : null}
-              <Button size="xs" onClick={() => onSubscribe(false)}>
-                {t('订阅')}
-              </Button>
+              <JudgeLock feature="asp_subscribe">
+                <Button size="xs" onClick={() => onSubscribe(false)}>
+                  {t('订阅')}
+                </Button>
+              </JudgeLock>
             </>
           ) : !subscribable ? (
             <span className="text-[10.5px] text-muted-foreground" title={t('按次服务要发任务而不是订阅,这一版只接订阅制')}>
@@ -109,7 +117,7 @@ function ServiceCard({ s, onDetail, onSubscribe }: { s: MarketService; onDetail:
 }
 
 function DetailSheet({ agentId, onClose, onSubscribe }: { agentId: string | null; onClose: () => void; onSubscribe: (s: MarketService, trial: boolean) => void }) {
-  const q = useQuery({ queryKey: ['market', 'asp-detail', agentId], queryFn: () => api.marketAspDetail(agentId!), enabled: agentId !== null, staleTime: 300_000 });
+  const q = useQuery({ queryKey: ['market', 'asp-detail', agentId], queryFn: () => api.marketAspDetail(agentId!), refetchInterval: cachePollMs, enabled: agentId !== null, staleTime: 300_000 });
   const d: MarketAspDetail | null = q.data ?? null;
   return (
     <Sheet open={agentId !== null} onOpenChange={(o) => !o && onClose()}>
@@ -119,7 +127,8 @@ function DetailSheet({ agentId, onClose, onSubscribe }: { agentId: string | null
           <SheetDescription>{t('资料 / 服务 / 评价。评价评的是交付合规,不是盈亏;市场上看不到 ASP 历史业绩。')}</SheetDescription>
         </SheetHeader>
         <div className="min-h-0 flex-1 overflow-y-auto p-4 text-[12px]">
-          {q.isLoading ? (
+          <CacheNote cache={q.data?.cache} asOf={pickSnapshotAsOf(q.data)} />
+          {q.isLoading || q.data?.cache?.fetched_at === null ? (
             <div className="space-y-2">
               <Skeleton className="h-16 w-full" />
               <Skeleton className="h-24 w-full" />
@@ -177,13 +186,17 @@ function DetailSheet({ agentId, onClose, onSubscribe }: { agentId: string | null
                         {isSubscriptionService(s) && !s.is_subscribing ? (
                           <div className="ml-auto flex gap-1">
                             {fmtTrial(s) ? (
-                              <Button size="xs" variant="outline" onClick={() => onSubscribe(s, true)}>
-                                {t('试用')}
-                              </Button>
+                              <JudgeLock feature="asp_subscribe">
+                                <Button size="xs" variant="outline" onClick={() => onSubscribe(s, true)}>
+                                  {t('试用')}
+                                </Button>
+                              </JudgeLock>
                             ) : null}
-                            <Button size="xs" onClick={() => onSubscribe(s, false)}>
-                              {t('订阅')}
-                            </Button>
+                            <JudgeLock feature="asp_subscribe">
+                              <Button size="xs" onClick={() => onSubscribe(s, false)}>
+                                {t('订阅')}
+                              </Button>
+                            </JudgeLock>
                           </div>
                         ) : null}
                       </div>
@@ -196,7 +209,7 @@ function DetailSheet({ agentId, onClose, onSubscribe }: { agentId: string | null
 
               <div>
                 <p className="mb-1.5 text-[11px] font-semibold text-muted-foreground">{t('评价 {n} 条', { n: d.feedback.length })}</p>
-                {d.feedback_error ? <p className="text-[11px] text-warn">{d.feedback_error}</p> : null}
+                {d.feedback_error ? <p className="text-[11px] text-warn">{friendlyError(d.feedback_error)}</p> : null}
                 <div className="flex flex-col gap-1.5">
                   {d.feedback.map((f, i) => (
                     <div key={i} className="rounded border bg-muted/20 px-2 py-1.5 text-[11px]">
@@ -252,8 +265,8 @@ function SubscribeDialog({
         fee_token_address: s!.fee_token_address ?? '',
         use_trial: target!.trial,
         auto_renew: autoRenew,
-        title: title || `trading-swarm · ${s!.service_name}`,
-        description: t('trading-swarm 信号市场订阅:投递进本机网关账本,人工/agent 判定后才执行。'),
+        title: title || `trade-gate · ${s!.service_name}`,
+        description: t('trade-gate 信号市场订阅:投递进本机网关账本,人工/agent 判定后才执行。'),
         mode,
         approval,
         weight: Math.max(0, Math.min(1, Number(weight) || 0)),
@@ -276,7 +289,7 @@ function SubscribeDialog({
     },
     onSettled: () => { void qc.invalidateQueries({ queryKey: ['market'] }); },
     onError: (err) => {
-      toast.error(t('订阅失败'), { description: err instanceof Error ? err.message : String(err) });
+      toast.error(t('订阅失败'), { description: friendlyError(err instanceof Error ? err.message : String(err)) });
     },
   });
   const fee = s ? fmtServicePrice(s) : '';
@@ -313,7 +326,7 @@ function SubscribeDialog({
             </div>
             <div className="flex flex-col gap-1.5">
               <Label>{t('订阅标题(给 OKX 那边看的)')}</Label>
-              <Input maxLength={30} value={title} placeholder={`trading-swarm · ${s.service_name}`} onChange={(e) => setTitle(e.target.value)} className="h-7 text-[11.5px]" />
+              <Input maxLength={30} value={title} placeholder={`trade-gate · ${s.service_name}`} onChange={(e) => setTitle(e.target.value)} className="h-7 text-[11.5px]" />
             </div>
             <div className="flex items-center justify-between">
               <Label>{t('自动续费')}</Label>
@@ -362,7 +375,7 @@ function SubscribeDialog({
                 </Select>
               </div>
             ) : null}
-            <p className="text-[10.5px] text-muted-foreground">{t('不走 OKX 自己的自动交易授权(autotrade);信号进本机账本,执行只发生在 trading-swarm 的闸门之后。')}</p>
+            <p className="text-[10.5px] text-muted-foreground">{t('不走 OKX 自己的自动交易授权(autotrade);信号进本机账本,执行只发生在 trade-gate 的闸门之后。')}</p>
             {notice ? (
               <div className="flex flex-col items-center gap-2 rounded border border-warn/40 bg-warn/10 p-2.5">
                 <span className="text-[11px] font-medium text-warn">{t('余额不够,先往 Agentic Wallet 充 XLayer USDT')}</span>
@@ -377,14 +390,16 @@ function SubscribeDialog({
             ) : null}
           </div>
         ) : null}
-        {sub.error ? <p role="alert" className="whitespace-pre-wrap break-words text-[12px] text-down">{sub.error.message}</p> : null}
+        {sub.error ? <p role="alert" className="whitespace-pre-wrap break-words text-[12px] text-down">{friendlyError(sub.error.message)}</p> : null}
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={onClose} disabled={sub.isPending}>
             {t('取消')}
           </Button>
-          <Button size="sm" onClick={() => sub.mutate()} disabled={sub.isPending || !status?.wallet.logged_in}>
-            {sub.isPending ? t('签名中…') : target?.trial ? t('开通试用') : t('确认订阅')}
-          </Button>
+          <JudgeLock feature="asp_subscribe">
+            <Button size="sm" onClick={() => sub.mutate()} disabled={sub.isPending || !status?.wallet.logged_in}>
+              {sub.isPending ? t('签名中…') : target?.trial ? t('开通试用') : t('确认订阅')}
+            </Button>
+          </JudgeLock>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -410,11 +425,11 @@ export function BrowseTab({ status, onSubscribed }: { status: MarketStatus | nul
     if (resolvingRef.current) return;
     resolvingRef.current = true; setResolving(true);
     try {
-      const r = await api.marketServicesOf(agent.agent_id);
+      const r = await waitForMarketRead(() => api.marketServicesOf(agent.agent_id));
       const hit = resolveCatalogService(r.services, service, trial);
       setSubTarget({ service: hit, trial });
     } catch (err) {
-      toast.error(t('拉不到服务信息'), { description: err instanceof Error ? err.message : String(err) });
+      toast.error(t('拉不到服务信息'), { description: friendlyError(err instanceof Error ? err.message : String(err)) });
     } finally {
       resolvingRef.current = false; setResolving(false);
     }
@@ -422,17 +437,17 @@ export function BrowseTab({ status, onSubscribed }: { status: MarketStatus | nul
 
   const q = useQuery({
     queryKey: ['market', 'search', submitted, maxFee],
-    queryFn: () => api.marketSearch({ keywords: submitted, max_fee: maxFee || undefined }),
+    refetchInterval: cachePollMs, queryFn: () => api.marketSearch({ keywords: submitted, max_fee: maxFee || undefined }),
     staleTime: 60_000,
     enabled: mode === 'search',
   });
   const more = useMutation({
-    mutationFn: () => api.marketSearch({ after: q.data?.search_after ?? after ?? undefined }),
+    mutationFn: () => waitForMarketRead(() => api.marketSearch({ after: after ?? q.data?.search_after ?? undefined })),
     onSuccess: (r) => {
       setPages((p) => [...p, r.services]);
       setAfter(r.search_after);
     },
-    onError: (err) => toast.error(t('翻页失败'), { description: err instanceof Error ? err.message : String(err) }),
+    onError: (err) => toast.error(t('翻页失败'), { description: friendlyError(err instanceof Error ? err.message : String(err)) }),
   });
 
   const services = useMemo(() => {
@@ -498,7 +513,8 @@ export function BrowseTab({ status, onSubscribed }: { status: MarketStatus | nul
         </label>
         <span className="ml-auto">{t('{n} 个服务', { n: services.length })}</span>
       </div>
-      {q.isLoading ? (
+      <CacheNote cache={q.data?.cache} asOf={pickSnapshotAsOf(q.data)} />
+      {q.isLoading || q.data?.cache?.fetched_at === null ? (
         <div className="grid grid-cols-1 gap-2 p-3 sm:grid-cols-2 xl:grid-cols-3">
           <Skeleton className="h-40 w-full" />
           <Skeleton className="h-40 w-full" />
@@ -507,7 +523,7 @@ export function BrowseTab({ status, onSubscribed }: { status: MarketStatus | nul
       ) : q.isError ? (
         <ErrorNote err={q.error} />
       ) : services.length === 0 ? (
-        <EmptyNote>{q.data?.unmatch_reason ?? t('没搜到服务;换个关键词,或者关掉筛选。')}</EmptyNote>
+        <EmptyNote>{friendlyError(q.data?.unmatch_reason) ?? t('没搜到服务;换个关键词,或者关掉筛选。')}</EmptyNote>
       ) : (
         <ScrollArea className="min-h-0 flex-1">
           <div className="grid grid-cols-1 gap-2 p-3 sm:grid-cols-2 xl:grid-cols-3">

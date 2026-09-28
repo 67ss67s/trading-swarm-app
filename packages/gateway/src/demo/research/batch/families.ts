@@ -5,7 +5,7 @@
  * 组合族(横截面动量、资金费套利)是 research-batch.json 的组合级原语节点,不是 IR。
  * 参数按根数给,四个周期共用;每族 2–4 组,不做网格。变体 id 稳定(族/参数/市场/方向/周期),重跑逐位一致。
  */
-import type { StrategyIR, StrategyPrimitive } from '@trading-swarm/contracts';
+import type { StrategyIR, StrategyPrimitive } from '@trade-gate/contracts';
 import { node } from '../strategy.js';
 import type { CarryParams } from '../primitives/portfolio-carry.js';
 import type { XsmomParams } from '../primitives/portfolio-xsmom.js';

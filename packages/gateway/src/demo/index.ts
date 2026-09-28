@@ -1,4 +1,4 @@
-// Public surface of the demo runtime for tooling (evals, scripts). Import as `import { demo } from '@trading-swarm/gateway'`.
+// Public surface of the demo runtime for tooling (evals, scripts). Import as `import { demo } from '@trade-gate/gateway'`.
 export * from './types.js';
 export { buildContext, PROMPT_VERSION, type EpisodeInputs, type BuiltContext } from './context.js';
 export { validateJudgment, extractJson, validateMarketState, findMemoryNumberLeaks, type ValidationResult } from './schema.js';

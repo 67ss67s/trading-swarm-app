@@ -1,4 +1,4 @@
-import type { ResearchDataset } from '@trading-swarm/contracts';
+import type { ResearchDataset } from '@trade-gate/contracts';
 export function periodsPerYear(timeframe_ms:number, calendar:ResearchDataset['calendar']='crypto_24_7'):number {
   if(!Number.isSafeInteger(timeframe_ms)||timeframe_ms<=0)throw new Error('timeframe_invalid');
   return calendar==='us_equity_rth'?252*Math.max(1,23400000/timeframe_ms):365*86400000/timeframe_ms;

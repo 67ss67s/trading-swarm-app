@@ -8,7 +8,7 @@ Jacky 上线后的第一批要求,原话转述:**按方向、交易频率、止�
 归因缺了分层就是把 5m 和 1d 的 R 混在一个池子里平均;归因缺了决策记录就只能解释已成交的那些,
 解释不了「它本来想做但被拒了」那半边。
 
-本文只写这一包。**不动** strategy-signals / outcome / replay-stats / strategy-lab(两个 外部评审在改),
+本文只写这一包。**不动** strategy-signals / outcome / replay-stats / strategy-lab(两个 astra 在改),
 **不动**执行/撤单/保护段。
 
 ---
@@ -88,7 +88,7 @@ exits: { insufficient, n,
   stop_distance_pct_p50,
   cost_over_risk_p50 }                                     // 止损距离 vs 成本比
 ```
-`cost_over_risk` 是 复审里点名的那个诊断量:双 taker 10bp 想把费用压到 ≤ 0.1R,价格止损距离
+`cost_over_risk` 是 Codex 复审里点名的那个诊断量:双 taker 10bp 想把费用压到 ≤ 0.1R,价格止损距离
 至少得 ~0.7%。这个比值 > 0.2 基本等于「策略在给交易所打工」。
 
 **D. 周期一致性**

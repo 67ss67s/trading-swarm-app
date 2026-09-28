@@ -1,6 +1,6 @@
 import { needsMicrostructure, type MicrostructureSource } from './microstructure.js';
 import { DecisionError } from '../../decisions.js';
-import type { ResearchBar, StrategyIR } from '@trading-swarm/contracts';
+import type { ResearchBar, StrategyIR } from '@trade-gate/contracts';
 import { hash } from '../primitives.js';
 import { buildJudgeState, decisionQuestions, evaluateJudgeRule, normalizeAnswers, validateJudge, validateState } from './pure.js';
 import { AtomicCallBudget, JudgeDecisionStore, decisionId, usdUnits } from './store.js';

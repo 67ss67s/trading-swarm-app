@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { demo } from '@trading-swarm/gateway';
+import { demo } from '@trade-gate/gateway';
 import { buildCase, stubJudge } from '../src/index.js';
 import { synthCases } from './helpers/synthetic.js';
 

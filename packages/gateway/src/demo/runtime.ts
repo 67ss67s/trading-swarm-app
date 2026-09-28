@@ -1,9 +1,18 @@
+import { BoundedMap } from './bounded-map.js';
+import { isExternalPosition } from './external-position.js';
+import { aspSnapshotEnabled } from './asp-snapshot.js';
+import { judgmentCjkFields, rewriteJudgmentInEnglish, withOutputLanguage } from './output-language.js';
+import { spotWatchlist } from './poll-instruments.js';
+import { dependencyHealth } from './dependency-health.js';
+import { chatRole, type AgentChatState } from './agent-registry.js';
+import { aspReadonlyChatTools } from './asp-agent/chat-read.js';
 import { AgentStrategyService } from './agent-strategy.js';
 import { matrixStudyService, type MatrixStudyHooks } from './routes-matrix-study.js';
 import { recorderMicrostructure } from './micro-source.js';
+import { jevShadowFactory } from './judge-live.js';
 import { AtomicCallBudget, JudgeDecisionStore, fromDecisionClient, type JudgeRuntime } from './research/judge/index.js';
 import { hash } from './research/primitives.js';
-import type { StrategyIR } from '@trading-swarm/contracts';
+import type { StrategyIR } from '@trade-gate/contracts';
 import { recommendAssets, recommendationSummary, RecommendationStore } from './recommend.js';
 import { currentUniverse, latestUniverseScan } from './universe-okx.js';
 import { StrategyRunner, isStrategyRunThread, parseRunFilter, runOrigin, strategyBlock, type RunEnvironment, type RunOpenResult, type StrategyRun } from './strategy-run.js';
@@ -36,7 +45,7 @@ import { EventEmitter } from 'node:events';
 import { randomBytes } from 'node:crypto';
 import type { Brain } from './brain.js';
 import { commandForKind, estimateCny, makeBrain } from './brain.js';
-import { cliLaunchStatus } from './cli-launch.js';
+import { cliLaunchStatusView } from './cli-launch.js';
 import { ModelRouter, type ModelRole, type ModelRouterDeps } from './model-connections.js';
 import { DEFAULT_DECISION_DAILY_USD_CAP, type DecisionClient } from './decisions.js';
 import { edgeFor, GRAPH_VERSION, guardsFromGates } from './graph.js';
@@ -48,6 +57,8 @@ import type { ExecBackend, OrderReceipt, PaperEvent } from './execution.js';
 import { DEFAULT_MCP_NAME, DEFAULT_MCP_URL, isTransportError, probeMcpConnection } from './execution-agent.js';
 import { requestSizingOpinion, sizingEvidence } from './sizing-agent.js';
 import { computeSizing, DEFAULT_GATES, evaluateGates, unknownOrderGate, type GateConfig } from './gates.js';
+import { aiScanEpisodes, runEventsSince, summarizeAiScan, summarizeRun } from './trading-sources.js';
+import { blendedTarget, checkPolicyPatch, codeFromText, executionPolicyBounds, executionPolicyValues, executionThresholds, floorModeOf, gateReasonCode, netRrCheck, STOP_FLOOR_ATR_TFS, stopFloorPct, stopGeometry, stopGeometryReason, type StopFloorTf } from './execution-policy.js';
 import { runInformationOfficer } from './info.js';
 import { minBarsFor, strategyForBackend, strategyKey, strategyWakes, type StrategySpec } from './strategies.js';
 import { redactDeep, redactSecrets, redactSignalSecrets, type FollowCredentials } from './trader-feed.js';
@@ -88,7 +99,7 @@ export interface ExecuteOpenFact {
 
 /** 「已发出未确认」的统一文案 —— 补拉重号与恢复两个入口共用同一句、同一组参数(R5-01)。 */
 const QUARANTINE_TRIGGERED_WHY = '上次运行已经发出过动作但没记完结果';
-import { alignLimitPrice, entryStyleGate, finalEntryCheck, freezeEntryBasis, nearEntryZone, pendingReviewDue } from './entry-policy.js';
+import { alignLimitPrice, classifyEntryOrder, entryStyleGate, finalEntryCheck, freezeEntryBasis, nearEntryZone, pendingReviewDue } from './entry-policy.js';
 
 /** 一次扫描最多向模型问几条策略的票(与 WORKFLOW_BOUNDS.active_strategies_max 同量级,防止延迟失控)。 */
 const COUNCIL_MODEL_MAX = 4;
@@ -112,10 +123,10 @@ import type { RiskAlertRow } from './team-store.js';
 import { extractJson, findMemoryNumberLeaks, validateJudgment } from './schema.js';
 import type { DemoStore } from './store.js';
 import type { DecisionReasonCode } from './types.js';
-import { ATTRIBUTION_GRACE_MS, hasLiveStop, isOpen, newThread, nextLegCid, openingBlockers, preflightBlockers, qtyGreater, reconcileThread, reduceReview, subQty, threadClientPrefix } from './threads.js';
+import { ATTRIBUTION_GRACE_MS, ENTRY_MISS_SPACING_MS, entrySubmitRef, entryUnknownVerifyDue, hasLiveStop, isOpen, newThread, nextLegCid, openingBlockers, preflightBlockers, qtyGreater, reconcileThread, reduceReview, subQty, threadClientPrefix } from './threads.js';
 import type { AccountView, ActivityItem, ActivityKind, Backend, BrainKind, ChatMessage, DailyRegime, DailyRegimeKind, DemoIntent, Direction, Episode, EpisodeStep, ExecutionOption, ExecutionView, HistoryResponse, HistoryThreadRow, InformationEvent, Judgment, Kline, LogLine, LoopView, ManualOrderRequest, MarketState, MarketView, QueueView, RegimeView, SessionInfo, StrategyThread, SymbolInfo, ThreadSettlement, Trigger, TriggerHit, TriggerKind, Usage, UsageToday, Workflow } from './types.js';
 import { summarize, tierOf } from './types.js';
-import { applyWorkflowPatch, backendsFor, BACKENDS, loadWorkflow, tierPolicyOf, tierSlotsOf, WORKFLOW_BOUNDS } from './workflow.js';
+import { applyWorkflowMigration, applyWorkflowPatch, backendsFor, BACKENDS, DEFAULT_PLAYBOOK, loadWorkflow, migrateWorkflowJson, tierPolicyOf, tierSlotsOf, WORKFLOW_BOUNDS } from './workflow.js';
 import { exchange } from './market.js';
 import { okxStatusView } from './execution-okx.js';
 import { buildDecisionRecord } from './attribution.js';
@@ -168,7 +179,7 @@ function localDayStart(now: number): number {
 
 export const BACKEND_LABELS: Record<Backend, string> = {
   paper: '纸面模拟(本地撮合)',
-  demo: 'Binance 模拟盘(tswarm-demo-exec)',
+  demo: 'Binance 模拟盘(tgate-demo-exec)',
   cli: 'Binance 模拟盘(官方 binance-cli)',
   agent_mcp: '币安官方 MCP(agent CLI 驱动)',
   mcp: '币安 MCP 直连(网关自己调)',
@@ -176,7 +187,7 @@ export const BACKEND_LABELS: Record<Backend, string> = {
 };
 const BACKEND_NOTES: Record<Backend, string> = {
   paper: '不碰交易所,余额与持仓存在本地库里;换后端不会带走纸面持仓。',
-  demo: '走 Rust 子进程 tswarm-demo-exec,密钥只在子进程里。',
+  demo: '走 Rust 子进程 tgate-demo-exec,密钥只在子进程里。',
   cli: '走官方 binance-cli(Skills Hub binance 技能),BINANCE_API_ENV=demo,密钥在 CLI 自己的 profile 里。',
   agent_mcp: '每个写操作 = 一次 agent CLI 运行,由它调币安官方 MCP 工具;网关不持有任何币安密钥或 token。读接口里只有账户与订单查询要花一次 CLI 运行(有缓存),行情走公开 REST。',
   mcp: '网关用自己的 OAuth token 直连币安官方 MCP,按人工确认过的工具映射下单:一笔单 = 一次 HTTP,零模型成本,回执是交易所原文;没映射到的操作一律拒绝执行。',
@@ -223,7 +234,7 @@ export class DemoRuntime extends EventEmitter {
   private switching: Promise<string | null> | null = null;
   private capNoticeAt = 0;
   workflow: Workflow;
-  markets = new Map<string, MarketView>();
+  markets = new BoundedMap<string, MarketView>(4096);
   account: AccountView | null = null;
   marketState: MarketState | null = null;
   readonly queue: BrainQueue;
@@ -248,13 +259,15 @@ export class DemoRuntime extends EventEmitter {
   private readonly submitEpoch = id('epoch');
   private protectionRun: { market?: Market; running: boolean; symbol: string | null; last_run_at: number | null; last_error: string | null; steps: { name: string; ok: boolean; detail: string }[] } = { running: false, symbol: null, last_run_at: null, last_error: null, steps: [] };
   private readonly proposals = new Map<string, WorkflowProposal>();
-  private capacityRules = new Map<string, CapacityRules>();
+  private capacityRules = new BoundedMap<string, CapacityRules>(4096);
   private capacityRulesAt = 0;
   riskOpen: RiskAlertRow[] = [];
   private riskEvaluating = false;
   private brains: Partial<Record<BrainKind, Brain>>;
-  private brainCache = new Map<string, Brain>();
+  private brainCache = new BoundedMap<string, Brain>(32);
   private readonly gatesCfg: GateConfig;
+  /** 测试注入了 opts.gates:止损上下限以注入值为准,不读 workflow(§9.56)。 */
+  private readonly gatesInjected: boolean;
   private halted = false;
   private inFlight: Episode | null = null;
   /** stop() 之后为 true:已经在飞的回调不许再排下一次定时(否则 emitLoop → 已关闭的库,teardown 竞态)。 */
@@ -273,6 +286,8 @@ export class DemoRuntime extends EventEmitter {
   private readonly marketPollMs: number;
   private readonly accountPollMs: number;
   private cancelingEntries = new Set<string>();
+  /** 09-26 stuck-entry:executeOpen 还在跑的线程(本进程内)。终态复核绝不碰它们,调用自己会收尾。 */
+  private openInFlight = new Set<string>();
   private protectionRetryAt = new Map<string, number>();
   private protectionWork = new Map<string, number>();
   private externalWarnedAt = 0;
@@ -300,19 +315,23 @@ export class DemoRuntime extends EventEmitter {
   private lastProtectionRefreshAt = 0;
   private approving = new Set<string>();
   // v3 triggers / regime (docs/demo/v3-ui-contract.md §0)
-  private markHistory = new Map<string, { at: number; mark: number }[]>();
-  private lastModelCallAt = new Map<string, number>();
-  private lastFeatures = new Map<string, TfFeatures>();
-  private lastH1 = new Map<string, TfFeatures>();
+  private markHistory = new BoundedMap<string, { at: number; mark: number }[]>(4096);
+  private lastModelCallAt = new BoundedMap<string, number>(4096);
+  private lastFeatures = new BoundedMap<string, TfFeatures>(4096);
+  private lastH1 = new BoundedMap<string, TfFeatures>(4096);
+  /** 止损底线和 stop_conversions 用的 ATR14 缓存,键 `${market}:${symbol}:${tf}`;同一根 K 线收盘前复用,不每次拉网络。 */
+  private atrCache = new Map<string, { atr: number; close: number; bar_close: number; fetched_at: number }>();
+  private atrInflight = new Map<string, Promise<number | null>>();
+  private atrLastTry = new Map<string, number>();
   /** Fingerprint of what the playbook saw at the last model call per symbol (heartbeat de-dup, fingerprint.ts). */
-  private lastAskFingerprint = new Map<string, string>();
-  private heartbeatSkipped = new Map<string, number>();
-  private regimeCache = new Map<string, { at: number; regime: DailyRegime | null }>();
-  private fastMoveFiredAt = new Map<string, number>();
+  private lastAskFingerprint = new BoundedMap<string, string>(4096);
+  private heartbeatSkipped = new BoundedMap<string, number>(4096);
+  private regimeCache = new BoundedMap<string, { at: number; regime: DailyRegime | null }>(4096);
+  private fastMoveFiredAt = new BoundedMap<string, number>(4096);
   private prevSessionName: SessionInfo['name'] | null = null;
-  private lastTriggerHits = new Map<string, TriggerHit[]>();
+  private lastTriggerHits = new BoundedMap<string, TriggerHit[]>(4096);
   /** v3.5: funding history per symbol for the 30-day z-score; refreshed at most hourly (it moves every 8h). */
-  private fundingHistory = new Map<string, { at: number; rows: { at: number; rate: string }[] }>();
+  private fundingHistory = new BoundedMap<string, { at: number; rows: { at: number; rate: string }[] }>(4096);
 
   readonly executorControl = new ExecutorControl(() => this.botEnabled('executor'));
   botEnabled(role: BotRole): boolean { return this.store.bots.profile(role)?.enabled !== false; }
@@ -346,9 +365,12 @@ export class DemoRuntime extends EventEmitter {
     this.brains = opts.brains ?? {};
     this.modelRouterOpts = opts.models ?? {};
     this.gatesCfg = opts.gates ?? DEFAULT_GATES;
+    this.gatesInjected = opts.gates !== undefined;
     this.marketPollMs = opts.marketPollMs ?? 10_000;
     this.accountPollMs = opts.accountPollMs ?? 15_000;
-    this.workflow = loadWorkflow(this.store.loadWorkflowJson());
+    const workflowJson = this.store.loadWorkflowJson();
+    this.workflow = loadWorkflow(workflowJson);
+    const migration = migrateWorkflowJson(workflowJson);
     this.protectionCreds = new ProtectionCredentials(this.store);
     this.halted = this.store.kvGet('demo.halted') === '1';
     this.queue = new BrainQueue((v) => this.emit('queue.state', v));
@@ -359,6 +381,24 @@ export class DemoRuntime extends EventEmitter {
     // The boot choice wins over whatever was persisted: `workflow.execution` must always name the
     // backend actually running, or the UI would offer to "switch" to the one it is already on.
     this.workflow.execution = this.backend.kind;
+    if (migration.changes.length) this.applyStartupMigration(migration.changes);
+  }
+
+  /** 09-27 止损底线/playbook 的一次性迁移(规则见 workflow.ts migrateWorkflowJson):存库并记一条活动日志。 */
+  private applyStartupMigration(changes: { key: string; from: unknown; to: unknown }[]): void {
+    this.workflow = { ...applyWorkflowMigration(this.workflow, changes), updated_at: Date.now() };
+    this.store.saveWorkflow(this.workflow);
+    const label: Record<string, string> = { min_stop_pct: '止损下限 0.3% → 1%', min_stop_atr: 'ATR 止损下限 0.5 → 1 倍', playbook_text: 'playbook 换成新默认(止损那句改成至少 1%)' };
+    const detail = changes.map((c) => label[c.key] ?? c.key).join(';');
+    this.log('warn', 'policy', `启动迁移:${detail}(库里是旧默认值、没人改过才迁)`, { changes });
+    this.activity('workflow_changed', { level: 'warn', title: `执行层默认值更新:${detail}`, detail: '库里存的是旧默认值(没人改过),按 09-27 新默认迁移;人改过的值不动。', data: { via: 'migration', changes } });
+  }
+
+  /** §9.56 开仓检查用的配置。止损上下限和 ATR 下限从 workflow 读;测试传了 opts.gates 时用测试给的值。 */
+  private execGates(over: Partial<GateConfig> = {}): GateConfig {
+    const th = executionThresholds(this.workflow);
+    const base = this.gatesInjected ? this.gatesCfg : { ...this.gatesCfg, stop_floor_mode: th.stop_floor_mode, stop_floor_atr_tf: th.stop_floor_atr_tf, min_stop_pct: th.min_stop_pct, max_stop_pct: th.max_stop_pct, min_stop_atr: th.min_stop_atr };
+    return { ...base, ...over };
   }
 
   private strategyRunner: StrategyRunner | null = null;
@@ -449,9 +489,12 @@ export class DemoRuntime extends EventEmitter {
       },
       // 盘口 / 清算特征:与矩阵研究回测同一个录制源(只取 as_of 前已落盘的帧)
       microstructure: recorderMicrostructure(),
-      judge: (run, ir) => this.judgeRuntime(ir, `strategy_run:${run.id}:${utcDayStart(Date.now())}`, 2000, '0.5', {
+      // 作用域以 live: 开头:实盘判断在 research_judge_decisions 里与回测(matrix:)/ASP(asp:)分开(docs/design/jev-live-2026-09-25.md)
+      judge: (run, ir) => this.judgeRuntime(ir, `live:gate:${run.id}:${utcDayStart(Date.now())}`, 2000, '0.5', {
         ir_hash: run.ir_hash, timeframe: run.timeframe, market: run.market, execution: run.execution, risk_pct: run.risk_pct, max_open: run.max_open, leverage: run.leverage,
       }),
+      // Jev 影子判断:无 judge 块的候选也问一次 Jev,只记录不挡单;TG_JEV_SHADOW=0 全局关(单个运行用 jev_shadow=false)
+      ...(process.env['TG_JEV_SHADOW'] === '0' ? {} : { jevShadow: jevShadowFactory({ db: this.store.marketDb, frozen: () => this.modelConnections().frozenDecision(), microstructure: recorderMicrostructure() }) }),
       blocked: () => this.stopped ? '运行时已停止' : this.halted ? '紧急停止中' : this.workflow.paused ? '工作流已暂停' : !this.botEnabled('executor') ? 'Executor 已暂停' : null,
       bars: async (symbol, tf, limit, end, market) => {
         const rows = new Map<number, Kline[]>(); let before = end, count = 0;
@@ -559,6 +602,7 @@ export class DemoRuntime extends EventEmitter {
    * 于是运行器一直以为「没有 ASP 身份」(2026-09-25 联调)。缓存空或超过 5 分钟就主动刷新,失败不抛。
    */
   async refreshAspIdentity(force = false): Promise<void> {
+    if (aspSnapshotEnabled()) return; // 信号市场只读快照模式:不读真实 ASP 身份
     try {
       const raw = this.store.kvGet('market.asp_identity');
       const at = raw ? Number((JSON.parse(raw) as { at?: number }).at ?? 0) : 0;
@@ -576,11 +620,11 @@ export class DemoRuntime extends EventEmitter {
     let publisherEnabled = false;
     try { publisherEnabled = normalizePublisherSettings(JSON.parse(this.store.kvGet('market.settings') ?? '{}').publisher).enabled; } catch { /* 默认关闭 */ }
     const aspId = asp?.['agentId'] ?? asp?.['aspAgentId'] ?? asp?.['id'];
-    return { execution, execution_key: `${kind}:${opts?.profile ?? ''}:${execution.profile ?? ''}`, watchlist: [...this.workflow.watchlist], risk_pct: Number(this.workflow.risk_pct), leverage_cap: this.workflow.leverage,
+    return { execution, execution_key: `${kind}:${opts?.profile ?? ''}:${execution.profile ?? ''}`, watchlist: [...this.workflow.watchlist], risk_pct: Number(this.workflow.risk_pct), leverage_cap: this.workflow.leverage, execution_thresholds: executionThresholds(this.workflow),
       asp: { id: aspId ? String(aspId) : null, identity: !!aspId, active: !!aspId && asp?.['isActive'] !== false && asp?.['active'] !== false, publisher_enabled: publisherEnabled } };
   }
 
-  private async filterStrategyCandidate(run: StrategyRun, c: RunCandidate, ir: import('@trading-swarm/contracts').StrategyIR) {
+  private async filterStrategyCandidate(run: StrategyRun, c: RunCandidate, ir: import('@trade-gate/contracts').StrategyIR) {
     if (this.capGuard(`${c.symbol} 策略过滤`)) return { decision: 'skip' as const, reason: '今日模型额度已用完' };
     const brain = this.brainForRole('filter');
     // 调用前先落 episode 占额度;超时和解析失败同样计费、同样不重试。
@@ -650,7 +694,7 @@ export class DemoRuntime extends EventEmitter {
     const safeMessage = this.modelRouter ? this.modelRouter.redact(redacted) : redacted; // §9.52:模型 key 也不进日志
     const safeData = data === undefined ? undefined : redactDeep(data, creds);
     const line: LogLine = { market, at: Date.now(), level, scope, message: safeMessage, ...(safeData === undefined ? {} : { data: safeData }) };
-    this.store.log(line);
+    if (!this.store.log(line)) return;
     this.emit('log', line);
     const tag = level === 'error' ? 'ERR ' : level === 'warn' ? 'WARN' : 'info';
     console.error(`${new Date(line.at).toISOString()} ${tag} [${scope}] ${safeMessage}`);
@@ -675,11 +719,14 @@ export class DemoRuntime extends EventEmitter {
     microstructure: () => recorderMicrostructure(),
     onConclusion: (row, c) => {
       const spec = row.manifest.spec as { origin?: { chat_session_id?: string | null }; symbols: string[] };
-      const head = c.kind === 'passed' ? `矩阵研究完成:找到 ${c.finalist_ids.length} 条通过留出段检验的候选` : '矩阵研究完成:这次没有找到能用的策略';
-      this.reportToChat(spec.origin?.chat_session_id, `${head}(${spec.symbols.map((x) => x.replace(/USDT$/, '')).join(' / ')})。\n${c.text}\n详情:[矩阵研究](#matrix-study?id=${row.id})`);
+      // 批量验证 v2 三档:通过 / 候补 · 可纸面观察 / 未通过;候补不算通过
+      const nc = c.paper_candidates ?? 0;
+      const head = c.kind === 'passed' ? `批量验证完成:找到 ${c.finalist_ids.length} 条通过最终验收的候选${nc ? `,另有 ${nc} 组候补` : ''}` : nc ? `批量验证完成:没有能直接上实盘的,但有 ${nc} 组值得先用模拟盘看看(候补,未经最终验收;用户同意后可 adopt_matrix_candidate 存成策略)` : '批量验证完成:这次没有找到能用的策略';
+      this.reportToChat(spec.origin?.chat_session_id, `${head}(${spec.symbols.map((x) => x.replace(/USDT$/, '')).join(' / ')})。\n${c.text}\n详情:[批量验证](#matrix-study?id=${row.id})`);
     },
     onAdopted: (row, a) => {
       const spec = row.manifest.spec as { origin?: { chat_session_id?: string | null } };
+      if ('kind' in a && a.kind === 'paper_candidate') { this.reportToChat(spec.origin?.chat_session_id, `候补已存成我的策略 v${a.version}(${a.horizon ?? ''},未经最终验收)。没有自动运行:去 [我的策略](#my-strategies?id=${a.strategy_id}) 里用模拟盘跑起来,看前向表现再说。`); return; }
       this.reportToChat(spec.origin?.chat_session_id, `候选已存成我的策略 v${a.version}(${a.horizon ?? ''})。要让 agent 按它跑,说「切到这条策略」或在 [我的策略](#my-strategies?id=${a.strategy_id}) 里设为当前策略。`);
     },
   };
@@ -745,7 +792,11 @@ export class DemoRuntime extends EventEmitter {
     const key = `${kind}:${model ?? ''}:${command ?? ''}`;
     const cached = this.brainCache.get(key);
     if (cached) return cached;
-    const b = makeBrain(kind, model, { command });
+    const inner = makeBrain(kind, model, { command });
+    const b: Brain = { name: inner.name, complete: async (system, user, opts) => {
+      try { const result = await inner.complete(withOutputLanguage(system), user, opts); if (kind !== 'stub') dependencyHealth.observe('brain', true); return result; }
+      catch (e) { dependencyHealth.observe('brain', false, e); throw e; }
+    } };
     this.brainCache.set(key, b);
     return b;
   }
@@ -781,10 +832,13 @@ export class DemoRuntime extends EventEmitter {
   }
   /** 按角色取大脑:有绑定走绑定(失效即报错,不回退);没绑定 chat/judge/research → 主脑,filter/reviewer/utility → 副脑。 */
   brainForRole(role: Exclude<ModelRole, 'decision'>): Brain {
+    // 浸泡验证实例:库里的角色绑定可能指向真实模型,一律用 stub(底层还有 model-guard.ts 硬闸)。
+    if (process.env['TG_SOAK_OFFLINE'] === '1') return this.brainFor('stub');
     return this.modelConnections().brainForRole(role);
   }
   /** 判断要素的 Decisions 客户端;decision 未绑定 → null。 */
   decisionClient(): DecisionClient | null {
+    if (process.env['TG_SOAK_OFFLINE'] === '1') return null;
     return this.modelConnections().decisionClient();
   }
 
@@ -834,7 +888,7 @@ export class DemoRuntime extends EventEmitter {
       } catch (e) {
         gate = { available: false, note: `状态检查失败:${(e as Error).message}` };
       }
-      const available = kind === this.backend.kind || (this.backendFactories[kind] !== undefined && (kind !== 'agent_mcp' || cliLaunchStatus(agentCommand).ok) && (gate === null || gate.available));
+      const available = kind === this.backend.kind || (this.backendFactories[kind] !== undefined && (kind !== 'agent_mcp' || cliLaunchStatusView(agentCommand).ok) && (gate === null || gate.available));
       const recommended = kind === (ex === 'okx' ? 'okx' : 'cli');
       return { kind, label: BACKEND_LABELS[kind], available, note: !available && gate?.note ? gate.note : BACKEND_NOTES[kind], recommended, setup: recommended && !available ? (gate?.note ?? '还没接好') : null };
     });
@@ -856,7 +910,7 @@ export class DemoRuntime extends EventEmitter {
         server_name: DEFAULT_MCP_NAME,
         url: DEFAULT_MCP_URL,
         command: agentCommand,
-        resolved: cliLaunchStatus(agentCommand),
+        resolved: cliLaunchStatusView(agentCommand),
       },
       connection: this.conn,
       account_read_error: this.accountReadError,
@@ -1085,6 +1139,9 @@ export class DemoRuntime extends EventEmitter {
       const existing = acct.positions.find((p) => p.symbol === symbol && (p.market ?? 'perp') === market) ?? null;
       const owned = existing !== null && this.openThreads().some((t) => t.symbol === symbol && (t.market ?? 'perp') === market);
       if (existing && owned) throw new Error(`${symbol} 已有线程持仓,换一个没有持仓的币再验证`);
+      // 外部仓位(不是本网关开的,例如 okx-demo 账户上手动开的单):只显示,不接管、不平、不动它的保护单。
+      // 重启留下的自家金丝雀孤儿仓仍按 09-06 的口径接管。
+      if (existing && isExternalPosition(existing, acct)) throw new Error(`${symbol} 上有外部仓位(不是本网关开的),验证不会接管或平掉它;换一个没有持仓的币再验证`);
       const adopt = existing !== null;
       step('账户读取', true, adopt ? `权益 ${acct.equity},${symbol} 有一张无主持仓(${existing.side} ${existing.qty}),接管它做验证并顺手平掉` : `权益 ${acct.equity},${symbol} 无持仓`);
       // 残留的条件单(比如上次金丝雀挂上的止损)会让这次同向止损被拒 -4130,先清干净
@@ -1267,6 +1324,11 @@ export class DemoRuntime extends EventEmitter {
     const fresh = this.conn.checked_at !== null && Date.now() - this.conn.checked_at < CONN_PROBE_TTL_MS;
     if (!force && fresh) return this.executionView();
     const before = this.conn.status;
+    // OKX 模式不用币安 MCP:别每分钟 spawn 一次 `claude mcp get`(18811 实测一天 400+ 条状态翻转日志,1 vCPU 上还白烧 CPU)。
+    if (exchange() === 'okx') {
+      this.conn = { status: 'unavailable', checked_at: Date.now(), detail: 'OKX 模式不使用币安 MCP' };
+      return this.executionView();
+    }
     try {
       this.conn = await probeMcpConnection(this.workflow.exec_agent_cli, undefined, undefined, undefined, this.cliCommandFor(this.workflow.exec_agent_cli));
     } catch (e) {
@@ -1383,7 +1445,16 @@ export class DemoRuntime extends EventEmitter {
   static readonly SKIPPED_MODEL = 'code:skipped_model';
   modelJudgmentsToday(): number {
     const since = localDayStart(Date.now());
-    return this.store.episodeCountSince(since) - (this.store.episodeUsageSince(since).find((r) => r.model === DemoRuntime.SKIPPED_MODEL)?.count ?? 0);
+    return this.store.episodeCountSince(since) - (this.store.episodeUsageSince(since).find((r) => r.model === DemoRuntime.SKIPPED_MODEL)?.count ?? 0) + this.langRetriesToday(since);
+  }
+
+  /** 英文评审版的「含中文 → 英文重写」额外模型调用:按本地日计数,计入今日判断次数(daily_judgment_cap)。 */
+  private langRetriesToday(since = localDayStart(Date.now())): number {
+    return Number(this.store.kvGet(`demo.lang_retry.${since}`) ?? '0') || 0;
+  }
+  private bumpLangRetry(): void {
+    const since = localDayStart(Date.now());
+    this.store.kvSet(`demo.lang_retry.${since}`, String(this.langRetriesToday(since) + 1));
   }
 
   /**
@@ -1506,14 +1577,16 @@ export class DemoRuntime extends EventEmitter {
     this.log('info', 'runtime', `启动:观察 ${this.workflow.watchlist.join('/')} ${this.workflow.timeframe},执行后端 ${BACKEND_LABELS[this.backend.kind]},大脑 ${this.brainForRole('judge').name}`);
     await this.pollMarkets();
     await this.pollAccount();
-    this.pollers.push(setInterval(() => void this.pollMarkets(), this.marketPollMs));
+    this.pollers.push(setInterval(() => void this.pollMarkets().catch(e => this.log('error', 'runtime', `行情轮询异常:${String(e)}`)), this.marketPollMs));
     this.pollers.push(setInterval(() => void this.pollAccount(), this.accountPollMs));
     // Risk Sentinel 看门狗:账户轮询卡住/一直失败时,快照会因 as_of 变老而 stale,但没人触发评估——这里每 5 秒看一眼。
     this.pollers.push(setInterval(() => {
       if (this.account && Date.now() - this.account.as_of > this.accountPollMs * 3) this.evaluateTeamRisk(this.account);
     }, 5_000));
-    this.pollers.push(setInterval(() => void this.shadowTick(), 60_000));
+    this.pollers.push(setInterval(() => void this.shadowTick().catch(e => this.log('error', 'runtime', `影子巡检异常:${String(e)}`)), 60_000));
     this.scheduleKline();
+    // 浸泡验证实例(TG_SOAK_OFFLINE=1,paper + stub):不跑信息员/事件采集与跟单循环这些外部源,只留行情、账户与 K 线判断。
+    if (process.env['TG_SOAK_OFFLINE'] === '1') return;
     this.scheduleInfo();
     this.scheduleEvents();
     // P1-14:老库里可能还留着早期版本写进去的 bridge 凭证键(那条写入路径已经删了)。
@@ -1576,7 +1649,7 @@ export class DemoRuntime extends EventEmitter {
     const at = nextCloseAfter(Date.now(), this.workflow.timeframe);
     this.nextAt = at;
     this.klineTimer = setTimeout(() => {
-      void this.onKlineClose(at).finally(() => this.scheduleKline());
+      void this.onKlineClose(at).catch(e => this.log('error', 'runtime', `K线回调异常:${String(e)}`)).finally(() => this.scheduleKline());
     }, Math.max(1000, at - Date.now()));
     this.emitLoop();
   }
@@ -1598,7 +1671,7 @@ export class DemoRuntime extends EventEmitter {
     this.prevSessionName = session.name;
     const open = this.openThreads().filter(t => !isStrategyRunThread(t));
     const needFeatures = this.workflow.scan_mode === 'triggered' || !this.workflow.review_every_close;
-    const hitsBySymbol = new Map<string, TriggerHit[]>();
+    const hitsBySymbol = new BoundedMap<string, TriggerHit[]>(4096);
     if (needFeatures) {
       const symbols = new Set<string>([...this.workflow.watchlist, ...open.map((t) => t.symbol)]);
       await Promise.all(
@@ -1611,6 +1684,8 @@ export class DemoRuntime extends EventEmitter {
             const prevSame = prev && prev.tf === f.tf && prev.last_open_time !== f.last_open_time ? prev : null;
             this.lastFeatures.set(sym, f);
             this.lastH1.set(sym, h1);
+            this.noteAtr(sym, 'perp', f);
+            this.noteAtr(sym, 'perp', h1);
             hitsBySymbol.set(sym, detectTriggers({ symbol: sym, now_tf: f, prev_tf: prevSame, h1, market: this.markets.get(sym) ?? null, session, fast_move_pct: null, fast_move_threshold_pct: Number(this.workflow.fast_move_pct), prev_session: prevSession }));
           } catch (e) {
             this.log('warn', 'trigger', `${sym} 触发器特征拉取失败:${(e as Error).message}`);
@@ -1928,7 +2003,18 @@ export class DemoRuntime extends EventEmitter {
   private async pollMarketsInner(): Promise<void> {
     const pairs = new Map<string, {symbol:string; market:Market}>();
     const add = (symbol:string, market:Market = 'perp') => pairs.set(`${market}:${symbol}`, {symbol,market});
-    for (const symbol of this.workflow.watchlist) for (const market of this.workflow.markets ?? ['perp']) add(symbol, market);
+    let marketFailures = 0;
+    let spotSymbols = new Set<string>();
+    if (this.workflow.markets?.includes('spot')) {
+      try { spotSymbols = await spotWatchlist(this.workflow.watchlist); }
+      catch {
+        marketFailures++;
+        this.log('warn', 'market', '现货 instrument 清单读取失败,本轮跳过现货观察池');
+      }
+    }
+    for (const symbol of this.workflow.watchlist) for (const market of this.workflow.markets ?? ['perp']) {
+      if (market !== 'spot' || spotSymbols.has(symbol)) add(symbol, market);
+    }
     for (const t of this.openThreads()) add(t.symbol,t.market);
     for (const p of this.account?.positions ?? []) add(p.symbol,p.market);
     await Promise.all(
@@ -1942,15 +2028,19 @@ export class DemoRuntime extends EventEmitter {
           if (market === 'spot') return;
           const hist = this.markHistory.get(sym) ?? [];
           hist.push({ at: mv.as_of, mark: Number(mv.mark) });
+          while (hist.length > 4096) hist.shift();
           while (hist.length && mv.as_of - hist[0]!.at > 3 * FAST_MOVE_WINDOW_MS) hist.shift();
           this.markHistory.set(sym, hist);
           const move = windowMovePct(hist, mv.as_of, FAST_MOVE_WINDOW_MS);
           if (move !== null && Math.abs(move) >= Number(this.workflow.fast_move_pct)) this.onFastMove(sym, move);
         } catch (e) {
-          this.log('warn', 'market', `${sym} 行情拉取失败:${(e as Error).message}`);
+          marketFailures++;
+          this.log('warn', 'market', `[${market}] ${sym} 行情拉取失败:${(e as Error).message}`);
         }
       }),
     );
+    // 个别品种超时是常态(噪音日志里合并);过半失败才算行情依赖这一轮失败。
+    if (pairs.size) dependencyHealth.observe('market', marketFailures * 2 < pairs.size, '行情轮询过半失败');
     if (this.pendingPaperEvents.length) await this.pollAccount();
   }
 
@@ -1983,12 +2073,16 @@ export class DemoRuntime extends EventEmitter {
       this.recordEquity(acct, false);
       await this.refreshCapacityRules();
       await this.reconcileThreads(acct);
+      const active = new Set(this.openThreads().map(t => t.id));
+      for (const key of this.protectionRetryAt.keys()) if (!active.has(key) && !this.protectionWork.has(key)) this.protectionRetryAt.delete(key);
       this.detectExternal(acct);
       this.evaluateTeamRisk(acct);
+      dependencyHealth.observe('account', true);
     } catch (e) {
       const msg = (e as Error).message;
       const first = this.accountReadError === null;
       if (first) this.log('warn', 'account', `账户拉取失败:${msg}`);
+      dependencyHealth.observe('account', false, e);
       this.accountReadError = { at: Date.now(), message: msg.slice(0, 300) };
       if (first) this.emit('execution.changed', this.executionView());
       // 账户拉不到也要让哨兵知道:快照会因 as_of 变老而 stale。
@@ -2206,7 +2300,7 @@ export class DemoRuntime extends EventEmitter {
         this.activity('attention', { level: 'warn', symbol: t.symbol, thread_id: t.id, title: `${t.symbol} 跟单挂单已过信号有效期`, detail: '首发不自动撤单,请人工撤掉或让它继续等' });
       }
     }
-    for (const t of this.openThreads()) {
+    for (let t of this.openThreads()) {
       const position = acct.positions.find((p) => p.symbol === t.symbol && (p.market ?? 'perp') === (t.market ?? 'perp') && p.side === t.side) ?? null;
       const openOrders = acct.open_orders.filter((o) => o.symbol === t.symbol && (o.market ?? 'perp') === (t.market ?? 'perp'));
       if (this.halted) {
@@ -2239,6 +2333,14 @@ export class DemoRuntime extends EventEmitter {
         }
       }
       if (this.cancelingEntries.has(t.id) || this.store.thread(t.id)?.version !== t.version) continue;
+      if (entryOrder && entryOrder !== 'unqueried' && typeof t.entry_submitting_since === 'number' && !this.openInFlight.has(t.id)) {
+        // 09-26 stuck-entry:过期的提交相位(调用抛错/崩溃遗留)+ 交易所按 CID 查到了单 = 单确实到了交易所。
+        // 收起相位、把停在 approved 的开仓意图推进到 submitted,之后走常规对账(成交→持仓+保护;挂单→保持)。
+        t = { ...t, entry_submitting_since: null, entry_submit_epoch: null, entry_submitted_at: t.entry_submitted_at ?? t.entry_submitting_since, version: t.version + 1, updated_at: Date.now() };
+        this.saveThread(t);
+        this.resolveUnknownIntents(t, entryOrder); // approved/unknown 的开仓意图按查到的事实收敛(filled/failed/submitted)
+        this.log('warn', 'reconcile', `${t.symbol} 过期提交相位的入场单在交易所查到(${entryOrder.status},累计成交 ${entryOrder.executed_qty}),转常规对账`, { thread_id: t.id, client_order_id: t.entry_client_order_id });
+      }
       if (entryOrder && entryOrder !== 'unqueried' && ['CANCELED', 'EXPIRED'].includes(entryOrder.status)) {
         await this.cancelEntry(t, null, t.close_reason ?? '巡检发现入场单已撤');
         continue;
@@ -2280,7 +2382,7 @@ export class DemoRuntime extends EventEmitter {
         } finally { this.finishProtectionWork(next.id); }
       }
       for (const e of r.events) {
-        this.log(e.kind === 'attention' ? 'warn' : 'info', 'thread', `${next.symbol} ${next.side === 'long' ? '多' : '空'}:${e.message}`, { thread_id: next.id });
+        this.log(e.kind === 'attention' || e.kind === 'lookup_miss' ? 'warn' : 'info', 'thread', `${next.symbol} ${next.side === 'long' ? '多' : '空'}:${e.message}`, { thread_id: next.id, ...(e.kind === 'lookup_miss' ? { client_order_id: next.entry_client_order_id, lookup_misses: next.entry_lookup_misses } : {}) });
         if (e.kind === 'entry_filled' || e.kind === 'closed' || e.kind === 'canceled') this.narrate(`${next.symbol} ${next.side === 'long' ? '多' : '空'}:${e.message}${e.kind === 'closed' && next.realized_pnl ? `,盈亏 ${next.realized_pnl} USDT` : ''}`);
         this.activityForThreadEvent(next, e.kind, e.message, paperClose?.kind ?? null);
       }
@@ -2311,12 +2413,13 @@ export class DemoRuntime extends EventEmitter {
         }
       }
       if (next.attention === 'PROTECTION_MISSING' || next.protection_missing) await this.placeProtectionOutsideStopMove(next, '巡检发现止损缺失');
+      if (r.verify_absent) await this.confirmEntryUnknownNotFound(next.id);
     }
     this.resolveOrphanIntents();
     await this.settlePending();
     // 判断账本(judgment-ledger.ts §9.29):到期未结算的行拉一次 K 线回填三条腿的 R。零模型,失败不影响交易。
     await settleJudgmentLedger(this.store, { fetchKlines, limit: 5, log: (level, message, data) => this.log(level, 'ledger', message, data) }).catch((e) => this.log('warn', 'ledger', `判断账本结算失败:${(e as Error).message}`));
-    try { this.store.memory.sweepOutcomes(); } catch (e) { this.log('warn', 'memory', `记忆后果回写失败:${(e as Error).message}`); }
+    try { this.store.memory.sweepOutcomes(undefined, { incremental: true, limit: 20 }); } catch (e) { this.log('warn', 'memory', `记忆后果回写失败:${(e as Error).message}`); }
     await this.autoReverifyProtection();
     // 影子实盘(strategy-loop.ts §1.2):到期的虚拟线程按真实 K 线结算 R,写回 lab_stats.shadow;
     // 再跑一轮状态机(降级 + shadow→paper 自动晋升)。全程零模型、不碰账户,失败不影响交易。
@@ -2629,7 +2732,8 @@ export class DemoRuntime extends EventEmitter {
   /** The entry order was found again (or filled): thaw the intents that were parked as `unknown`. */
   private resolveUnknownIntents(t: StrategyThread, order: Awaited<ReturnType<ExecBackend['getOrder']>>): void {
     for (const i of this.store.intentsForThread(t.id)) {
-      if (i.status !== 'unknown') continue;
+      // approved = 调用前就停住的开仓意图(过期提交相位);查到单之后同样按事实收敛。
+      if (i.status !== 'unknown' && !(i.status === 'approved' && i.kind === 'open' && i.client_order_id === t.entry_client_order_id)) continue;
       const status: DemoIntent['status'] = order === null ? 'unknown' : /[1-9]/.test(order.executed_qty) && ['FILLED', 'CANCELED', 'EXPIRED'].includes(order.status) ? 'filled' : ['CANCELED', 'EXPIRED', 'REJECTED'].includes(order.status) ? 'failed' : 'submitted';
       if (status !== 'unknown') this.updateIntent(null, i, { status, error: null });
     }
@@ -2646,6 +2750,7 @@ export class DemoRuntime extends EventEmitter {
 
   /** While halted, keep retrying cancel + flatten for a thread until the exchange is provably clean. */
   private async retryHalt(t: StrategyThread, hasPosition: boolean): Promise<void> {
+    if (this.frozenForeign(t, '紧急停止重试')) return;
     const startedAt = Date.now();
     const c = await this.backend.cancelAll(t.symbol, t.market);
     let closed = !hasPosition;
@@ -2690,6 +2795,13 @@ export class DemoRuntime extends EventEmitter {
     this.log('warn', 'exec', `${t.symbol} 紧急停止重试完成`, { thread_id: t.id });
   }
 
+  /** 当前账户上的外部仓位(见 isExternalPosition):只显示,不平、不改保护单、不当孤儿处理。 */
+  externalPositions(acct: AccountView | null = this.account): AccountView['positions'] {
+    if (!acct) return [];
+    const open = this.openThreads();
+    return acct.positions.filter((p) => !open.some((t) => t.symbol === p.symbol && (t.market ?? 'perp') === (p.market ?? 'perp')) && isExternalPosition(p, acct));
+  }
+
   private detectExternal(acct: AccountView): void {
     const open = this.openThreads();
     const now = Date.now();
@@ -2718,6 +2830,7 @@ export class DemoRuntime extends EventEmitter {
   private async protectKnownExposure(threadId: string, acct: AccountView | null, why: string): Promise<void> {
     const t = this.store.thread(threadId);
     if (!t || t.status !== 'in_position' || this.halted || !t.stop_price) return;
+    if (this.frozenForeign(t, '复查保护')) return;
     const account = acct ?? this.account;
     if (account && !account.positions.some((p) => p.symbol === t.symbol && (p.market ?? 'perp') === (t.market ?? 'perp') && p.side === t.side)) return; // 没有敞口就没有要保护的东西
     const missing = account
@@ -2743,6 +2856,102 @@ export class DemoRuntime extends EventEmitter {
     return true;
   }
 
+  /**
+   * 09-26 stuck-entry:「已提交、结果未知」入场单的终态复核。只在 reconcileThread 报 `verify_absent`
+   * (连续 N 次按 CID 查不到、距提交超过 T)时调用。**只读交易所,不下单、不撤单、不重发**。
+   * 撤单链接管的线程(entry_cancel_pending / CANCEL_UNKNOWN)不走这里,走 cancelEntry 里的同一套复核。
+   */
+  private async confirmEntryUnknownNotFound(threadId: string): Promise<void> {
+    const t = this.store.thread(threadId);
+    if (!t || t.status !== 'pending_entry' || !t.entry_client_order_id || t.entry_cancel_pending || t.backend !== this.backend.kind) return;
+    if (this.openInFlight.has(t.id) || this.submitPhaseActive(t) || this.cancelingEntries.has(t.id)) return;
+    const proof = await this.proveEntryAbsent(t);
+    if (!proof.ok) return this.logEntryVerifyBlocked(t, 'reconcile', proof.why);
+    const cur = this.store.thread(t.id);
+    if (!cur || cur.version !== t.version || cur.status !== 'pending_entry' || this.openInFlight.has(t.id)) return; // 复核期间被别的链路改过:下一轮按新事实再来
+    this.finishEntryUnknownNotFound(cur, proof.fresh, '巡检');
+  }
+
+  /**
+   * 「这张入场单没到交易所」的只读证明(巡检与撤单链共用)。写终态之前必须同时满足:
+   * - 本进程没有这条线程的入场调用在飞,提交相位租约也已失效(调用方负责判);
+   * - 新鲜(fresh=true)按 CID 查单仍明确是「不存在」(null);查询抛错 = 读不到,不算否定事实;
+   * - 新鲜账户快照(as_of 晚于本次复核开始)上:该币同市场**没有任何持仓**(单向持仓下反向仓也可能被我们的单改过),
+   *   也没有同 CID 的挂单、没有同币非减仓挂单。
+   */
+  private async proveEntryAbsent(t: StrategyThread): Promise<{ ok: true; fresh: AccountView } | { ok: false; why: string }> {
+    const cid = t.entry_client_order_id;
+    if (!cid) return { ok: false, why: '线程没有入场 CID' };
+    const startedAt = Date.now();
+    let order: Awaited<ReturnType<ExecBackend['getOrder']>>;
+    try {
+      order = await this.backend.getOrder(t.symbol, cid, true, t.market);
+    } catch (e) {
+      return { ok: false, why: `复核查单失败:${(e as Error).message.slice(-200)}` };
+    }
+    if (order !== null) return { ok: false, why: `复核时交易所查到了这张单(${order.status}),交回常规对账` };
+    this.backend.invalidateAccount?.();
+    let fresh: AccountView;
+    try {
+      fresh = await this.backend.account();
+    } catch (e) {
+      return { ok: false, why: `复核账户读失败:${(e as Error).message.slice(-200)}` };
+    }
+    if (fresh.as_of < startedAt) return { ok: false, why: '账户快照早于本次复核,不算零敞口证据' };
+    const same = (x: { symbol: string; market?: Market }): boolean => x.symbol === t.symbol && (x.market ?? 'perp') === (t.market ?? 'perp');
+    const positions = fresh.positions.filter(same);
+    if (positions.length) return { ok: false, why: `${t.symbol} 账户上有持仓 ${positions.map((p) => `${p.side} ${p.qty}`).join(', ')},无法证明入场单没有成交` };
+    const cids = new Set([cid, toClOrdId(cid)]);
+    const orders = fresh.open_orders.filter((o) => same(o) && (cids.has(o.client_order_id ?? '') || !o.reduce_only));
+    if (orders.length) return { ok: false, why: `${t.symbol} 账户上有同 CID 或非减仓挂单 ${orders.map((o) => o.client_order_id ?? '?').join(', ')}` };
+    return { ok: true, fresh };
+  }
+
+  private logEntryVerifyBlocked(t: StrategyThread, scope: 'reconcile' | 'exec', why: string): void {
+    this.log('warn', scope, `${t.symbol} ${t.side === 'long' ? '多' : '空'}:入场单 ${t.entry_client_order_id} 已连续 ${t.entry_lookup_misses} 次查不到,但终态复核未通过(${why});保持现状继续核对,不重发、不自动下单`, { thread_id: t.id, client_order_id: t.entry_client_order_id, code: 'entry_unknown_verify_blocked' });
+  }
+
+  /** 复核通过后的唯一收口:canceled + entry_unknown_not_found,意图 failed,事件齐全。调用方已核过版本。 */
+  private finishEntryUnknownNotFound(cur: StrategyThread, fresh: AccountView, via: '巡检' | '撤单链'): StrategyThread {
+    const cid = cur.entry_client_order_id;
+    const tag = `${cur.symbol} ${cur.side === 'long' ? '多' : '空'}`;
+    const ref = entrySubmitRef(cur);
+    const age = ref === null ? '提交时刻未留存' : `提交后 ${Math.round((Date.now() - ref) / 60_000)} 分钟`;
+    const reason = `entry_unknown_not_found:入场单 ${cid} 连续 ${cur.entry_lookup_misses} 次按 clientOrderId 查不到(${age},${via}复核),确认无同 CID 订单、无 ${cur.symbol} 持仓与挂单;判定未到交易所,释放占位(未重发)${via === '撤单链' && cur.close_reason ? `;原撤单原因:${cur.close_reason}` : ''}`;
+    const next: StrategyThread = { ...cur, status: 'canceled', closed_at: Date.now(), close_reason: reason, attention: null, entry_cancel_pending: false, entry_submitting_since: null, entry_submit_epoch: null, version: cur.version + 1, updated_at: Date.now() };
+    this.saveThread(next);
+    for (const i of this.store.intentsForThread(cur.id)) {
+      if (i.kind === 'open' && ['approved', 'unknown', 'submitted'].includes(i.status)) this.updateIntent(null, i, { status: 'failed', error: reason });
+    }
+    this.resolveOpenIntents(next, 'failed');
+    this.log('warn', via === '巡检' ? 'reconcile' : 'exec', `${tag}:${reason}`, { thread_id: cur.id, client_order_id: cid, code: 'entry_unknown_not_found', lookup_misses: cur.entry_lookup_misses, submitted_at: ref, via });
+    this.activityForThreadEvent(next, 'canceled', reason, null);
+    this.narrate(`${tag}:入场单查无此单,已判定未到交易所并释放占位(没有重发)。`);
+    this.recordEquity(fresh, true);
+    try {
+      this.reviewer.onThreadEnded(next);
+    } catch (e) {
+      this.log('warn', 'reviewer', `复盘卡失败:${(e as Error).message}`, { thread_id: next.id });
+    }
+    return next;
+  }
+
+  /**
+   * 09-26:线程绑在开它的执行通道上(`thread.backend`)。当前通道不是它时,**冻结这条线程的全部自动与手动写动作**:
+   * 任何写只会打到当前通道(例如切到 paper 后,「平仓」会在纸面上得到「无持仓」,进而把 okx 线程误收成 closed;
+   * 「补挂保护」会在纸面上挂一张不存在仓位的止损)。交易所上原通道的仓位与 OCO 原样保留,切回原通道后照常管理。
+   * 返回拒绝原因;null = 同通道,照常。
+   */
+  foreignBackend(t: StrategyThread): string | null {
+    return t.backend !== this.backend.kind ? `线程属于 ${t.backend} 通道,当前执行通道是 ${this.backend.kind}:已冻结(只显示),切回 ${t.backend} 后再操作` : null;
+  }
+  private frozenForeign(t: StrategyThread, what: string): boolean {
+    const why = this.foreignBackend(t);
+    if (!why) return false;
+    this.log('warn', 'exec', `${t.symbol} ${what}被拒:${why}`, { thread_id: t.id, code: 'thread_backend_frozen' });
+    return true;
+  }
+
   private saveThread(t: StrategyThread): void {
     this.store.saveThread(t);
     this.emit('thread.changed', t);
@@ -2752,6 +2961,7 @@ export class DemoRuntime extends EventEmitter {
   /** Places the stop (mandatory) and TP legs for an in-position thread; on stop failure, flattens. */
   /** 无止损现货只执行用户明确指定的止盈，不进入止损补挂流程。 */
   private async placeOptionalSpotTakeProfit(tIn: StrategyThread, reconcileOrders = false): Promise<void> {
+    if (this.frozenForeign(tIn, '挂现货止盈')) return;
     let t = this.store.thread(tIn.id) ?? tIn;
     if (reconcileOrders && this.account) {
       const liveIds = t.protection_client_order_ids.filter(cid => this.account!.open_orders.some(o => o.symbol === t.symbol && o.market === 'spot' && o.client_order_id === cid));
@@ -2785,6 +2995,7 @@ export class DemoRuntime extends EventEmitter {
 
   private async placeProtection(tIn: StrategyThread, why: string, placed?: { stop: { id: string; receipt: OrderReceipt }; tp?: { id: string; receipt: OrderReceipt } }): Promise<void> {
     if (tIn.status !== 'in_position' || this.halted || (tIn.market === 'spot' && tIn.stop_price === null)) return;
+    if (this.frozenForeign(tIn, '挂/重挂保护单')) return;
     const last = this.protectionRetryAt.get(tIn.id) ?? 0;
     if (Date.now() - last < 60_000) return;
     this.protectionRetryAt.set(tIn.id, Date.now());
@@ -3095,10 +3306,12 @@ export class DemoRuntime extends EventEmitter {
   scan(symbol: string, trigger: Trigger): boolean {
     if (!this.botEnabled('thread_manager')) return false;
     if (this.halted || this.workflow.paused) return false; // paused = no model calls at all
+    // 只停 AI 扫盘:不再问模型找新机会;已有线程的复查和策略运行照常
+    if (this.workflow.ai_scan_paused) return false;
     if (this.openThreads().some((t) => t.symbol === symbol)) return false;
     if (this.capReached(`${symbol} 扫描`)) return false;
     // cap 只在入队前查过一次是不够的:60 币批量入队时预算还没花完,等排到自己时可能早已超额
-    // (串行队列只去重、不预占预算)。出队真正要花钱之前再查一次,超了就丢弃(评审 §B6)。
+    // (串行队列只去重、不预占预算)。出队真正要花钱之前再查一次,超了就丢弃(Codex §B6)。
     // §9.36:同一时刻还要复查 effective 策略与议会政策(排队期间票池可能已经被换掉/清空)。
     // 入队时冻结的是**版本 + 内容 hash**,不是一串 id(出队时同 ID 新版本 = 另一套规则,不算同一个池)。
     const enqueuedPool = poolKeys(this.store.strategies.resolve(effectivePoolIds(this.livePoolIds(), null), { allow_below_paper: false, backend: this.backend.kind }).specs);
@@ -3138,6 +3351,7 @@ export class DemoRuntime extends EventEmitter {
     if (!this.botEnabled('thread_manager')) return false;
     const t = this.store.thread(threadId);
     if (!t || !isOpen(t) || isStrategyRunThread(t)) return false;
+    if (this.foreignBackend(t)) return false; // 别的通道的线程只显示,不复查(复查的动作会打到当前通道)
     const mark = Number(this.markets.get(t.market === 'spot' ? `spot:${t.symbol}` : t.symbol)?.mark ?? 0);
     const stop = Number(t.stop_price ?? 0);
     const stopHit = mark > 0 && stop > 0 && (t.side === 'long' ? mark <= stop : mark >= stop);
@@ -3291,6 +3505,8 @@ export class DemoRuntime extends EventEmitter {
       extra: [
         ...threadTfs.filter(Boolean).map((x) => ({ tf: x, bars: 80 })),
         ...(thread && ['swing', 'position'].includes(threadHorizon(thread)) ? [{ tf: '1d', bars: 80 }] : []),
+        // ATR 模式的止损底线要用所选周期的 ATR(15m 在工作周期不是 15m 时不在基线里)
+        ...(floorModeOf(this.floorThresholds()) === 'atr' ? [{ tf: this.floorThresholds().stop_floor_atr_tf, bars: 80 }] : []),
       ],
     });
     const planTfs = Object.keys(barPlan);
@@ -3308,6 +3524,7 @@ export class DemoRuntime extends EventEmitter {
     this.progress('context', ep.id);
     const klines: Record<string, Kline[]> = Object.fromEntries(barPairs.map(([k, v]) => [k, v]));
     const features: TfFeatures[] = planTfs.map((ptf) => tfFeatures(ptf, klines[ptf]!));
+    for (const f of features) this.noteAtr(symbol, tradeMarket, f);
     const oiChange = oiHist.length >= 2 ? ((Number(oiHist[1]!.sumOpenInterest) - Number(oiHist[0]!.sumOpenInterest)) / Number(oiHist[0]!.sumOpenInterest)) * 100 : null;
     const last = this.store.episodes(50).find((e) => e.symbol === symbol && e.status === 'done' && e.action);
     const lastSummary = last ? `${new Date(last.at).toISOString().slice(11, 16)} UTC ${last.action}${last.direction ? `(${last.direction})` : ''}:${last.headline}` : null;
@@ -3327,7 +3544,7 @@ export class DemoRuntime extends EventEmitter {
     // v3.5 strategy library: only strategies at paper or above may drive a live judgment, and only the ones
     // this episode's triggers actually wake get rendered (an empty set falls back to playbook_text alone).
     // 09-12:Radar 候选**只作优先/提示**(排在最前,决定扫描周期),不再替换票池——以前候选一出现,
-    // 议会就只剩这一条策略在投票,「多条策略一致才交易」直接失效(评审 §B4/D)。
+    // 议会就只剩这一条策略在投票,「多条策略一致才交易」直接失效(Codex §B4/D)。
     // §9.36(P1-06 第 2 条):**正式票池的唯一口径是 effectivePoolIds** —— Radar 候选只能把已经在
     // active 里的那条排到最前(优先),**不能**把一条被人从 active 停掉的策略再塞回票池。
     // 「停用 = 摘出票池」对 Radar 一样有硬效力。
@@ -3351,7 +3568,7 @@ export class DemoRuntime extends EventEmitter {
     features.splice(0, features.length, ...Object.entries(klines).map(([key, bars]) => tfFeatures(key, bars.filter(b => b.close_time <= contextNow))));
     if (thread && !thread.holding_plan) {
       const opening = thread.episode_ids.map(id => this.store.episode(id)).find(e => e?.judgment?.action === 'PROPOSE');
-      const plan = buildHoldingPlan({ thread: { ...thread, thesis: opening?.judgment?.thesis ?? thread.thesis, invalidation_text: opening?.judgment?.invalidation ?? thread.invalidation_text }, judgment: opening?.judgment, strategy: pinned, features, now: contextNow, origin: 'legacy_snapshot', confirm_bars: this.workflow.invalidation_confirm_bars, invalidation_buffer_atr: this.workflow.invalidation_buffer_atr });
+      const plan = buildHoldingPlan({ thread: { ...thread, thesis: opening?.judgment?.thesis ?? thread.thesis, invalidation_text: opening?.judgment?.invalidation ?? thread.invalidation_text }, judgment: opening?.judgment, strategy: pinned, features, now: contextNow, origin: 'legacy_snapshot', confirm_bars: this.workflow.invalidation_confirm_bars, invalidation_buffer_atr: this.workflow.invalidation_buffer_atr, execution: executionThresholds(this.workflow) });
       if (plan) {
         thread = { ...thread, holding_plan: plan, version: thread.version + 1, updated_at: contextNow };
         this.saveThread(thread);
@@ -3413,6 +3630,7 @@ export class DemoRuntime extends EventEmitter {
       ticker24h: t24,
       market_state: this.marketState,
       playbook_text: this.workflow.playbook_text,
+      stop_floor: this.stopFloorForPrompt(features, market),
       last_judgment_summary: lastSummary,
       halted: this.halted,
       daily_regime: regime,
@@ -3502,6 +3720,30 @@ export class DemoRuntime extends EventEmitter {
         judgment = null;
       }
     }
+    // 英文评审版(TG_PUBLIC_LANG=en)兜底:判断的自由文本还含中文 → 同一个 brain 用英文重写一次(最多一次,计入今日判断次数与花费,
+    // 额度用完就不重写);重写后仍含中文就保留原样记 warn,交给出口句式层翻译。本机模式 judgmentCjkFields 恒为空,不走这里。
+    if (judgment && !skipModel && judgmentCjkFields(judgment as Judgment).length) {
+      const rewrite = await rewriteJudgmentInEnglish<Judgment>({
+        judgment: judgment as Judgment,
+        previous: result.text,
+        allowed: !this.capReached(`${symbol} 英文重写`),
+        complete: async (suffix) => {
+          this.bumpLangRetry();
+          const r = await brain.complete(built.system_text, `${built.user_text}\n\n${suffix}`);
+          usage = { input_tokens: usage.input_tokens + r.input_tokens, output_tokens: usage.output_tokens + r.output_tokens, latency_ms: usage.latency_ms + r.latency_ms };
+          return r;
+        },
+        parse: (text) => {
+          const v = validateJudgment(extractJson(text), validRefs, { strategies: built.strategy_ids });
+          return v.judgment && !findMemoryNumberLeaks(v.judgment, built.evidence).length ? v.judgment : null;
+        },
+      });
+      if (rewrite.accepted) {
+        judgment = rewrite.judgment;
+        ep.judgment_raw = rewrite.call!.text;
+      }
+      if (rewrite.still_cjk.length) this.log('warn', 'brain', `${symbol} judgment still contains Chinese in ${rewrite.still_cjk.join('/')} after ${rewrite.call ? 'one English rewrite' : 'skipping the rewrite (daily judgment cap)'}; the public exit layer will translate what it can`, { episode_id: ep.id });
+    }
     ep.schema_errors = errors;
     ep.usage = { ...usage, cost_estimate: brain.name.startsWith('pi:zai') ? `≈¥${((usage.input_tokens + usage.output_tokens * 3) * 0.000004).toFixed(3)}` : 'n/a' };
     if (!judgment) {
@@ -3535,6 +3777,13 @@ export class DemoRuntime extends EventEmitter {
       const current = this.store.thread(thread.id);
       if (!current || !isOpen(current)) {
         ep.reducer = { from: ep.strategy_before.state, to: 'closed', accepted: false, reason: '线程在判断期间已结束' };
+        return;
+      }
+      const foreign = this.foreignBackend(current);
+      if (foreign) {
+        // 切换通道前排进队列的复查,切换后才跑到这里:只记录,不改线程、不执行动作。
+        ep.reducer = { from: ep.strategy_before.state, to: ep.strategy_before.state, accepted: false, reason: foreign };
+        this.store.saveEpisode(ep);
         return;
       }
       // Recheck after model latency against current thread and fresh mark. No model can bypass this gate.
@@ -3591,13 +3840,15 @@ export class DemoRuntime extends EventEmitter {
           policy: tierPolicyOf(this.workflow, proposedTier),
         }
       : undefined;
-    ep.gates = evaluateGates(j, { markets:this.workflow.markets, halted: this.halted, paused: this.workflow.paused, account: { ...account, positions: account.positions.filter((p) => p.symbol === symbol && (p.market ?? 'perp') === (j.proposal?.market ?? 'perp')) }, market, opens_today: opensToday, stale_refs: staleRefs, now: Date.now(), ...(tierCtx ? { tier: tierCtx } : {}) }, { ...this.gatesCfg, risk_pct: Number(this.workflow.risk_pct), max_opens_per_day: this.workflow.max_opens_per_day });
+    ep.gates = evaluateGates(j, { markets:this.workflow.markets, halted: this.halted, paused: this.workflow.paused, account: { ...account, positions: account.positions.filter((p) => p.symbol === symbol && (p.market ?? 'perp') === (j.proposal?.market ?? 'perp')) }, market, opens_today: opensToday, stale_refs: staleRefs, now: Date.now(), atr: this.scanGateAtr(features, tf), ...(tierCtx ? { tier: tierCtx } : {}) }, this.execGates({ risk_pct: Number(this.workflow.risk_pct), max_opens_per_day: this.workflow.max_opens_per_day }));
     // 09-12 事件区闸 event_blackout:事件前 event_blackout_min 分钟到窗口结束不开新仓(0 = 关闭);只拦开仓。
     ep.gates = [...ep.gates, eventBlackoutGate(this.store.events.activeAt(Date.now()), symbol, Date.now(), this.workflow.event_blackout_min ?? 0, j.action === 'PROPOSE' || j.action === 'ADD')];
-    for (const b of blockers) ep.gates.push({ name: '线程/日内限制', passed: false, reason: b });
+    for (const b of blockers) ep.gates.push({ name: '线程/日内限制', passed: false, reason: b, code: codeFromText(b)?.code ?? 'preflight' });
     // §9.54:agent 有当前策略时,自由判断线只复查不开新仓(开仓归策略运行器),避免两套大脑同时下单。
     const agentBlock = this.agentStrategy().blocksFreeOpens();
-    if (agentBlock) ep.gates.push({ name: '当前策略', passed: false, reason: agentBlock });
+    if (agentBlock) ep.gates.push({ name: '当前策略', passed: false, reason: agentBlock, code: 'current_strategy' });
+    // 排队时还没暂停、跑完才暂停的扫描,结果也不开仓
+    if (this.workflow.ai_scan_paused) ep.gates.push({ name: 'AI 扫盘已暂停', passed: false, reason: 'AI 扫盘已暂停,不开新仓', code: 'ai_scan_paused' });
     ep.gates.push(unknownOrderGate(unknownOpen));
     if (councilMode !== 'off') {
       const cg = consensusGate({ ...j, proposal: j.proposal ? { entry: j.proposal.entry } : null }, council, councilMode);
@@ -3615,7 +3866,7 @@ export class DemoRuntime extends EventEmitter {
     this.store.saveEpisode(ep);
     if (!gatesOk) {
       this.log('warn', 'gate', `${symbol} 提议被代码闸拒绝:${ep.reducer.reason}`, { episode_id: ep.id });
-      this.activity('proposal_blocked', { level: 'warn', symbol, episode_id: ep.id, title: `${symbol} 提议${j.direction === 'long' ? '做多' : '做空'}被代码闸拦下`, detail: ep.gates.filter((g) => !g.passed).map((g) => `${g.name}:${g.reason}`).join(';'), data: { direction: j.direction, proposal: j.proposal } });
+      this.activity('proposal_blocked', { level: 'warn', symbol, episode_id: ep.id, title: `${symbol} 提议${j.direction === 'long' ? '做多' : '做空'}被代码闸拦下`, detail: ep.gates.filter((g) => !g.passed).map((g) => `${g.name}:${g.reason}`).join(';'), data: { direction: j.direction, proposal: j.proposal, layer: 'gate', code: gateReasonCode(ep.gates.find((g) => !g.passed)!), gates: ep.gates.filter((g) => !g.passed) } });
       return;
     }
     this.activity('proposal', { level: 'success', symbol, episode_id: ep.id, title: `${symbol} 出策略:${j.direction === 'long' ? '做多' : '做空'} ${j.proposal.entry === 'market' ? '市价' : `限价 ${j.proposal.limit_price ?? ''}`},止损 ${j.proposal.stop_price}`, detail: j.headline, data: { direction: j.direction, proposal: j.proposal, confidence: j.confidence } });
@@ -3785,7 +4036,10 @@ export class DemoRuntime extends EventEmitter {
     const alignedLimit = raw.entry === 'limit' && raw.limit_price ? alignLimitPrice(raw.limit_price, rules.tick_size, raw.direction) : null;
     const p = alignedLimit && alignedLimit !== raw.limit_price ? { ...raw, limit_price: alignedLimit } : raw;
     if (alignedLimit && alignedLimit !== raw.limit_price) this.log('info', 'exec', `${ep.symbol} 限价 ${raw.limit_price} 对齐到交易所价格网格 ${alignedLimit}(tick ${rules.tick_size})`, { episode_id: ep.id });
-    const mode = !opts.run && this.botEnabled('portfolio_manager') ? this.workflow.sizing_agent : 'off';
+    // §9.56 仓位 = risk_pct × 组合经理倍率,所有机会来源共用(策略运行用运行自带的 risk_pct)。
+    // 波动率目标(sized)的数量只由 sizeRunOrder 给出,倍率会改掉它的单笔风险上限 → 不接。
+    const mode = !opts.sized && this.botEnabled('portfolio_manager') ? this.workflow.sizing_agent : 'off';
+    const baseRiskPct = opts.riskPct ?? Number(this.workflow.risk_pct);
     let agent: import('./types.js').SizingAgent | undefined;
     if (mode !== 'off') {
       const evidenceAccount = await this.backend.account();
@@ -3796,8 +4050,8 @@ export class DemoRuntime extends EventEmitter {
         quote_volume_24h: (await fetchTicker24h(ep.symbol, tradeMarket).catch(() => null))?.quoteVolume ?? null,
         setup_fit: ep.evidence.filter((e) => e.kind === 'checklist' && !e.stale).map((e) => ({ label: e.label, value: e.value })),
         daily_regime: regime?.regime ?? null, atr_pct: regime?.atr_pct ?? null,
-        risk_pct: this.workflow.risk_pct,
-        base_risk_budget: (Number(evidenceAccount.equity) * Number(this.workflow.risk_pct) / 100).toFixed(8),
+        risk_pct: String(baseRiskPct),
+        base_risk_budget: (Number(evidenceAccount.equity) * baseRiskPct / 100).toFixed(8),
         max_quote_volume_pct: this.portfolioPolicy().max_quote_volume_pct,
         equity: evidenceAccount.equity, cluster: clusterFor(ep.symbol),
         positions: evidenceAccount.positions.map((pos) => ({ ...pos, cluster: clusterFor(pos.symbol) })),
@@ -3925,8 +4179,13 @@ export class DemoRuntime extends EventEmitter {
       const frozen = basisBars.length ? freezeEntryBasis(tfFeatures(basisTf, basisBars), p.direction, Number(market.mark), Date.now()) : null;
       thread.entry_basis = frozen ?? (ep.entry_advice ? { breakout_level: ep.entry_advice.breakout_level, atr: ep.entry_advice.atr, mark: ep.entry_advice.mark, at: Date.now() } : null);
     }
-    const planFeatures = await Promise.all([...new Set(holdingTimeframes(horizon, thread.timeframe))].map(async tf => tfFeatures(tf, (await fetchKlines(ep.symbol, tf, 80, undefined, tradeMarket)).filter(b => b.close_time <= planCutoff))));
-    thread.holding_plan = buildHoldingPlan({ thread: { ...thread, entry: { ...thread.entry, price: thread.entry.price ?? market.mark } }, judgment: j, strategy: selectedStrategy, features: planFeatures, now: Date.now(), confirm_bars: this.workflow.invalidation_confirm_bars, invalidation_buffer_atr: this.workflow.invalidation_buffer_atr }) ?? undefined;
+    // 模型在 risk_plan 里选的 ATR 周期也要拉上:没绑策略时 15m 工作周期推断成 intraday(持仓周期 1h/4h),
+    // 模型照 playbook 选 15m ATR,以前这里只拉 1h/4h,持仓计划就建不起来(09-26 评审站 94 次 PROPOSE 因此作废)。
+    const chosenAtrTf = j.proposal?.risk_plan?.atr_timeframe;
+    const planTfs = new Set<string>(holdingTimeframes(horizon, thread.timeframe));
+    if (chosenAtrTf && /^\d+[mhdw]$/.test(chosenAtrTf)) planTfs.add(chosenAtrTf);
+    const planFeatures = await Promise.all([...planTfs].map(async tf => tfFeatures(tf, (await fetchKlines(ep.symbol, tf, 80, undefined, tradeMarket)).filter(b => b.close_time <= planCutoff))));
+    thread.holding_plan = buildHoldingPlan({ thread: { ...thread, entry: { ...thread.entry, price: thread.entry.price ?? market.mark } }, judgment: j, strategy: selectedStrategy, features: planFeatures, now: Date.now(), confirm_bars: this.workflow.invalidation_confirm_bars, invalidation_buffer_atr: this.workflow.invalidation_buffer_atr, execution: executionThresholds(this.workflow) }) ?? undefined;
     ep.holding_plan = thread.holding_plan;
     // Shadow book records a counterfactual size; approved quantity/leverage remain unchanged.
     this.evaluateTeamRisk(account);
@@ -4017,7 +4276,37 @@ export class DemoRuntime extends EventEmitter {
    *   把它当成功记成 `applied` 是六审 R6-01 点名的确定性反例。
    */
   private async executeOpen(threadIn: StrategyThread, intent: DemoIntent, ep: Episode | null): Promise<ExecuteOpenFact> {
+    // 09-26 stuck-entry:CID 落库之后、入场接口调用之前任何一步抛错(实例:账户快照里 `okx spot orders` 读超时),
+    // 以前会把线程永久留在 pending_entry + 提交相位 + 意图 approved,且没人收尾。
+    // 现在按「有没有真的调用入场接口」分流:没调 → 确定未发送,按 abort 口径收掉;调了 → unknown,交给周期对账,绝不重发。
+    const phase: { cid: string | null; dispatched: boolean } = { cid: null, dispatched: false };
+    this.openInFlight.add(threadIn.id);
+    try {
+      return await this.executeOpenInner(threadIn, intent, ep, phase);
+    } catch (e) {
+      const cur = phase.cid ? this.store.thread(threadIn.id) : null;
+      if (!cur || cur.status !== 'pending_entry' || cur.entry_client_order_id !== phase.cid || typeof cur.entry_submitting_since !== 'number') throw e;
+      const msg = (e as Error).message;
+      if (!phase.dispatched) {
+        const why = `发送前异常,入场单未发送:${msg}`;
+        this.updateIntent(ep, intent, { status: 'rejected', error: why });
+        this.saveThread({ ...cur, status: 'canceled', entry_client_order_id: null, entry_submitting_since: null, entry_submit_epoch: null, closed_at: Date.now(), close_reason: why, version: cur.version + 1, updated_at: Date.now() });
+        this.log('warn', 'exec', `${cur.symbol} 未发送入场单:${why}`, { thread_id: cur.id, client_order_id: phase.cid });
+        return { sent: false, receipt: 'rejected', thread_id: cur.id, reason: why };
+      }
+      // 入场接口已经调用、还没正常返回就抛错:可能已经到交易所。收起提交相位、标 ORDER_UNKNOWN,巡检按 CID 对账。
+      this.saveThread({ ...cur, entry_submitting_since: null, entry_submit_epoch: null, entry_submitted_at: cur.entry_submitted_at ?? Date.now(), attention: cur.attention ?? 'ORDER_UNKNOWN', version: cur.version + 1, updated_at: Date.now() });
+      if (intent.status === 'approved') this.updateIntent(ep, intent, { status: 'unknown', error: `入场调用抛错,按 clientOrderId 对账:${msg}` });
+      this.log('error', 'exec', `${cur.symbol} 入场调用抛错,结果未知,巡检按 clientOrderId 对账(不重发):${msg}`, { thread_id: cur.id, client_order_id: phase.cid });
+      return { sent: true, receipt: 'unknown', thread_id: cur.id, reason: `入场调用抛错,结果未知,按 clientOrderId 对账:${msg}` };
+    } finally {
+      this.openInFlight.delete(threadIn.id);
+    }
+  }
+
+  private async executeOpenInner(threadIn: StrategyThread, intent: DemoIntent, ep: Episode | null, phase: { cid: string | null; dispatched: boolean }): Promise<ExecuteOpenFact> {
     const t = this.store.thread(threadIn.id) ?? threadIn;
+    { const why = this.foreignBackend(t); if (why) throw Object.assign(new Error(why), { status: 409 }); }
     if (t.status !== 'pending_entry' || t.entry_client_order_id) throw Object.assign(new Error(`thread ${t.id} is ${t.status}${t.entry_client_order_id ? ' (entry already sent)' : ''}`), { status: 409 });
     if (isStrategyRunThread(t)) {
       const run = this.strategyRuns().store.get(t.origin!.slice('strategy_run:'.length));
@@ -4031,11 +4320,12 @@ export class DemoRuntime extends EventEmitter {
     // entry_submitting_since: the reconcile loop must not query this CID (→ false ORDER_UNKNOWN) while the
     // leverage/margin/entry calls are in flight.
     this.saveThread({ ...minted.next, entry_client_order_id: cid, entry_submitting_since: Date.now(), entry_submit_epoch: this.submitEpoch, entry_submitted_at: null, version: t.version + 1, updated_at: Date.now() });
+    phase.cid = cid;
     this.updateIntent(ep, intent, { status: 'approved', client_order_id: cid });
     const fact = (sent: boolean, receipt: ExecuteOpenFact['receipt'], reason: string): ExecuteOpenFact => ({ sent, receipt, thread_id: t.id, reason });
     const abort = async (why: string): Promise<ExecuteOpenFact> => {
       this.updateIntent(ep, intent, { status: 'rejected', error: why });
-      this.saveThread({ ...(this.store.thread(t.id) ?? t), status: 'canceled', entry_client_order_id: null, closed_at: Date.now(), close_reason: why, version: t.version + 2, updated_at: Date.now() });
+      this.saveThread({ ...(this.store.thread(t.id) ?? t), status: 'canceled', entry_client_order_id: null, entry_submitting_since: null, entry_submit_epoch: null, closed_at: Date.now(), close_reason: why, version: t.version + 2, updated_at: Date.now() });
       this.log('warn', 'exec', `${t.symbol} 未发送入场单:${why}`, { thread_id: t.id });
       // **没有调用入场接口**(placeEntry / openWithProtection)。注意这不等于「完全没有交易所副作用」——
       // 设杠杆 / 设保证金模式这些调用点在它之前(七审的措辞订正)。
@@ -4060,12 +4350,27 @@ export class DemoRuntime extends EventEmitter {
           { agent: intent.sizing.agent, fixed_qty: t.qty, liquidity_notional_cap: Number.isFinite(quoteVolume) && quoteVolume > 0 ? quoteVolume * policy.max_quote_volume_pct / 100 : 0 });
         if (!checked.ok) return abort(`发送前数量硬闸:${checked.sizing.note}`);
         if (t.holding_plan && !isStrategyRunThread(t)) {
-          for (const entry of new Set([market.mark, t.entry.price ?? market.mark])) {
+          // 只有证明是「等回踩」的限价单才只按挂单价复核:拿现价考核会把它在出生时就否掉(09-26 SOL 事故)。
+          // 市价、会立刻成交的限价、身份证明不了的限价仍两价全查——它们成交在现价,现价穿止损或离止损太近都要挡。
+          const kind = classifyEntryOrder(t.entry.type, t.entry.price, Number(market.mark), t.side);
+          const rrPrices = kind === 'waiting_limit' ? [t.entry.price!] : [...new Set([market.mark, t.entry.price ?? market.mark])];
+          for (const entry of rrPrices) {
             const economics = holdingEconomics(t.side, entry, t.stop_price!, t.take_profits[0] ?? null, t.holding_plan.round_trip_cost_bps);
             const rechecked = holdingEntryGates({ ...t.holding_plan, entry_price: entry, net_rr: economics?.net_rr ?? null }, t);
             if (rechecked.some(g => !g.passed)) return abort(`发送前持仓计划重闸: ${rechecked.filter(g => !g.passed).map(g => g.name).join('/')};原计划不改价`);
           }
           if (Date.now() - market.as_of > 180000 || market.as_of > Date.now()) return abort('发送前行情过期');
+        }
+        // 放在持仓计划复查之后:两个都不过时先报持仓计划那条(原因更具体)。
+        // 人工审批可能等待很久,发送时按当前价格、ATR 和参数复查,不修改原计划。
+        // waiting_limit 做多时 lim < mark、做空时 lim > mark,下面的 min/max 都取挂单价。
+        if (t.stop_price) {
+          const mark = Number(market.mark), lim = t.entry.type === 'limit' && t.entry.price ? Number(t.entry.price) : null;
+          const ref = lim === null ? mark : t.side === 'long' ? Math.min(lim, mark) : Math.max(lim, mark);
+          const th = this.floorThresholds(), mode = floorModeOf(th);
+          const atr = mode === 'atr' ? await this.floorAtr(t.symbol, th.stop_floor_atr_tf, t.market) : null;
+          const geo = stopGeometry(ref, Number(t.stop_price), atr, th);
+          if (ref > 0 && geo.blocks.length) return abort(`发送前止损复查:止损${geo.blocks.includes('stop_atr') ? 'ATR下限' : geo.blocks.includes('stop_distance') ? '距离' : '过宽'} ${stopGeometryReason(geo, th)};原计划不改价`);
         }
 
         const snapshot = computeSnapshot({ account: fresh, markets: this.markets,
@@ -4119,6 +4424,7 @@ export class DemoRuntime extends EventEmitter {
     const req = { symbol: t.symbol, market: t.market, direction: t.side, qty: t.qty, entry: t.entry.type, limit_price: t.entry.price, client_order_id: cid };
     let placed: Parameters<DemoRuntime['placeProtection']>[2];
     let entry: OrderReceipt;
+    phase.dispatched = true; // 从这里起入场接口可能已被调用:之后的异常只能按 unknown 对账
     if (this.backend.openWithProtection && t.entry.type === 'market' && t.stop_price) {
       const stop = nextLegCid(this.store.thread(t.id) ?? minted.next, 's');
       const tp = t.take_profits[0] && !t.run_take_profit ? nextLegCid(stop.next, 't') : null;
@@ -4267,6 +4573,100 @@ export class DemoRuntime extends EventEmitter {
       this.approving.delete(intentId);
     }
   }
+  // ------------------------------------------------------------ §9.56 执行层参数(所有机会来源共用)
+
+  /** 是否在用真钱。纸面和交易所模拟盘都不算;判断方法和策略运行要不要输入 LIVE 一致。 */
+  executionIsLive(): boolean {
+    const e = this.strategyRunEnvironment().execution;
+    return e.backend !== 'paper' && e.profile !== 'demo';
+  }
+
+  executionPolicyView() {
+    const e = this.strategyRunEnvironment().execution;
+    return {
+      values: executionPolicyValues(this.workflow),
+      bounds: executionPolicyBounds(),
+      backend: this.backend.kind, execution_label: e.label, live: this.executionIsLive(),
+      usage: {
+        open_threads: this.openThreads().length, max_open_threads: this.workflow.max_open_threads,
+        opens_today: this.store.threadOpensSince(utcDayStart(Date.now())), max_opens_per_day: this.workflow.max_opens_per_day,
+        daily_loss_hit: this.dailyLossHit(),
+      },
+      updated_at: this.workflow.updated_at,
+    };
+  }
+
+  /**
+   * 改执行层参数。human(界面 PATCH):按 bounds 严格校验,越界整单 400,不部分生效。
+   * agent(对话工具):模拟盘且每个键都在 agent_direct 区间 → 直接生效并留痕;否则(超区间或实盘)→ WorkflowProposal 等人确认。
+   */
+  setExecutionPolicy(raw: unknown, ctx: { via: 'human' | 'agent'; session_id?: string | null }) {
+    // 实盘通道由人改时要带 confirm:'LIVE'(和策略运行同一个确认词);模拟盘带了也不管
+    let confirm: unknown;
+    if (raw && typeof raw === 'object' && !Array.isArray(raw) && 'confirm' in raw) { const { confirm: c, ...rest } = raw as Record<string, unknown>; confirm = c; raw = rest; }
+    if (ctx.via === 'human' && this.executionIsLive() && confirm !== 'LIVE') throw Object.assign(new Error('实盘通道改执行层参数需要输入 LIVE 确认'), { status: 409, code: 'live_requires_confirm' });
+    const check = checkPolicyPatch(raw, this.workflow);
+    const keys = Object.keys(check.patch);
+    if (check.errors.length || !keys.length) {
+      const errors = check.errors.length ? check.errors : [{ key: '*', code: 'invalid_type' as const, message: '没有要改的执行层参数' }];
+      if (ctx.via === 'human') throw Object.assign(new Error(errors.map((x) => x.message).join('; ')), { status: 400, code: 'invalid_policy', errors });
+      return { ok: false, applied: false, mode: 'rejected' as const, errors };
+    }
+    const live = this.executionIsLive();
+    const direct = ctx.via === 'human' || (!live && check.outside_agent_direct.length === 0);
+    if (!direct) {
+      const p = this.proposeWorkflow(check.patch, { session_id: ctx.session_id ?? null });
+      this.log('info', 'policy', `对话提议改执行层:${keys.join('、')}(${live ? '实盘通道' : `超出 agent 直改区间:${check.outside_agent_direct.join('、')}`}),等待确认`, { proposal_id: p.id });
+      return { ok: true, applied: false, mode: 'proposal' as const, reason: live ? 'live_requires_human' : 'outside_agent_direct', outside_agent_direct: check.outside_agent_direct,
+        proposal: { id: p.id, status: p.status, keys, before: p.before, after: p.after, errors: p.errors }, note: '已生成设置提议卡,用户在界面上点确认才生效' };
+    }
+    const before = Object.fromEntries(keys.map((k) => [k, (executionPolicyValues(this.workflow) as unknown as Record<string, unknown>)[k]]));
+    const r = this.setWorkflow(check.patch);
+    const after = executionPolicyValues(r.workflow) as unknown as Record<string, unknown>;
+    const detail = keys.map((k) => `${k}: ${JSON.stringify(before[k])} → ${JSON.stringify(after[k])}`).join('; ');
+    this.log('warn', 'policy', `${ctx.via === 'agent' ? 'agent 在模拟盘直接' : '用户'}改了执行层:${detail}`, { via: ctx.via, keys });
+    this.activity('workflow_changed', { level: 'warn', title: `${ctx.via === 'agent' ? 'agent 改了执行层参数(模拟盘直改区间内)' : '执行层参数已更新'}:${keys.join('、')}`, detail, data: { via: ctx.via, keys, before, after } });
+    return { ok: r.errors.length === 0, applied: true, mode: 'direct' as const, errors: r.errors, policy: this.executionPolicyView() };
+  }
+
+
+  /** 只暂停/恢复 AI 扫盘(不影响策略运行和已有线程的复查)。 */
+  setAiScanPaused(paused: boolean): void {
+    if ((this.workflow.ai_scan_paused === true) === paused) return;
+    this.setWorkflow({ ai_scan_paused: paused });
+    this.log('info', 'runtime', paused ? 'AI 扫盘已暂停:不再扫描新机会,策略运行照常' : 'AI 扫盘已恢复');
+    this.activity('workflow_changed', { level: 'info', title: paused ? 'AI 扫盘已暂停' : 'AI 扫盘已恢复', detail: paused ? '已有线程继续复查,策略运行不受影响' : null });
+  }
+
+  /** §9.56 来源漏斗:AI 扫盘 + 每条策略运行,窗口 [since, now)。零模型、只读。 */
+  tradingSources(since: number) {
+    const now = Date.now();
+    const agentBlock = this.agentStrategy().blocksFreeOpens();
+    const disabled = this.halted ? '紧急停止中' : this.workflow.paused ? '工作流已暂停' : this.workflow.ai_scan_paused ? 'AI 扫盘已暂停' : !this.botEnabled('thread_manager') ? 'Thread Manager 已暂停' : agentBlock;
+    const ai = summarizeAiScan(aiScanEpisodes(this.store.marketDb, since, now + 1), DemoRuntime.SKIPPED_MODEL);
+    const playbook = (this.workflow.playbook_text ?? '').split('\n')[0]?.trim().replace(/[::]$/, '') || '(空 playbook)';
+    const runner = this.strategyRuns();
+    const runs = runner.list().map((r) => ({ run: r, events: runEventsSince(this.store.marketDb, r.id, since, now + 1) }))
+      .filter(({ run, events }) => run.status !== 'stopped' || events.length > 0)
+      .map(({ run, events }) => summarizeRun(run, events, run.stats.open_threads));
+    return {
+      since, until: now,
+      shared: {
+        open_threads: this.openThreads().length, max_open_threads: this.workflow.max_open_threads,
+        opens_today: this.store.threadOpensSince(utcDayStart(now)), max_opens_per_day: this.workflow.max_opens_per_day,
+        daily_loss_hit: this.dailyLossHit(), halted: this.halted, paused: this.workflow.paused,
+      },
+      sources: [
+        { kind: 'ai_scan' as const, id: 'ai_scan', name: 'AI 扫盘', enabled: !disabled, disabled_reason: disabled ?? null, paused: this.workflow.ai_scan_paused === true,
+          playbook: { name: playbook, prompt_version: PROMPT_VERSION, custom: this.workflow.playbook_text !== DEFAULT_PLAYBOOK },
+          judge: 'model' as const, timeframe: this.workflow.timeframe, symbols: [...this.workflow.watchlist], scan_mode: this.workflow.scan_mode,
+          budget: { judgments_used_today: this.modelJudgmentsToday(), judgment_cap: this.workflow.daily_judgment_cap },
+          ...ai },
+        ...runs,
+      ],
+    };
+  }
+
   // ------------------------------------------------------------ v3.10 设置提议(对话改高风险设置只到提议)
 
   workflowProposals(): WorkflowProposal[] {
@@ -4281,6 +4681,8 @@ export class DemoRuntime extends EventEmitter {
     const after = Object.fromEntries(keys.map((k) => [k, (preview.next as unknown as Record<string, unknown>)[k] ?? null]));
     const now = Date.now();
     const p: WorkflowProposal = { id: `wfp-${now.toString(36)}${Math.random().toString(36).slice(2, 6)}`, created_at: now, expires_at: now + PROPOSAL_TTL_MS, status: preview.errors.length ? 'rejected' : 'pending', via: 'chat', session_id: ctx.session_id, patch, before, after, errors: preview.errors, resolved_at: preview.errors.length ? now : null };
+    for (const [key, prior] of this.proposals) if (prior.status !== 'pending' || prior.expires_at <= Date.now()) this.proposals.delete(key);
+    if (this.proposals.size >= 200) throw new Error('待处理设置提议已达 200 条，请先处理');
     this.proposals.set(p.id, p);
     this.emit('workflow.proposal', { id: p.id, status: p.status, keys });
     if (p.status === 'pending') this.activity('chat_action', { level: 'warn', title: `对话提议改设置:${keys.join('、')},等你在界面上确认`, detail: keys.map((k) => `${k}: ${JSON.stringify(before[k])} → ${JSON.stringify(after[k])}`).join('; '), data: { proposal_id: p.id } });
@@ -4361,6 +4763,7 @@ export class DemoRuntime extends EventEmitter {
     const unconfirmed = (why: string): CancelEntryResult => ({ confirmed_zero_fill: false, reason: why });
     const confirmed = (why: string): CancelEntryResult => ({ confirmed_zero_fill: true, reason: why });
     if (this.cancelingEntries.has(t.id)) return unconfirmed('这条线程正在撤单中,本次不重复发');
+    if (this.frozenForeign(t, '撤入场单')) return unconfirmed(this.foreignBackend(t)!);
     const current = this.store.thread(t.id);
     if (!current || !isOpen(current)) return unconfirmed(`线程已是 ${current?.status ?? '不存在'},没有在场的入场腿`);
     // All entry points reload current state; an in-position thread is eligible only for its remainder.
@@ -4381,7 +4784,8 @@ export class DemoRuntime extends EventEmitter {
         return confirmed('入场单从未发出,本地撤掉');
       }
       // Persist uncertainty BEFORE I/O, so restart cannot lose the requested cancellation.
-      t = { ...t, entry_cancel_pending: true, ...(staleSubmitPhase ? { entry_submitting_since: null, entry_submit_epoch: null } : {}), attention: t.status === 'in_position' ? 'ENTRY_REMAINDER' : 'CANCEL_UNKNOWN', close_reason: reason, version: t.version + 1, updated_at: Date.now() };
+      // 接管过期相位时把「相位开始时刻」留成提交时刻(09-26:以前直接清空,后续复核就不知道单是多久前发的)。
+      t = { ...t, entry_cancel_pending: true, ...(staleSubmitPhase ? { entry_submitting_since: null, entry_submit_epoch: null, entry_submitted_at: t.entry_submitted_at ?? t.entry_submitting_since } : {}), attention: t.status === 'in_position' ? 'ENTRY_REMAINDER' : 'CANCEL_UNKNOWN', close_reason: reason, version: t.version + 1, updated_at: Date.now() };
       this.saveThread(t);
       for (const i of this.store.intentsForThread(t.id)) {
         if (i.kind === 'open' && ['approved', 'submitted', 'unknown'].includes(i.status)) this.updateIntent(ep, i, { status: 'unknown' });
@@ -4391,8 +4795,17 @@ export class DemoRuntime extends EventEmitter {
         try { await this.backend.cancelOrder(t.symbol, t.entry_client_order_id!, t.market); }
         catch (e) { this.log('warn', 'exec', `${t.symbol} 撤单传输失败:${String(e)}`, { thread_id: t.id }); }
       }
-      const order = await this.backend.getOrder(t.symbol, t.entry_client_order_id!, true, t.market).catch(() => null);
-      if (!order || !/^\d+(?:\.\d+)?$/.test(order.executed_qty)) return unconfirmed('按 clientOrderId 回查无果(查不到或成交量读不出),保持待核对');
+      // 09-26:「查询失败」和「交易所明确说没有这张单」分开 —— 前者什么也不证明,后者可以累计成 entry_unknown_not_found。
+      let order: Awaited<ReturnType<ExecBackend['getOrder']>> = null;
+      let queryError: string | null = null;
+      try { order = await this.backend.getOrder(t.symbol, t.entry_client_order_id!, true, t.market); }
+      catch (e) { queryError = (e as Error).message.slice(-200); }
+      if (queryError !== null) return unconfirmed(`按 clientOrderId 回查失败(${queryError}),保持待核对`);
+      if (!order) {
+        if (t.status === 'pending_entry' && !submitting && !t.opened_at && !t.filled_avg_price) return await this.cancelChainEntryAbsent(t);
+        return unconfirmed('按 clientOrderId 回查无果,保持待核对');
+      }
+      if (!/^\d+(?:\.\d+)?$/.test(order.executed_qty)) return unconfirmed('按 clientOrderId 回查成交量读不出,保持待核对');
       const positive = /[1-9]/.test(order.executed_qty);
       const terminal = ['FILLED', 'CANCELED', 'EXPIRED'].includes(order.status);
       let fresh: AccountView | null = null;
@@ -4459,10 +4872,43 @@ export class DemoRuntime extends EventEmitter {
   }
 
   /**
+   * 09-26 stuck-entry(撤单链分支):撤单链接管的待入场线程,按 CID fresh 查单**明确不存在**(null,不是查询失败)。
+   * 与巡检同一口径:同一份 60 秒窗口内只计一次 miss;满 N 次且距提交超过 T(提交时刻未知时要求 miss 次数本身跨过 T)
+   * 才做只读复核(proveEntryAbsent),通过才写 canceled(entry_unknown_not_found)。**不下单、不追加任何写操作**。
+   * 调用方持有 cancelingEntries 锁,t 是本次撤单刚落盘的版本。
+   */
+  private async cancelChainEntryAbsent(t: StrategyThread): Promise<CancelEntryResult> {
+    const unconfirmed = (why: string): CancelEntryResult => ({ confirmed_zero_fill: false, reason: why });
+    let cur = this.store.thread(t.id);
+    if (!cur || cur.version !== t.version || cur.status !== 'pending_entry') return unconfirmed('核对期间线程被别的链路改动,本次结论作废');
+    if (this.openInFlight.has(cur.id) || this.submitPhaseActive(cur)) return unconfirmed('入场调用还在飞,查不到不算否定事实');
+    const now = Date.now();
+    if (typeof cur.entry_lookup_miss_at === 'number' && now - cur.entry_lookup_miss_at < ENTRY_MISS_SPACING_MS) {
+      return unconfirmed(`按 clientOrderId 查不到(第 ${cur.entry_lookup_misses} 次已计,${Math.round(ENTRY_MISS_SPACING_MS / 1000)} 秒内不重复计数),保持待核对`);
+    }
+    const misses = (cur.entry_lookup_misses ?? 0) + 1;
+    const due = entryUnknownVerifyDue(cur, misses, now);
+    cur = { ...cur, entry_lookup_misses: misses, entry_lookup_miss_at: now, version: cur.version + 1, updated_at: now };
+    this.saveThread(cur);
+    this.log('warn', 'exec', `${cur.symbol} ${cur.side === 'long' ? '多' : '空'}:撤单链按 clientOrderId 第 ${misses} 次查不到入场单 ${cur.entry_client_order_id}${due ? ',已满足终态复核条件' : '(次数/时长未到,继续核对)'}`, { thread_id: cur.id, client_order_id: cur.entry_client_order_id, code: 'entry_lookup_miss', lookup_misses: misses });
+    if (!due) return unconfirmed(`按 clientOrderId 第 ${misses} 次查不到,未到复核条件,保持待核对`);
+    const proof = await this.proveEntryAbsent(cur);
+    if (!proof.ok) {
+      this.logEntryVerifyBlocked(cur, 'exec', proof.why);
+      return unconfirmed(`查不到但终态复核未通过:${proof.why}`);
+    }
+    const latest = this.store.thread(cur.id);
+    if (!latest || latest.version !== cur.version || latest.status !== 'pending_entry' || this.openInFlight.has(cur.id)) return unconfirmed('复核期间线程被别的链路改动,本次结论作废');
+    const next = this.finishEntryUnknownNotFound(latest, proof.fresh, '撤单链');
+    return { confirmed_zero_fill: true, reason: next.close_reason ?? 'entry_unknown_not_found' };
+  }
+
+  /**
    * 09-12 P0-01:入场余量还没确认时,把**已确认**的那部分敞口 reduce-only 平掉(只降风险),
    * 线程留在巡检里继续核对余量。不 `cancelAll`(那会一并抹掉正在核对的入场单证据),不写终态。
    */
   private async flattenKnownExposure(tIn: StrategyThread, ep: Episode | null, reason: string): Promise<void> {
+    if (this.frozenForeign(tIn, '减风险平仓')) return;
     let t = this.store.thread(tIn.id) ?? tIn;
     // 09-12 P0-01(复审回归):`exposure_flattened` **不是一次性布尔**。上次平仓只证明「那一刻那些量已平」;
     // 之后同一张入场单再成交(累计成交 > 已平水位),或账户读比上次平仓更新且仍看得到仓位,都是**新敞口**,
@@ -4512,6 +4958,7 @@ export class DemoRuntime extends EventEmitter {
   }
 
   private async closeThreadNow(tIn: StrategyThread, ep: Episode | null, reason: string): Promise<void> {
+    if (this.frozenForeign(tIn, '平仓/撤单')) return;
     let t = this.store.thread(tIn.id) ?? tIn;
     if (t.status === 'pending_entry') {
       await this.cancelEntry(t, ep, reason);
@@ -4550,7 +4997,7 @@ export class DemoRuntime extends EventEmitter {
       }
     }
     if (!proven) {
-      // 结果未知 ≠ 失败:意图留在 unknown,线程保持开着,巡检按新鲜仓位收敛(review #7)。
+      // 结果未知 ≠ 失败:意图留在 unknown,线程保持开着,巡检按新鲜仓位收敛(codex-review #7)。
       const unknown = r.ambiguous === true;
       this.updateIntent(ep, intent, { status: unknown ? 'unknown' : 'failed', error: r.error ?? '平仓未被证实' });
       this.saveThread({ ...t, attention: 'CLOSE_FAILED', version: t.version + 1, updated_at: Date.now() });
@@ -4570,6 +5017,7 @@ export class DemoRuntime extends EventEmitter {
   }
 
   private async reduceHalf(t: StrategyThread, ep: Episode | null, quantity?: string): Promise<void> {
+    if (this.frozenForeign(t, '减仓')) return;
     const pos = this.account?.positions.find((p) => p.symbol === t.symbol && (p.market ?? 'perp') === (t.market ?? 'perp'));
     if (!pos) return;
     const rules = await this.backend.symbolRules(t.symbol, t.market);
@@ -4607,6 +5055,7 @@ export class DemoRuntime extends EventEmitter {
     const t = this.store.thread(threadId);
     if (!t) throw Object.assign(new Error('thread not found'), { status: 404 });
     if (!isOpen(t)) throw Object.assign(new Error(`thread is ${t.status}`), { status: 409 });
+    { const why = this.foreignBackend(t); if (why) throw Object.assign(new Error(why), { status: 409 }); }
     // 09-07 事故:入场单还在子代理手里飞(agent_mcp 一次运行 40 多秒),界面点撤单走了「撤入场单」,交易所那边其实已成交,
     // 撤单回「已不存在」被当成功,线程标成已撤,留下一张界面上碰不到的仓。发送中一律不许撤,等回执。
     if (t.status === 'pending_entry' && this.submitPhaseActive(t)) {
@@ -4819,7 +5268,17 @@ export class DemoRuntime extends EventEmitter {
   }
 
   chatTools(chatSessionId: string | null = null): ChatTools {
+    /** §9.53 B v2「存为候补策略」:tier=paper_candidate 或 near 的试验 → 我的策略(未经最终验收,不自动运行) */
+    const matrixCandidateTools = {
+      adopt_matrix_candidate: async (a: { study_id?: string; trial_id?: string; name?: string }) => {
+        const svc = matrixStudyService(); if (!svc) return { error: '批量验证服务未就绪' };
+        if (typeof a?.study_id !== 'string' || typeof a?.trial_id !== 'string') return { error: '需要 study_id 与 trial_id(get_matrix_study 的 paper_candidates[].trial_id)' };
+        const r = svc.adoptCandidate(a.study_id, a.trial_id, typeof a.name === 'string' ? a.name : undefined);
+        return { ...r, note: '已存为候补策略(未经最终验收),没有自动运行;请引导用户去我的策略里用模拟盘跑起来,看前向表现', link: r.next.link };
+      },
+    };
     return {
+      ...aspReadonlyChatTools({ db: this.store.marketDb, kvGet: (key) => this.store.kvGet(key), live: () => this.marketAgentInst ? { services: this.marketAgentInst.services.chatSnapshot(), poller: this.marketAgentInst.providerTasks.status() } : {} }),
       get_state: () => ({ loop: this.loopView(), workflow: this.workflow, account: this.account, markets: Object.fromEntries(this.markets), market_state: this.marketState, queue: this.queue.view(), daily_loss_pct: this.dailyLossPct().toFixed(2) }),
       list_threads: (a) => (a.status === 'all' ? this.store.threads({ limit: 30 }) : this.openThreads()),
       get_thread: (a) => {
@@ -4842,7 +5301,8 @@ export class DemoRuntime extends EventEmitter {
         const account = this.account ?? (await this.backend.account());
         const j: Judgment = { action: 'PROPOSE', direction: a.side, confidence: 0.6, headline: '对话中提议', thesis: a.thesis, reasons: ['用户/agent 对话中提议'], evidence_refs: [], invalidation: null, invalidation_price: a.stop_price, target_price: a.take_profits?.[0] ?? null, watch_conditions: [], proposal: { direction: a.side, entry: a.entry, limit_price: a.limit_price ?? null, entry_zone: null, stop_price: a.stop_price, take_profit_price: a.take_profits?.[0] ?? null, take_profits: a.take_profits ?? [], rationale: a.thesis } };
         const blockers = openingBlockers(this.openThreads(), this.workflow, symbol, this.store.threadOpensSince(utcDayStart(Date.now())), this.dailyLossHit());
-        const gates = evaluateGates(j, { markets:this.workflow.markets, halted: this.halted, paused: this.workflow.paused, account: { ...account, positions: account.positions.filter((p) => p.symbol === symbol && (p.market ?? 'perp') === (j.proposal?.market ?? 'perp')) }, market, opens_today: 0, stale_refs: new Set() }, { ...this.gatesCfg, risk_pct: Number(this.workflow.risk_pct) });
+        const chatAtr = await this.gateAtr(symbol, j.proposal?.market ?? 'perp');
+        const gates = evaluateGates(j, { markets:this.workflow.markets, halted: this.halted, paused: this.workflow.paused, account: { ...account, positions: account.positions.filter((p) => p.symbol === symbol && (p.market ?? 'perp') === (j.proposal?.market ?? 'perp')) }, market, opens_today: 0, stale_refs: new Set(), ...(chatAtr !== undefined ? { atr: chatAtr } : {}) }, this.execGates({ risk_pct: Number(this.workflow.risk_pct) }));
         const failed = [...gates.filter((g) => !g.passed).map((g) => `${g.name}:${g.reason}`), ...blockers];
         if (failed.length) return { accepted: false, blocked_by: failed };
         const ep: Episode = { id: id('ep'), at: Date.now(), as_of: Date.now(), symbol, thread_id: null, trigger: { kind: 'chat', detail: '对话中提议' }, strategy_before: { state: 'researching', version: 0 }, evidence: [], context_text: '', context_hash: '', prompt_version: PROMPT_VERSION, model: 'chat', judgment: j, judgment_raw: null, schema_errors: [], reducer: { from: 'researching', to: 'ready', accepted: true, reason: '对话提议' }, gates, intent: null, usage: null, status: 'done', error: null, strategy_after: null };
@@ -4876,7 +5336,7 @@ export class DemoRuntime extends EventEmitter {
           errors: applied?.errors ?? [],
           proposal: p ? { id: p.id, status: p.status, keys: Object.keys(p.patch), before: p.before, after: p.after, errors: p.errors, note: p.status === 'pending' ? '已生成设置提议卡,用户在界面上点确认才生效' : `提议无效:${p.errors.join('; ')}` } : null,
           refused_keys: refused,
-          note: refused.length ? '风险/杠杆/上限/自动执行/执行通道只能由用户在界面上改' : undefined,
+          note: refused.length ? '风险/杠杆/止损距离/净盈亏比/持仓与开仓上限/日亏停/仓位倍率属于执行层,改用 set_execution_policy(模拟盘区间内直接生效,否则生成提议);自动执行/执行通道只能由用户在界面上改' : undefined,
         };
       },
       run_scan: (a) => ({ queued: a.symbol ? this.scan(String(a.symbol).toUpperCase(), { kind: 'chat', detail: '对话中要求扫描' }) : this.scanAll({ kind: 'chat', detail: '对话中要求扫描' }) }),
@@ -4961,7 +5421,7 @@ export class DemoRuntime extends EventEmitter {
       recommend_assets: async (a) => recommendationSummary(await this.recommend(a ?? {})),
       // §9.53 B / §9.54:「策略研究」流程的其余工具(对话里任何底层模型都按 STRATEGY_LOOP_SKILL 的顺序调)
       start_matrix_study: async (a) => {
-        const svc = matrixStudyService(); if (!svc) return { error: '矩阵研究服务未就绪' };
+        const svc = matrixStudyService(); if (!svc) return { error: '批量验证服务未就绪' };
         const spec: Record<string, unknown> = { origin: { chat_session_id: chatSessionId ?? 'default' } };
         for (const k of ['symbols', 'timeframes', 'families', 'arms', 'market'] as const) if (a[k] !== undefined) spec[k] = a[k];
         const body = { spec, ...(a.recommendation_id ? { recommendation_id: a.recommendation_id } : {}), idempotency_key: `chat:${chatSessionId ?? 'default'}:${a.recommendation_id ?? JSON.stringify(spec)}` };
@@ -4970,34 +5430,79 @@ export class DemoRuntime extends EventEmitter {
         return { study_id: row.id, status: row.status, estimate: { cells: est.cells, trials: est.matrix_trials, iteration_trials_max: est.iteration_trials_max, judge_calls: est.judge_calls, judge_usd: est.judge_usd, cold_fetch_minutes_max: Math.ceil(est.data.cold_fetch_ms_upper / 60000), warnings: est.warnings }, link: `#matrix-study?id=${row.id}`, note: '研究异步进行,完成后会在本对话回报;不要反复查' };
       },
       get_matrix_study: async (a) => {
-        const svc = matrixStudyService(); if (!svc) return { error: '矩阵研究服务未就绪' };
-        const id = a.id ?? svc.list(1).items[0]?.id; if (!id) return { error: '还没有矩阵研究' };
-        const v = svc.get(id) as unknown as Record<string, unknown> & { finalists?: Record<string, unknown>[]; cells?: { result: { verdict: string } | null }[] };
+        const svc = matrixStudyService(); if (!svc) return { error: '批量验证服务未就绪' };
+        const id = a.id ?? svc.list(1).items[0]?.id; if (!id) return { error: '还没有批量验证' };
+        const v = svc.get(id) as unknown as Record<string, unknown> & { finalists?: Record<string, unknown>[]; cells?: { id: string; symbol: string; timeframe: string; family: string; side: string; arm: string; result: { verdict: string; tier?: string; tier_trial_id?: string | null; tier_reasons?: string[]; scorecard?: { score: { value: number; label: string }; metrics: { total_return: number; trades: number; max_drawdown: number; exposure_matched_hold: number | null }; luck: { text: string } } | null } | null }[] };
         const verdicts: Record<string, number> = {}; for (const c of v.cells ?? []) { const k = c.result?.verdict ?? 'pending'; verdicts[k] = (verdicts[k] ?? 0) + 1; }
+        // 批量验证 v2:候补 · 可纸面观察(只差样本数 / 显著性;不算通过)
+        const paper_candidates = (v.cells ?? []).filter((c) => c.result?.tier === 'paper_candidate' && c.result.tier_trial_id).map((c) => ({ trial_id: c.result!.tier_trial_id, symbol: c.symbol, timeframe: c.timeframe, family: c.family, side: c.side, arm: c.arm, why: c.result!.tier_reasons, score: c.result!.scorecard?.score.value ?? null, score_label: c.result!.scorecard?.score.label ?? null, selection_return: c.result!.scorecard?.metrics.total_return ?? null, trades: c.result!.scorecard?.metrics.trades ?? null, max_drawdown: c.result!.scorecard?.metrics.max_drawdown ?? null, luck: c.result!.scorecard?.luck.text ?? null }))
+          .sort((a, b) => (b.score ?? -1) - (a.score ?? -1)).slice(0, 12);
         return { id, status: v['status'], stage: v['stage'], progress: v['progress'], holdout_state: v['holdout_state'], conclusion: v['conclusion'], usage: v['usage'], cell_verdicts: verdicts,
+          paper_candidates, ...(paper_candidates.length ? { paper_candidate_note: '候补 = 只差样本数 / 显著性,没做最终验收,不算通过;用户同意后调 adopt_matrix_candidate{"study_id","trial_id"} 存成我的策略(不自动运行),再引导去我的策略用模拟盘跑前向。别把候补说成通过。' } : {}),
           finalists: (v.finalists ?? []).map((f) => ({ id: f['id'], symbol: f['symbol'], timeframe: f['timeframe'], horizon: f['horizon'], family: f['family'], arm: f['arm'], passed: f['passed'], cause: f['cause'], selection: f['selection'], holdout: f['holdout'], portfolio: f['portfolio'] ? { ...(f['portfolio'] as Record<string, unknown>), equity: undefined } : null })),
           link: `#matrix-study?id=${id}` };
       },
       adopt_matrix_finalist: async (a) => {
-        const svc = matrixStudyService(); if (!svc) return { error: '矩阵研究服务未就绪' };
+        const svc = matrixStudyService(); if (!svc) return { error: '批量验证服务未就绪' };
         return svc.adopt(a.study_id, a.finalist_id);
       },
+      // 批量验证 v2(chat.ts 的 ChatTools / TOOL_DOC 由另一任务在改,这里按名字挂上;说明由 get_matrix_study 的 paper_candidate_note 带给模型)
+      ...matrixCandidateTools,
+      get_execution_policy: () => ({ ...this.executionPolicyView(), ...this.stopConversionsNow() }),
+      set_execution_policy: (a) => this.setExecutionPolicy(a && typeof a === 'object' && 'patch' in a ? a.patch : a, { via: 'agent', session_id: chatSessionId }),
       get_agent_strategy: () => { const v = this.agentStrategy().view(); return { ...v, slices: v.slices.map((x) => ({ role: x.role, title: x.title, summary: x.summary })) }; },
       set_agent_strategy: async (a) => this.agentStrategy().put(a),
 
     };
   }
 
+  private readonly chatStates = new Map<string, { state: AgentChatState; tool: string | null; since: number | null }>();
+  private readonly chatWaiting = new Map<string, number>();
+  private readonly chatActive = new Set<string>();
+  chatStatus(session: string): { state: AgentChatState; tool: string | null; since: number | null } {
+    return this.chatStates.get(session) ?? { state: 'idle', tool: null, since: null };
+  }
+  private setChatStatus(session_id: string, role: string | null, state: AgentChatState, tool: string | null): void {
+    const at = Date.now();
+    this.chatStates.set(session_id, { state, tool, since: at });
+    this.emit('chat.status', { session_id, role: role === null ? null : chatRole(role), state, tool, at });
+  }
+
+  /** 只读当前调度字段,不启动 agent / brain / 市场服务。 */
+  agentLoopSignals(role: BotRole): { running: boolean; next_run_at: number | null } {
+    const q = this.queue.view().running;
+    const min = (values: (number | null)[]) => { const ns = values.filter((n): n is number => n !== null && Number.isFinite(n)); return ns.length ? Math.min(...ns) : null; };
+    const accountNext = !this.stopped && this.pollers.length && this.account ? this.account.as_of + this.accountPollMs : null;
+    switch (role) {
+      case 'gate_captain': return { running: false, next_run_at: this.team.nextCheckAt() };
+      case 'strategy_lab': return { running: this.team.labIsRunning(), next_run_at: this.team.nextCheckAt() };
+      case 'reviewer': return { running: this.reviewer.isThinking(), next_run_at: this.reviewer.nextCheckAt() };
+      case 'radar': return { running: this.radar.schedule().some((h) => h.running) || q?.kind === 'info', next_run_at: this.stopped || !this.pollers.length ? null : min([...this.radar.schedule().map((h) => h.next_at), this.infoTimer && this.marketState ? this.marketState.as_of + this.workflow.info_every_ms : null]) };
+      case 'thread_manager': return { running: this.inFlight !== null || q?.kind === 'scan' || q?.kind === 'review', next_run_at: this.stopped ? null : this.nextAt };
+      case 'portfolio_manager':
+      case 'risk_sentinel': return { running: this.accountPolling !== null, next_run_at: accountNext };
+      case 'executor': return { running: this.executorControl.active > 0, next_run_at: accountNext };
+      case 'asp_agent': {
+        const p = this.marketAgentInst?.providerTasks.status();
+        return { running: !!p?.working || this.okxAspTicking, next_run_at: min([p?.running && p.last_tick ? p.last_tick.at + p.interval_ms : null, this.okxAspTimer && this.okxAspLastPollAt ? this.okxAspLastPollAt + this.followSettings.poll_ms : null]) };
+      }
+    }
+  }
+
   sendChat(text: string, session: string | null = null): { queued: boolean } {
     const sid = session ?? 'default';
     const sess = this.store.chatSession(sid);
-    this.requireBot((sess?.role ?? 'gate_captain') as BotRole);
+    this.requireBot(chatRole(sess?.role));
+    this.chatWaiting.set(sid, (this.chatWaiting.get(sid) ?? 0) + 1);
+    // 同一规范线程已有一轮在思考时,保留当前状态;本轮结束后再显示后续排队。
+    if (!this.chatActive.has(sid)) this.setChatStatus(sid, sess?.role ?? null, 'queued', null);
     const queued = this.queue.enqueue(
       {
-      key: `chat:${Date.now()}`,
+      key: id('chat'),
       kind: 'chat',
       symbol: null,
       run: async () => {
+        this.chatActive.add(sid);
         try {
           this.requireBot((sess?.role ?? 'gate_captain') as BotRole);
           await runChatTurn(
@@ -5005,6 +5510,8 @@ export class DemoRuntime extends EventEmitter {
               assertEnabled: () => this.requireBot((sess?.role ?? 'gate_captain') as BotRole),
               brain: () => this.brainForRole('chat'),
               tools: this.chatTools(sid),
+              readonly_db: this.store.marketDb,
+              status: (state, tool) => this.setChatStatus(sid, sess?.role ?? null, state, tool),
               session_id: sid,
               can_execute: sess?.can_execute ?? false,
               role: sess?.role ?? null,
@@ -5020,6 +5527,12 @@ export class DemoRuntime extends EventEmitter {
           const err: ChatMessage = { id: id('msg'), at: Date.now(), role: 'system', text: `回复失败:${(e as Error).message}`, tool_calls: [], episode_id: null, kind: 'chat', session_id: sid };
           this.store.saveChat(err);
           this.emit('chat.message', err);
+          if (this.chatStatus(sid).state !== 'error') this.setChatStatus(sid, sess?.role ?? null, 'error', null);
+        } finally {
+          this.chatActive.delete(sid);
+          const pending = Math.max(0, (this.chatWaiting.get(sid) ?? 1) - 1);
+          if (pending) { this.chatWaiting.set(sid, pending); this.setChatStatus(sid, sess?.role ?? null, 'queued', null); }
+          else this.chatWaiting.delete(sid);
         }
       },
       },
@@ -5276,7 +5789,126 @@ export class DemoRuntime extends EventEmitter {
       origin: `trader:${sig.subscription_job_id ?? sig.trader}`, signal_id: sig.signal_id, risk_pct: Number(riskPct), approval: ctx.approval, authorize: ctx.authorize }, plan);
   }
 
-  /** 共享机械开仓:几何 → Judgment → 基础闸 → 组合经理。Strategy Run 禁止定量模型。 */
+  /** 已收盘 K 线的 ATR14(价格单位);取不到 = null。 */
+  private async closedAtr(symbol: string, tf: string, market: Market): Promise<number | null> {
+    try {
+      const now = Date.now(), bars = (await fetchKlines(symbol, tf, 80, undefined, market)).filter((b) => b.close_time <= now);
+      const f = bars.length >= 15 ? tfFeatures(tf, bars) : null;
+      const a = f ? f.atr14 : NaN;
+      if (!(Number.isFinite(a) && a > 0)) return null;
+      this.noteAtr(symbol, market, f!);
+      return a;
+    } catch { return null; }
+  }
+
+  /** 把已经算好的特征记进 ATR 缓存(AI 扫盘、K 线收盘触发器、closedAtr 都会顺手记)。 */
+  private noteAtr(symbol: string, market: Market, f: TfFeatures): void {
+    if (!(STOP_FLOOR_ATR_TFS as readonly string[]).includes(f.tf) || !(f.atr14 > 0) || !Number.isFinite(f.atr14)) return;
+    this.atrCache.set(`${market}:${symbol}:${f.tf}`, { atr: f.atr14, close: f.last_close, bar_close: f.last_open_time + tfToMs(f.tf) - 1, fetched_at: Date.now() });
+  }
+
+  /** 缓存里还算新的 ATR:下一根 K 线收盘(再宽限 1 分钟)之前都算。 */
+  private cachedAtr(symbol: string, tf: string, market: Market, now = Date.now()) {
+    const e = this.atrCache.get(`${market}:${symbol}:${tf}`);
+    return e && now <= e.bar_close + tfToMs(tf) + 60_000 ? e : null;
+  }
+
+  /** 止损底线要的 ATR:先看缓存,没有才拉一次;同一个键同时只拉一次,失败后 60 秒内不重试。 */
+  private async floorAtr(symbol: string, tf: string, market: Market): Promise<number | null> {
+    const hit = this.cachedAtr(symbol, tf, market);
+    if (hit) return hit.atr;
+    const key = `${market}:${symbol}:${tf}`;
+    const running = this.atrInflight.get(key);
+    if (running) return running;
+    if (Date.now() - (this.atrLastTry.get(key) ?? 0) < 60_000) return null;
+    this.atrLastTry.set(key, Date.now());
+    const p = this.closedAtr(symbol, tf, market).finally(() => this.atrInflight.delete(key));
+    this.atrInflight.set(key, p);
+    return p;
+  }
+
+  /** 当前止损底线配置(测试注入的 gates 也算在内)。 */
+  private floorThresholds() {
+    const cfg = this.execGates();
+    return { ...executionThresholds(this.workflow), stop_floor_mode: cfg.stop_floor_mode, stop_floor_atr_tf: cfg.stop_floor_atr_tf ?? '1h', min_stop_pct: cfg.min_stop_pct, max_stop_pct: cfg.max_stop_pct, min_stop_atr: cfg.min_stop_atr ?? 0 };
+  }
+
+  /**
+   * 开仓检查要传的 ATR(gates.ts ctx.atr):ATR 模式取 stop_floor_atr_tf 那根;百分比模式不需要,不拉网络;
+   * 测试注入的老配置(百分比和 ATR 两条都判)沿用原来的候选周期 ATR。
+   */
+  private async gateAtr(symbol: string, market: Market, legacyTf?: string): Promise<number | null | undefined> {
+    const th = this.floorThresholds(), mode = floorModeOf(th);
+    if (mode === 'atr') return this.floorAtr(symbol, th.stop_floor_atr_tf, market);
+    if (mode === 'both' && legacyTf) return this.closedAtr(symbol, legacyTf, market);
+    return undefined;
+  }
+
+  /** 写进提示词的止损底线:当前阈值 + 本币所选周期 ATR 占价格的百分比(从这次扫盘的特征里取)。 */
+  private stopFloorForPrompt(features: TfFeatures[], market: MarketView) {
+    const th = executionThresholds(this.workflow), a = features.find((f) => f.tf === th.stop_floor_atr_tf)?.atr14, mark = Number(market.mark);
+    return { thresholds: th, atr_pct: typeof a === 'number' && a > 0 && mark > 0 ? (a / mark) * 100 : null };
+  }
+
+  /** AI 扫盘开仓检查的 ATR:从这次扫盘已经算好的特征里取,不另外拉;ATR 模式取所选周期,老配置取工作周期。 */
+  private scanGateAtr(features: TfFeatures[], workTf: string): number | null {
+    const th = this.floorThresholds(), mode = floorModeOf(th);
+    const tf = mode === 'atr' ? th.stop_floor_atr_tf : workTf;
+    const a = features.find((f) => f.tf === tf)?.atr14;
+    return typeof a === 'number' && Number.isFinite(a) && a > 0 ? a : null;
+  }
+
+  /**
+   * §9.56 GET /api/execution-policy 的 stop_conversions:观察列表每个币的 ATR 占价格百分比和当前实际止损底线。
+   * 只从缓存算;缓存缺的在后台补拉,最多等 waitMs(默认 800ms),等不到的记 null 并标 stale,接口不会因此变慢。
+   */
+  async stopConversions(waitMs = 800) {
+    const started = Date.now(), market: Market = 'perp';
+    if (waitMs > 0) {
+      const missing: Promise<unknown>[] = [];
+      for (const sym of this.workflow.watchlist) for (const tf of STOP_FLOOR_ATR_TFS) if (!this.cachedAtr(sym, tf, market)) missing.push(this.floorAtr(sym, tf, market).catch(() => null));
+      if (missing.length) {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        await Promise.race([Promise.allSettled(missing), new Promise((r) => { timer = setTimeout(r, waitMs); })]);
+        if (timer) clearTimeout(timer);
+      }
+    }
+    try {
+      const view = this.stopConversionsNow();
+      return Date.now() - started > 1000 ? { ...view, stop_conversions: null, stop_conversions_stale: true } : view;
+    } catch {
+      return { stop_conversions: null, stop_conversions_as_of: Date.now(), stop_conversions_stale: true, risk_per_trade_usdt: null };
+    }
+  }
+
+  /** stop_conversions 的同步版本:只读缓存,不拉网络(agent 工具和 PATCH 回包用)。 */
+  stopConversionsNow() {
+    const now = Date.now(), market: Market = 'perp', th = executionThresholds(this.workflow);
+    let stale = false;
+    const rows = this.workflow.watchlist.map((symbol) => {
+      const mv = this.markets.get(symbol);
+      const cached = Object.fromEntries(STOP_FLOOR_ATR_TFS.map((tf) => [tf, this.cachedAtr(symbol, tf, market, now)])) as Record<StopFloorTf, { atr: number; close: number; fetched_at: number } | null>;
+      const anyEntry = STOP_FLOOR_ATR_TFS.map((tf) => cached[tf]).find((x) => !!x) ?? null;
+      const priceText = mv?.mark ?? (anyEntry ? String(anyEntry.close) : null);
+      const price = Number(priceText ?? NaN), ok = Number.isFinite(price) && price > 0;
+      const atr_pct = Object.fromEntries(STOP_FLOOR_ATR_TFS.map((tf) => [tf, ok && cached[tf] ? Math.round((cached[tf]!.atr / price) * 100 * 10000) / 10000 : null])) as Record<StopFloorTf, number | null>;
+      const floor = stopFloorPct(th, cached[th.stop_floor_atr_tf!]?.atr ?? null, ok ? price : 0);
+      const rowStale = !ok || STOP_FLOOR_ATR_TFS.some((tf) => atr_pct[tf] === null);
+      if (rowStale) stale = true;
+      const asOf = STOP_FLOOR_ATR_TFS.map((tf) => cached[tf]?.fetched_at).filter((x): x is number => typeof x === 'number');
+      return { symbol, price: ok ? priceText : null, atr_pct, floor_pct: floor === null ? null : Math.round(floor * 10000) / 10000, as_of: asOf.length ? Math.min(...asOf) : null, stale: rowStale };
+    });
+    const equity = Number(this.account?.equity ?? NaN), risk = Number(this.workflow.risk_pct);
+    return {
+      stop_conversions: rows as typeof rows | null,
+      stop_conversions_as_of: now,
+      stop_conversions_stale: stale,
+      // 打到止损大约亏多少:权益 × 单笔风险(仓位按这个数倒推,手续费和滑点另算)
+      risk_per_trade_usdt: Number.isFinite(equity) && equity > 0 && risk > 0 ? (equity * risk / 100).toFixed(2) : null,
+    };
+  }
+
+  /** 共享机械开仓:几何 → Judgment → 基础闸(执行层) → 组合经理(仓位倍率,§9.56)。IR 定几何,模型不定数量与价位。 */
   private async bookOpenFromPlan(input: { symbol: string; market: Market; side: Direction; label: string; origin: string; signal_id?: string; risk_pct: number; approval: 'manual' | 'auto'; authorize?: () => { ok: boolean; reason: string }; run?: StrategyRun; candidate?: RunCandidate; sized?: boolean }, plan: EntryPlan): Promise<OpenFromSignalResult> {
     const symbol = input.symbol, tradeMarket = input.market, riskPct = input.risk_pct;
     const fail = (reason: string): OpenFromSignalResult => ({ outcome: 'rejected', reason });
@@ -5310,9 +5942,19 @@ export class DemoRuntime extends EventEmitter {
     };
     const marketView = market ?? ({ symbol, mark: String(mark), as_of: Date.now() } as MarketView);
     const blockers = openingBlockers(this.openThreads(), this.workflow, symbol, this.store.threadOpensSince(utcDayStart(Date.now())), this.dailyLossHit(), tradeMarket);
-    const gates = evaluateGates(j, { markets:this.workflow.markets, halted: this.halted, paused: this.workflow.paused, account: { ...account, positions: account.positions.filter((p) => p.symbol === symbol && (p.market ?? 'perp') === (j.proposal?.market ?? 'perp')) }, market: marketView, opens_today: 0, stale_refs: new Set() }, { ...this.gatesCfg, risk_pct: Number(riskPct), max_opens_per_day: this.workflow.max_opens_per_day });
-    const failed = [...gates.filter((g) => !g.passed).map((g) => `${g.name}:${g.reason}`), ...blockers];
-    if (failed.length) return fail(`基础闸拒绝:${failed.join(';')}`);
+    // §9.56 执行层:止损底线走 gates.ts 同一个判定;ATR 模式取 stop_floor_atr_tf 那根的 ATR(有缓存),百分比模式不拉 K 线。
+    // 净RR 与 AI 扫盘持仓计划同一个判定(execution-policy.ts)。
+    const atr = await this.gateAtr(symbol, tradeMarket, input.run?.timeframe);
+    const gates = evaluateGates(j, { markets:this.workflow.markets, halted: this.halted, paused: this.workflow.paused, account: { ...account, positions: account.positions.filter((p) => p.symbol === symbol && (p.market ?? 'perp') === (j.proposal?.market ?? 'perp')) }, market: marketView, opens_today: 0, stale_refs: new Set(), ...(atr !== undefined ? { atr } : {}) }, this.execGates({ risk_pct: Number(riskPct), max_opens_per_day: this.workflow.max_opens_per_day }));
+    if (input.run && plan.stop !== null) {
+      const th = executionThresholds(this.workflow);
+      // 限价单按挂单价算,市价单按现价算,和下单前最后一次检查一致。没有止盈目标的策略(靠信号或时间离场)不算净盈亏比。
+      // 分档止盈按仓位比例加权成等效目标(blendedTarget),不拿首档部分止盈判整笔盈亏比
+      const rr = netRrCheck(input.side, entry === 'limit' ? limit : String(mark), plan.stop, blendedTarget(plan.take_profits.map((tp) => ({ price: tp.price, size: tp.percent ?? null }))), th);
+      if (rr.applicable) gates.push({ name: '净盈亏比', passed: rr.ok, code: 'min_net_rr', reason: `净RR=${rr.net_rr ?? '不可计算'},需≥${th.min_net_rr};往返成本预算${th.round_trip_cost_bps}bps` });
+    }
+    const failedGates = [...gates.filter((g) => !g.passed), ...blockers.map((b) => ({ name: '线程/日内限制', passed: false, reason: b, code: codeFromText(b)?.code ?? 'preflight' }))];
+    if (failedGates.length) return { outcome: 'rejected', reason: `基础闸拒绝:${failedGates.map((g) => g.name === '线程/日内限制' ? g.reason : `${g.name}:${g.reason}`).join(';')}`, layer: 'gate', code: gateReasonCode(failedGates[0]!), gates: failedGates };
     const detail = `${input.run ? '策略' : '订阅信号'} ${input.label} open ${symbol} ${input.side},${plan.stop === null ? '现货,无止损(可选)' : `止损 ${plan.stop}`}`;
     const ep: Episode = { id: id('ep'), at: Date.now(), as_of: Date.now(), symbol, thread_id: null, origin: input.origin, trigger: input.run ? { kind: 'kline_close', detail } : { kind: 'trader_signal', detail, hits: [{ kind: 'trader_signal', detail, score: 1 }] }, strategy_before: { state: 'researching', version: 0 }, evidence: [], context_text: '', context_hash: '', prompt_version: PROMPT_VERSION, model: input.run ? DemoRuntime.SKIPPED_MODEL : 'asp_agent', ...(input.run ? { skipped_model: true } : {}), judgment: j, judgment_raw: null, schema_errors: [], reducer: { from: 'researching', to: 'ready', accepted: true, reason: input.run ? '策略 IR → 组合经理' : 'ASP 订阅信号 → 组合经理' }, gates, intent: null, usage: null, status: 'done', error: null, strategy_after: null };
     this.store.saveEpisode(ep);
@@ -5324,12 +5966,15 @@ export class DemoRuntime extends EventEmitter {
     } catch (e) {
       const reason = (e as Error).message;
       // 组合限额 / 风控哨兵 / 提交前重闸都是 409:明确的「不开」,不是 unknown。
-      if ((e as { status?: number }).status === 409) return fail(reason);
+      if ((e as { status?: number }).status === 409) {
+        const blocked = ep.gates.filter((g) => !g.passed);
+        return { outcome: 'rejected', reason, layer: 'gate', code: blocked.length ? gateReasonCode(blocked[0]!) : codeFromText(reason)?.code ?? 'preflight', gates: blocked };
+      }
       return { outcome: 'failed_before_send', reason };
     }
     // executeOpen 会更新成交/订单/状态,必须取最新行,不能用开仓前的对象覆盖它。
     thread = this.store.thread(thread.id) ?? thread;
-    if (input.run && !isOpen(thread) && !thread.opened_at) return fail(thread.close_reason ?? '开仓被执行闸拒绝');
+    if (input.run && !isOpen(thread) && !thread.opened_at) return { outcome: 'rejected', reason: thread.close_reason ?? '开仓被执行闸拒绝', layer: 'gate', code: codeFromText(thread.close_reason ?? '')?.code ?? 'sizing' };
     if (input.run && this.store.intentsForThread(thread.id).some(i => i.kind === 'open' && i.status === 'unknown')) return { outcome: 'unknown', thread_id: thread.id, reason: '入场回执未知,按原 clientOrderId 对账,不重复下单' };
     thread.origin = input.origin;
     if (input.signal_id) thread.trader_signal_id = input.signal_id;
@@ -5410,8 +6055,9 @@ export class DemoRuntime extends EventEmitter {
       opens_today: this.store.threadOpensSince(utcDayStart(Date.now()), null),
       stale_refs: new Set<string>(),
       now: Date.now(),
+      ...await (async () => { const a = await this.gateAtr(symbol, tradeMarket); return a !== undefined ? { atr: a } : {}; })(),
     };
-    const gates = evaluateGates(signalJudgment, gateCtx, { ...this.gatesCfg, risk_pct: Number(riskPct), max_opens_per_day: this.workflow.max_opens_per_day });
+    const gates = evaluateGates(signalJudgment, gateCtx, this.execGates({ risk_pct: Number(riskPct), max_opens_per_day: this.workflow.max_opens_per_day }));
     // 入场方式闸:跟单永远是限价(市价意图也翻成了限价),所以 limit_only / prefer_limit 都该放行;
     // 真被拒了说明设置有别的收窄,如实拒。
     const styleGate = entryStyleGate(signalJudgment, null, this.workflow.entry_style ?? 'free', { entry_mode: null });

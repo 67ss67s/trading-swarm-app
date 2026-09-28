@@ -1,5 +1,5 @@
 // 矩阵研究测试夹具:确定性合成行情 + 可控优势的假执行器 + 判断桩。只做工程验证,不是经济证据;零网络。
-import type { ResearchBar, StrategyIR } from '@trading-swarm/contracts';
+import type { ResearchBar, StrategyIR } from '@trade-gate/contracts';
 import type { AssetExecutor, AssetRunEquity, BarsLoader } from '../../../../src/demo/research/backtest-report.js';
 import { candidateSnapshot } from '../../../../src/demo/research/judge/candidate.js';
 import type { DecisionProvider, FrozenModelProfile } from '../../../../src/demo/research/judge/types.js';

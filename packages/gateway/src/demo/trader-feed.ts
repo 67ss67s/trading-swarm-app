@@ -18,8 +18,8 @@
 
 import { normalizeBridgeSignal, type TraderSignal } from './trader-signal.js';
 
-export const FOLLOW_USER_AGENT = 'trading-swarm-follow/0.1';
-export const FOLLOW_AGENT_ID = 'trading-swarm-follow';
+export const FOLLOW_USER_AGENT = 'trade-gate-follow/0.1';
+export const FOLLOW_AGENT_ID = 'trade-gate-follow';
 /** 指数退避封顶(8794 `MAX_TARGET_BACKOFF_SECONDS`)。 */
 export const FOLLOW_MAX_BACKOFF_MS = 60_000;
 export const FOLLOW_BASE_BACKOFF_MS = 5_000;

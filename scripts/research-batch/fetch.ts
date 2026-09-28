@@ -1,5 +1,5 @@
 /**
- * 批量研究取数(零模型,只读公共接口):资产池(universe.json)× 周期 × 现货/永续,冻结成 JSON 放 ~/.trading-swarm-okx/research-batch/data/。
+ * 批量研究取数(零模型,只读公共接口):资产池(universe.json)× 周期 × 现货/永续,冻结成 JSON 放 ~/.trade-gate-okx/research-batch/data/。
  *  - 现货:backtest-report 的 okxLoader(先读 state.sqlite 的 research_datasets 缓存,只读打开;缺的头尾从 OKX 公共 K 线补);
  *  - 永续:data/perp-market.ts 的 syncCandles(成交价 K 线)+ loadFunding(OKX 归档/REST,早于 OKX 覆盖的币安代理),走共享 sqlite 缓存;
  *    批量研究全部用 1 倍杠杆,标记价只影响强平,1 倍下不会触发,所以不拉标记价(执行核按成交价兜底并标 mark_fallback)。
@@ -20,7 +20,7 @@ const kind = process.argv[2] as 'spot' | 'perp', tfs = (process.argv[3] ?? '1d,4
 if (kind !== 'spot' && kind !== 'perp') throw Error('用法: fetch.ts spot|perp [tfs]');
 mkdirSync(DATA_DIR, { recursive: true });
 const universe = readUniverse(), t0 = Date.now(), log = (m: string) => console.log(`${((Date.now() - t0) / 1000).toFixed(0)}s ${m}`);
-const db = kind === 'spot' ? new DatabaseSync(path.join(process.env.HOME!, '.trading-swarm-okx', 'demo', 'state.sqlite'), { readOnly: true }) : null;
+const db = kind === 'spot' ? new DatabaseSync(path.join(process.env.HOME!, '.trade-gate-okx', 'demo', 'state.sqlite'), { readOnly: true }) : null;
 const load = db ? okxLoader({ store: new ResearchStore(db), service: null as never }) : null;
 const cache = kind === 'perp' ? new MarketCache() : null, ctx = cache ? perpContext(cache) : null;
 for (const tf of tfs) for (const symbol of universe) {

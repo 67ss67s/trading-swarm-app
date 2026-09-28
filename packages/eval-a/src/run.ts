@@ -4,7 +4,7 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
-import { demo } from '@trading-swarm/gateway';
+import { demo } from '@trade-gate/gateway';
 import { cacheKey, ResponseCache } from './cache.js';
 import { zaiApiBrain } from './api-brain.js';
 import { citedMemoryIds } from './checks.js';

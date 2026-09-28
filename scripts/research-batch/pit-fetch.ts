@@ -4,7 +4,7 @@
  *    归档里最后一个月之后到 TO_MS 的日线用 data-api.binance.vision/api/v3/klines 补(只对仍有最近月份数据的交易对)。
  *    两者都是静态 CDN / 公共行情镜像,不占主站 API 权重;本机走 Clash 代理。
  *  - 2025-01 起现货归档的时间戳是微秒,统一折成毫秒。
- *  - 冻结到 ~/.trading-swarm-okx/research-batch/pit/<SYM>.json:{ symbol, bars:[open_time, open, high, low, close, quote_volume][] },已有文件跳过(可断点续跑)。
+ *  - 冻结到 ~/.trade-gate-okx/research-batch/pit/<SYM>.json:{ symbol, bars:[open_time, open, high, low, close, quote_volume][] },已有文件跳过(可断点续跑)。
  * 用法:node --experimental-transform-types --no-warnings --import ./scripts/research-oracle/register.mjs scripts/research-batch/pit-fetch.ts [--concurrency 12]
  */
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';

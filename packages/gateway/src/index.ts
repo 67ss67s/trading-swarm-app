@@ -1,4 +1,4 @@
-// @trading-swarm/gateway — A0 scope: ExecClient (UDS JSON-RPC client for execd) and state.sqlite
+// @trade-gate/gateway — A0 scope: ExecClient (UDS JSON-RPC client for execd) and state.sqlite
 // (schema + migrator + minimal DAOs). See README.md.
 
 export { defaultExecdSocketPath, ExecClient, ExecRpcError, ExecTimeout } from './exec-client.js';

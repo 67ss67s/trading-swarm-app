@@ -3,8 +3,13 @@ import { judgeWithBars, type JudgeRuntime } from './research/judge/index.js';
 import { candidateSnapshot, judgeDecimal } from './research/judge/candidate.js';
 import { randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
-import type { StrategyIR } from '@trading-swarm/contracts';
-import type { Kline, StrategyThread } from './types.js';
+import type { BacktestReport, ResearchBar, StrategyIR } from '@trade-gate/contracts';
+import { reportBars } from './research/backtest-report.js';
+import { atr as researchAtr } from './research/primitives/registry.js';
+import type { FrozenModelProfile, JudgeCandidateSnapshot, JudgeResult } from './research/judge/types.js';
+import { needsMicrostructure } from './research/judge/microstructure.js';
+import type { GateResult, Kline, StrategyThread } from './types.js';
+import type { ReasonLayer } from './execution-policy.js';
 import { isOpen } from './threads.js';
 import { researchContext, toResearchBars, SYNTH_POLICY } from './strategy-candidate.js';
 import { viewBars } from './research/engine.js';
@@ -19,8 +24,23 @@ import type { Position } from './research/ledger.js';
 import { BINDING_LEVERAGE_CAP } from './research/strategies/compile-binding.js';
 import { onStrategyArchived, type StrategyService } from './research/strategies/service.js';
 import type { PublishEvent } from './asp-agent/publisher.js';
+import { JEV_SHADOW_MAX_INFLIGHT, JudgeLiveLedger, gateRecord, memoMicro, runJevJudge, runShadowJudge, type JevShadowFactory, type JevVerdict, type JudgeLiveRecord } from './judge-live.js';
+import { DEFAULT_EXECUTION_THRESHOLDS, blendedTarget, codeFromText, policyFit, policyFitAdvice, researchThresholds, thresholdsText, type ExecutionThresholds, type GeometrySample } from './execution-policy.js';
 
-export type StrategyRunMode = 'auto' | 'agent' | 'confirm' | 'signal_only';
+/** slow_ir 护栏:IR 是同步纯计算,按本进程 CPU 时间计(机器负载高时墙钟会被别的进程拉长,不能当成 IR 自己慢);
+ *  另设墙钟硬上限防事件循环被长时间占住。测试可注入 deps.clock。 */
+const IR_CPU_BUDGET_MS = 200, IR_WALL_CEILING_MS = 2000;
+const irCpuClock = (): number => { const u = process.cpuUsage(); return (u.user + u.system) / 1000; };
+
+/**
+ * 判断层(§9.56):auto = 直接做;agent = LLM 判断 agent 过滤;jev = Jev 判断作真门(无 IR judge 块时);signal_only = 只发信号。
+ * confirm(每笔问我)已下线:新建/修改不再接受,已存在的 confirm 运行照旧能跑(不迁移)。
+ */
+export type StrategyRunMode = 'auto' | 'agent' | 'jev' | 'confirm' | 'signal_only';
+/** 新建/修改运行时可选的模式(confirm 不在内)。 */
+export const RUN_MODES_WRITABLE: StrategyRunMode[] = ['auto', 'agent', 'jev', 'signal_only'];
+/** jev 模式等 Jev 回答最多 30 秒,超时按跳过。judgeCandidate 对每道题有自己的超时,这里管的是读盘口数据之类的其它等待。 */
+export const JEV_GATE_TIMEOUT_MS = 30_000;
 export type StrategyRunStatus = 'running' | 'paused' | 'stopped' | 'error';
 export type SymbolsSource = { kind: 'fixed' } | { kind: 'radar'; tier: 'short' | 'swing' | 'weekly'; top_n: number };
 export interface StrategyRun {
@@ -28,6 +48,8 @@ export interface StrategyRun {
   ir_hash: string; timeframe: string; mode: StrategyRunMode; market: 'spot' | 'perp'; direction: 'long' | 'short' | 'both'; leverage: number;
   symbols: string[]; risk_pct: number; max_open: number; publish_asp: boolean; status: StrategyRunStatus; error: string | null;
   symbols_source?: SymbolsSource;
+  /** Jev 影子判断开关(默认开;false = 不对无 judge 块的候选做影子判断)。只影响记录,不影响下单。 */
+  jev_shadow?: boolean;
   execution: { backend: 'paper' | 'okx' | 'binance'; profile: 'demo' | 'live' | null; label: string };
   created_at: number; updated_at: number; last_scan_at: number | null; next_scan_at: number | null;
   stats: { scans: number; candidates: number; orders: number; pending_approval: number; skipped: number; rejected: number; open_threads: number; closed: number; realized_r: number | null; published: number; today_orders: number };
@@ -49,8 +71,10 @@ export interface RunEnvironment {
   execution: StrategyRun['execution']; execution_key: string;
   watchlist: string[]; risk_pct: number; leverage_cap: number;
   asp: StrategyRunPreflight['asp'] & { id: string | null };
+  /** §9.56 执行层阈值(workflow);预检拿它核对回测/历史候选。不给 = 执行层缺省。 */
+  execution_thresholds?: ExecutionThresholds;
 }
-export interface RunOpenResult { outcome: string; reason: string; thread_id?: string | null }
+export interface RunOpenResult { outcome: string; reason: string; thread_id?: string | null; /** §9.56 结构化拒绝(执行层闸等):写进 order_rejected 事件 data */ layer?: ReasonLayer; code?: string; gates?: GateResult[] }
 export interface RunFilterResult { decision: 'follow' | 'skip'; reason: string }
 export interface RunPositionState {
   fee_rate?: string; initial_stop?: string; first_tp_filled_at?: number;
@@ -91,6 +115,8 @@ export interface StrategyRunDeps {
   /** IR judge 的依赖，所有模式共用；无配置时 fail closed。 */
   microstructure?: import('./research/judge/microstructure.js').MicrostructureSource;
   judge?: (run: StrategyRun, ir: StrategyIR) => JudgeRuntime | null;
+  /** Jev 影子判断(docs/design/jev-live-2026-09-25.md):IR 无 judge 块的候选只记录不挡单;不接 = 不做影子判断。 */
+  jevShadow?: JevShadowFactory;
   filter: (run: StrategyRun, candidate: RunCandidate, ir: StrategyIR) => Promise<RunFilterResult>;
   publish: (event: PublishEvent) => Promise<unknown>;
   emit: (event: string, payload: unknown) => void;
@@ -108,6 +134,11 @@ export const isStrategyRunThread = (t: StrategyThread) => t.origin?.startsWith('
 export const nextRunScan = (now: number, tf: string) => (Math.floor((now - 5000) / timeframeMillis(tf)) + 1) * timeframeMillis(tf) + 5000;
 const live = (e: StrategyRun['execution']) => e.backend !== 'paper' && e.profile !== 'demo';
 const failure = (message: string, code = 'invalid_request', status = 400): never => { throw Object.assign(new Error(message), { code, status }); };
+/** §9.56 事件 data 的结构化原因:layer + code;认不出的按调用方给的层、取「code:说明」的前缀。 */
+export const reasonData = (reason: string, fallback: ReasonLayer = 'strategy'): { layer: ReasonLayer; code: string } => {
+  const c = codeFromText(reason);
+  return c ?? { layer: fallback, code: (String(reason).split(':')[0] || 'unknown').slice(0, 60) };
+};
 export function parseSymbolsSource(raw: unknown): SymbolsSource {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return failure('symbols_source 必须是对象');
   const x = raw as Record<string, unknown>;
@@ -148,6 +179,17 @@ export class StrategyRunStore {
   clearTransition(id: string, symbol: string): void { this.db.prepare('DELETE FROM demo_kv WHERE key=?').run(`strategy_run:transition:${id}:${symbol}`); }
   append(e: StrategyRunEvent): void { this.db.prepare('INSERT INTO strategy_run_events(id,run_id,at,kind,json) VALUES (?,?,?,?,?)').run(e.id, e.run_id, e.at, e.kind, JSON.stringify(e)); }
   sequence(): number { return Number(this.db.prepare('SELECT COALESCE(MAX(seq),0) AS n FROM strategy_run_events').get()?.['n']); }
+  /**
+   * view() 的事件统计:按 kind 计数(走 (run_id, kind, at) 覆盖索引),只读 order_opened 行的 at/thread_id。
+   * 与「since(id,0) 全量读出再逐条数」同口径:kind 列与 JSON 里的 kind 同源写入(append / 平仓 upsert 只改 json 不改 kind)。
+   */
+  eventStats(id: string): { kinds: Map<string, number>; opened: { at: number; thread_id: unknown }[] } {
+    const kinds = new Map<string, number>();
+    for (const r of this.db.prepare('SELECT kind, COUNT(*) AS n FROM strategy_run_events WHERE run_id=? GROUP BY kind').all(id)) kinds.set(String(r['kind']), Number(r['n']));
+    const opened = this.db.prepare("SELECT json_extract(json,'$.at') AS at, json_extract(json,'$.data.thread_id') AS thread_id FROM strategy_run_events WHERE run_id=? AND kind='order_opened'").all(id)
+      .map(r => ({ at: Number(r['at']), thread_id: r['thread_id'] ?? undefined }));
+    return { kinds, opened };
+  }
   since(id: string, seq: number): StrategyRunEvent[] { return this.db.prepare('SELECT json FROM strategy_run_events WHERE run_id=? AND seq>? ORDER BY seq').all(id, seq).map(r => JSON.parse(String(r['json'])) as StrategyRunEvent); }
   events(id: string, limit = 50, cursor?: string | null): { rows: StrategyRunEvent[]; next_cursor: string | null } {
     this.require(id);
@@ -208,8 +250,12 @@ export class StrategyRunner {
   private closed = false;
   private off: () => void;
   private now: () => number;
+  /** 实盘 Jev 判断账本(影子 + 挡单),routes-judge-live.ts 读它。 */
+  readonly judgeLedger: JudgeLiveLedger;
+  private shadows = new Set<Promise<unknown>>();
+  private shadowAbort = new AbortController();
   constructor(readonly deps: StrategyRunDeps) {
-    this.store = new StrategyRunStore(deps.db); this.now = deps.now ?? Date.now;
+    this.store = new StrategyRunStore(deps.db); this.now = deps.now ?? Date.now; this.judgeLedger = new JudgeLiveLedger(deps.db, this.now);
     this.off = onStrategyArchived(id => this.archive(id));
   }
   private serial<T>(fn: () => Promise<T>): Promise<T> {
@@ -222,25 +268,24 @@ export class StrategyRunner {
     this.store.append(e); this.deps.emit('strategy_run.event', e); return e;
   }
   private view(r: StrategyRun): StrategyRun {
-    const rows = this.store.since(r.id, 0), ts = this.deps.threads(r.id), today = new Date(this.now()); today.setHours(0, 0, 0, 0);
-    const stats = emptyStats();
-    for (const e of rows) {
-      if (e.kind === 'scan') stats.scans++;
-      if (e.kind === 'candidate') stats.candidates++;
-      if (e.kind === 'order_opened') { stats.orders++; if (e.at >= today.getTime()) stats.today_orders++; }
-      if (e.kind === 'skip' || e.kind === 'agent_skip') stats.skipped++;
-      if (e.kind === 'order_rejected') stats.rejected++;
-      if (e.kind === 'published') stats.published++;
-    }
+    // 统计只要按 kind 的计数和 order_opened 的 at/thread_id:SQL 聚合,不再每次把整段事件历史读出来逐条 JSON.parse。
+    const { kinds, opened } = this.store.eventStats(r.id), ts = this.deps.threads(r.id), today = new Date(this.now()); today.setHours(0, 0, 0, 0);
+    const stats = emptyStats(), n = (k: StrategyRunEvent['kind']) => kinds.get(k) ?? 0;
+    stats.scans = n('scan');
+    stats.candidates = n('candidate');
+    stats.orders = opened.length; stats.today_orders = opened.filter(e => e.at >= today.getTime()).length;
+    stats.skipped = n('skip') + n('agent_skip');
+    stats.rejected = n('order_rejected');
+    stats.published = n('published');
     // 人工审批通过后也算订单,按线程去重;closed 的结算仍可继续补齐 R。
-    const recorded = new Set(rows.filter(e => e.kind === 'order_opened').map(e => e.data?.['thread_id']));
+    const recorded = new Set(opened.map(e => e.thread_id));
     for (const t of ts) if (t.opened_at && !recorded.has(t.id)) { stats.orders++; if (t.opened_at >= today.getTime()) stats.today_orders++; }
     stats.open_threads = ts.filter(isOpen).length;
     stats.pending_approval = ts.filter(t => isOpen(t) && this.deps.pendingApproval?.(t)).length;
     stats.closed = ts.filter(t => t.status === 'closed').length;
     const rs = ts.filter(t => t.status === 'closed').map(t => this.deps.realizedR?.(t) ?? null).filter((x): x is number => x !== null && Number.isFinite(x));
     stats.realized_r = rs.length ? rs.reduce((a, b) => a + b, 0) : null;
-    return { ...r, symbols_source: r.symbols_source ?? { kind: 'fixed' }, latest_version: this.deps.strategies.store.get(r.strategy_id)?.current_version ?? r.latest_version, stats };
+    return { ...r, symbols_source: r.symbols_source ?? { kind: 'fixed' }, jev_shadow: r.jev_shadow !== false, latest_version: this.deps.strategies.store.get(r.strategy_id)?.current_version ?? r.latest_version, stats };
   }
   list(): StrategyRun[] { return this.store.list().map(r => this.view(r)); }
   get(id: string): StrategyRun { return this.view(this.store.require(id)); }
@@ -249,6 +294,8 @@ export class StrategyRunner {
     if (!isStrategyRunThread(t)) return;
     const r = this.store.get(t.origin!.slice('strategy_run:'.length)); if (!r) return;
     if (t.status === 'canceled' && t.entry_expires_at && this.now() >= t.entry_expires_at && this.store.claim(r.id, `expiry:${t.id}`, t.entry_expires_at)) this.event(r, 'skip', '限价挂单已过期,已确认未成交入场单结束', t.symbol, { code: 'entry_expired', thread_id: t.id, as_of: t.entry_expires_at });
+    // 09-26 stuck-entry:「已提交、结果未知」的入场单经复核判定未到交易所 → 本运行该币占位释放(没有重发)。
+    if (t.status === 'canceled' && t.close_reason?.startsWith('entry_unknown_not_found') && this.store.claim(r.id, `entry_unknown:${t.id}`, t.closed_at ?? 0)) this.event(r, 'skip', `${t.symbol} 入场单按 clientOrderId 多次查无此单,复核无持仓/挂单,判定未到交易所,释放占位(未重发)`, t.symbol, { code: 'entry_unknown_not_found', thread_id: t.id, client_order_id: t.entry_client_order_id, lookup_misses: t.entry_lookup_misses });
     if (t.status === 'closed') {
       const id = `runev_closed_${t.id}`, value = this.deps.realizedR?.(t) ?? null;
       const prior = this.deps.db.prepare('SELECT json FROM strategy_run_events WHERE id=?').get(id);
@@ -309,6 +356,18 @@ export class StrategyRunner {
     // 复审 High-4:移损是回测收益的一部分(吊灯线是账本里唯一不亏的持仓管理),没接通就跑 = 实盘与回测两套规则 → 挡住
     if (ir && ((!this.deps.moveStop && (ir.exit.some(x => ['chandelier_trail', 'breakeven_after_r', 'swing_structure_stop'].includes(x.primitive)) || ir.order?.breakeven_after_tp)) || (ir.order?.breakeven_after_tp && !this.deps.positionState))) block('trailing_not_connected', '这条策略靠追踪/保本/结构移损管仓,运行器的移损还没接通(缺 moveStop 或首档止盈成交状态);接通前不能运行');
     if (!this.deps.strategies.store.reports(strategy_id).some(r => r.version === v && r.completed)) warnings.push({ code: 'not_backtested', message: '这个版本还没有完成的回测报告' });
+    // §9.56 回测/历史候选按当前执行层核对:实盘会被拒掉多少(与实盘开仓闸同一个判定)
+    if (ir && v) {
+      // 样本里的 ATR 是策略周期的,阈值按回测同一套折算(ATR 模式的倍数折到策略周期),这样和回测报告里冻结的快照能直接比
+      const current = env.execution_thresholds ?? DEFAULT_EXECUTION_THRESHOLDS;
+      const snapshot = researchThresholds(current, timeframeMillis(s.timeframe));
+      // 样本检查保留模式和自定义百分比,缺 ATR 时仍按当前设置计算。
+      const sampleThresholds = { ...current, min_stop_atr: snapshot.min_stop_atr };
+      delete sampleThresholds.stop_floor_atr_tf;
+      const fit = this.executionFit(strategy_id, v, sampleThresholds);
+      for (const w of fit.warnings) warnings.push(w);
+      if (fit.blocker) block(fit.blocker.code, fit.blocker.message);
+    }
     if (!env.asp.identity) warnings.push({ code: 'asp_identity_missing', message: '尚未注册 ASP 身份,发布会跳过;请到信号市场 → 发布注册' });
     const cap = Math.min(BINDING_LEVERAGE_CAP, env.leverage_cap);
     if (selectedMarket === 'perp' && rawLeverage > cap) warnings.push({ code: 'leverage_capped', message: `杠杆按账户/工作流上限封顶为 ${cap} 倍` });
@@ -319,13 +378,70 @@ export class StrategyRunner {
       watchlist: env.watchlist, execution: env.execution, requires_live_confirm: live(env.execution), asp: { identity: env.asp.identity, active: env.asp.active, publisher_enabled: env.asp.publisher_enabled },
       existing_run: this.list().find(r => r.strategy_id === strategy_id && r.status !== 'stopped') ?? null };
   }
+  /**
+   * §9.56 预检:用这个版本的回测结果检查执行层会拒掉多少。新回测报告直接读 execution_gate;旧报告用订单计划里的止损止盈和数据集算的 ATR;
+   * 都没有就用本策略同版本实盘候选)按当前执行层阈值过一遍。拒掉 ≥50% → blocker,>0 → warning,拿不到样本 → warning「无法核对」。
+   * 文案只建议改策略(止损倍数/止盈),不建议调低执行层下限。
+   */
+  private executionFit(strategy_id: string, version: number, th: ExecutionThresholds): { warnings: { code: string; message: string }[]; blocker: { code: string; message: string } | null } {
+    const warnings: { code: string; message: string }[] = [];
+    const link = this.deps.strategies.store.reports(strategy_id).find(r => r.version === version && r.completed);
+    let report: BacktestReport | null = null;
+    try { report = link ? this.deps.strategies.detail(strategy_id, link.report_id).report : null; } catch { report = null; }
+    const samples: GeometrySample[] = [];
+    let source = '';
+    for (const a of report?.assets ?? []) {
+      let bars: readonly ResearchBar[] | null = null;
+      try { bars = reportBars(this.deps.strategies.research, report!, a.key); } catch { bars = null; }
+      for (const p of a.plans ?? []) {
+        if (p.status === 'blocked' || !p.stop) continue;
+        const ref = p.entry_price ?? p.reference_price, upto = bars ? bars.filter(b => b.close_time <= p.placed_at).slice(-15) : [];
+        const atrNow = upto.length === 15 ? researchAtr(upto as ResearchBar[], 14) : NaN;
+        samples.push({ side: p.side === 'short' ? 'short' : 'long', ref, stop: p.stop.price, target: blendedTarget(p.take_profits.map(t => ({ price: t.price, size: t.size_pct }))), atr: Number.isFinite(atrNow) && atrNow > 0 ? atrNow : null });
+      }
+    }
+    if (samples.length) source = '回测订单';
+    else {
+      // 同策略同版本的实盘候选(运行器已经看到的真实几何;没有 ATR,只核对百分比与净RR)
+      for (const r of this.store.list().filter(r => r.strategy_id === strategy_id && r.version === version)) {
+        for (const e of this.deps.db.prepare("SELECT json FROM strategy_run_events WHERE run_id=? AND kind='candidate' ORDER BY seq DESC LIMIT 200").all(r.id).map(x => JSON.parse(String(x['json'])) as StrategyRunEvent)) {
+          const d = e.data ?? {};
+          const tps = Array.isArray(d['take_profits']) ? (d['take_profits'] as { price: string; size_pct: number }[]).map(t => ({ price: t.price, size: t.size_pct })) : [];
+          samples.push({ side: d['direction'] === 'short' ? 'short' : 'long', ref: Number(d['entry_ref']), stop: Number(d['stop']), target: tps.length ? blendedTarget(tps) : d['target'] === null || d['target'] === undefined ? null : Number(d['target']), atr: null });
+        }
+      }
+      if (samples.length) source = '实盘候选';
+    }
+    const gate = (report as { execution_gate?: { thresholds?: Partial<ExecutionThresholds>; checked: number; rejected: number; rejected_by_execution: Record<string, number> } | null } | null)?.execution_gate;
+    const fit = policyFit(samples, th);
+    let checked = fit.checked, rejected = fit.rejected, by = fit.rejected_by_execution as Record<string, number>;
+    if (gate && gate.checked > 0) {
+      // 新回测报告在回测时就按执行层拒过单,直接用报告里的数;当时用的阈值和现在不一样就提示重跑
+      checked = gate.checked; rejected = gate.rejected; by = gate.rejected_by_execution; source = '回测';
+      const snap = gate.thresholds ?? {}, currentSnapshot = researchThresholds(th, null);
+      if ((['min_stop_pct', 'max_stop_pct', 'min_stop_atr', 'min_net_rr'] as const).some(k => snap[k] !== undefined && snap[k] !== currentSnapshot[k]))
+        warnings.push({ code: 'execution_policy_changed', message: `回测时的执行层阈值(${thresholdsText({ ...currentSnapshot, ...snap } as ExecutionThresholds)})与现在(${thresholdsText(th)})不同,回测结果不代表现在的实盘,请重跑回测` });
+    }
+    if (!checked) {
+      warnings.push({ code: 'execution_unverified', message: `无法核对执行层:没有找到这个版本的回测订单或实盘候选(执行层要求${thresholdsText(th)}),实盘可能被执行层拒单` });
+      return { warnings, blocker: null };
+    }
+    if (!rejected) return { warnings, blocker: null };
+    const pct = Math.round((rejected / checked) * 100);
+    const parts = [['stop_distance', '止损低于下限'], ['stop_atr', '止损小于 ATR 下限'], ['stop_too_wide', '止损过宽'], ['min_net_rr', '净RR不足']].filter(([k]) => (by[k!] ?? 0) > 0).map(([k, l]) => `${l} ${by[k!]}`).join('、');
+    const advice = policyFitAdvice({ ...fit, rejected_by_execution: { stop_distance: by['stop_distance'] ?? 0, stop_atr: by['stop_atr'] ?? 0, stop_too_wide: by['stop_too_wide'] ?? 0, min_net_rr: by['min_net_rr'] ?? 0 } }, th);
+    const message = `${source}按当前执行层会被拒掉 ${pct}%(${rejected}/${checked}:${parts})${fit.median_stop_pct !== null ? `,样本止损中位 ${fit.median_stop_pct.toFixed(2)}%` : ''};建议${advice || '调整策略几何'}`;
+    // 只有回测样本过半被拒才挡住上线;实盘候选只提示,运行时本来就会逐单拒掉并记下原因,不该连暂停/改参数都拦
+    return source !== '实盘候选' && rejected / checked >= 0.5 ? { warnings, blocker: { code: 'execution_policy_mismatch', message } } : { warnings: [...warnings, { code: 'execution_policy_mismatch', message }], blocker: null };
+  }
   private validate(raw: unknown, create: boolean): Record<string, unknown> {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) failure('请求体必须是对象');
-    const b = raw as Record<string, unknown>, allowed = ['version', 'mode', 'symbols', 'symbols_source', 'risk_pct', 'max_open', 'publish_asp', 'confirm', ...(create ? ['strategy_id', 'market'] : ['status'])];
+    const b = raw as Record<string, unknown>, allowed = ['version', 'mode', 'symbols', 'symbols_source', 'risk_pct', 'max_open', 'publish_asp', 'jev_shadow', 'confirm', ...(create ? ['strategy_id', 'market'] : ['status'])];
     for (const key of Object.keys(b)) if (!allowed.includes(key)) failure(`未知字段 ${key}`);
     if (create && (typeof b['strategy_id'] !== 'string' || !b['strategy_id'])) failure('strategy_id 必填');
     if ('version' in b && !(Number.isInteger(b['version']) && Number(b['version']) > 0)) failure('version 必须是正整数');
-    if ('mode' in b && !['auto', 'agent', 'confirm', 'signal_only'].includes(String(b['mode']))) failure('无效的 mode');
+    if ('mode' in b && b['mode'] === 'confirm') failure('「每笔问我确认」已下线;请选 auto(直接做)/ agent(LLM 判断)/ jev(Jev 判断)/ signal_only(只发信号)。已在跑的 confirm 运行不受影响', 'mode_confirm_removed');
+    if ('mode' in b && !RUN_MODES_WRITABLE.includes(String(b['mode']) as StrategyRunMode)) failure('无效的 mode,只能是 auto / agent / jev / signal_only');
     if ('market' in b && !['spot', 'perp'].includes(String(b['market']))) failure('无效的 market');
     if ('status' in b && !['running', 'paused', 'stopped'].includes(String(b['status']))) failure('无效的 status');
     if ('symbols' in b && !(Array.isArray(b['symbols']) && b['symbols'].length > 0 && b['symbols'].length <= 30 && b['symbols'].every(x => typeof x === 'string' && /^[A-Z0-9]+USDT$/.test(x)))) failure('symbols 必须是 1–30 个内部 USDT 符号');
@@ -333,6 +449,7 @@ export class StrategyRunner {
     if ('risk_pct' in b && !(typeof b['risk_pct'] === 'number' && Number.isFinite(b['risk_pct']) && b['risk_pct'] > 0 && b['risk_pct'] <= 100)) failure('risk_pct 必须在 (0,100]');
     if ('max_open' in b && !(Number.isInteger(b['max_open']) && Number(b['max_open']) >= 1 && Number(b['max_open']) <= 30)) failure('max_open 必须在 1–30');
     if ('publish_asp' in b && typeof b['publish_asp'] !== 'boolean') failure('publish_asp 必须是布尔值');
+    if ('jev_shadow' in b && typeof b['jev_shadow'] !== 'boolean') failure('jev_shadow 必须是布尔值');
     if ('confirm' in b && b['confirm'] !== 'LIVE') failure('confirm 必须是 LIVE');
     return b;
   }
@@ -363,8 +480,8 @@ export class StrategyRunner {
     if (pf.requires_live_confirm && (!old || changingChannel || b['status'] === 'running' || 'version' in b || 'mode' in b || 'risk_pct' in b || 'symbols' in b || 'symbols_source' in b || 'max_open' in b) && b['confirm'] !== 'LIVE') failure('实盘运行需要输入 LIVE 确认', 'live_requires_confirm', 409);
     const now = this.now();
     const r: StrategyRun = { ...(old ?? { id: newId('run'), created_at: now, last_scan_at: null, stats: emptyStats(), status: 'running' }),
-      ...pf.defaults, ...(old ? { mode: old.mode, symbols: old.symbols, symbols_source: old.symbols_source ?? { kind: 'fixed' }, risk_pct: old.risk_pct, max_open: old.max_open, publish_asp: old.publish_asp } : {}),
-      ...Object.fromEntries(Object.entries(b).filter(([k]) => ['mode', 'symbols', 'symbols_source', 'risk_pct', 'max_open', 'publish_asp', 'status'].includes(k))),
+      ...pf.defaults, ...(old ? { mode: old.mode, symbols: old.symbols, symbols_source: old.symbols_source ?? { kind: 'fixed' }, risk_pct: old.risk_pct, max_open: old.max_open, publish_asp: old.publish_asp, ...(old.jev_shadow === false ? { jev_shadow: false } : {}) } : {}),
+      ...Object.fromEntries(Object.entries(b).filter(([k]) => ['mode', 'symbols', 'symbols_source', 'risk_pct', 'max_open', 'publish_asp', 'jev_shadow', 'status'].includes(k))),
       strategy_id: sid, strategy_name: this.deps.strategies.store.require(sid).name, version: pf.version, latest_version: this.deps.strategies.store.require(sid).current_version,
       ir_hash: this.deps.strategies.binding(sid, String(pf.version)).binding!.ir_hash, timeframe: pf.timeframe, direction: this.deps.strategies.store.versionIR(sid, pf.version)?.order?.direction ?? 'long', execution: env.execution,
       error: old?.error?.startsWith('slow_ir:') && b['status'] !== 'running' && !('version' in b) ? old.error : null,
@@ -434,9 +551,9 @@ export class StrategyRunner {
         if (this.store.seen(id, symbol, as_of)) continue;
         const ks = pool.get(symbol) ?? await this.deps.bars(symbol, r.timeframe, runHistoryBars(ir, ms), as_of - 1, r.market);
         if (!this.canRun(id)) break;
-        const start = (this.deps.clock ?? performance.now.bind(performance))();
+        const clock = this.deps.clock ?? irCpuClock, start = clock(), wallStart = performance.now();
         const g = (this.deps.generate ?? generateRunCandidate)({ shadow: { strategy_id: r.strategy_id, version: r.version, ir_hash: r.ir_hash, timeframe: r.timeframe, ir, source: 'research_strategy_version', label: r.strategy_name, unmapped: [], horizon_bars: Number(ir.exit.find(x => x.primitive === 'time_stop')?.params['bars'] ?? 48), pick_note: 'strategy_run' }, symbol, klines: { [r.timeframe]: ks }, now: as_of, screen: screens.find(row => row.symbol === symbol) });
-        if ((this.deps.clock ?? performance.now.bind(performance))() - start > 200) throw new Error(`slow_ir: ${symbol} 单次 IR 计算超过 200ms,运行已停止`);
+        if (clock() - start > IR_CPU_BUDGET_MS || performance.now() - wallStart > IR_WALL_CEILING_MS) throw new Error(`slow_ir: ${symbol} 单次 IR 计算超过 ${IR_CPU_BUDGET_MS}ms CPU(或 ${IR_WALL_CEILING_MS}ms 墙钟),运行已停止`);
         if (g.reason.startsWith('ir_error:')) throw new Error(g.reason);
         if (g.as_of !== as_of) { retryBars = true; this.event(r, 'skip', '行情尚未返回最新收盘 K 线,稍后重试', symbol); continue; }
         // 在任何模型/下单/发布之前持久化;崩溃留下已消费信号,不盲重放未知提交。
@@ -445,15 +562,22 @@ export class StrategyRunner {
         if (!c) { if (g.reason !== 'no_candidate' && g.reason !== 'regime_filter') this.event(r, 'skip', g.reason === 'screen_filter' ? '筛选条件未通过或历史不足,本根跳过' : g.reason, symbol, { code: g.reason.split(':')[0], as_of }); continue; }
         this.event(r, 'candidate', `${symbol} 命中 ${r.strategy_name}`, symbol, { entry_ref: String(c.entry_ref), stop: String(c.stop), target: c.target === null ? null : String(c.target), rr: c.rr, as_of, direction: c.direction, entry_type: c.entry_type, take_profits: c.take_profits?.map(t => ({ price: String(t.price), size_pct: t.size_pct })), warnings: c.unmapped, sizing_mode: c.size_weight === undefined ? 'fixed_risk' : 'vol_target', ...(c.size_weight !== undefined ? { size_weight: c.size_weight, size_note: c.size_note } : {}) });
         let traded = false, judgeFollow = true;
+        // Jev 影子判断:claim 之后、下单之前发起,fire-and-forget —— 不 await、不挡单、失败只记账本(见 shadowJudge)。
+        if (!ir.judge && r.mode !== 'jev' && r.jev_shadow !== false && this.deps.jevShadow) this.shadowJudge(r, ir, c, ks, ms);
         if (ir.judge) {
-          const runtime = this.deps.judge?.(r, ir);
-          if (!runtime) { judgeFollow = false; this.event(r, 'agent_skip', 'judge_runtime_missing', symbol); }
+          const runtime = this.deps.judge?.(r, ir), started = performance.now();
+          if (!runtime) { judgeFollow = false; this.event(r, 'agent_skip', 'judge_runtime_missing', symbol, { layer: 'judge', code: 'ir_judge_skip' }); this.recordGate(r, ir, c, null, [], ms, null, 'judge_runtime_missing', { source: undefined, snapshot: () => undefined }, null, started); }
           else {
             const snapshot = candidateSnapshot(ir, { symbol, as_of: c.as_of, timeframe_ms: ms, direction: c.direction,
               entry: judgeDecimal(c.entry_ref), stop: judgeDecimal(c.stop), target: c.target === null ? null : judgeDecimal(c.target), reward_risk: c.rr });
-            const answer = await judgeWithBars(ir, snapshot, toResearchBars(ks, ms, c.as_of), { ...runtime, ...(this.deps.microstructure ? { microstructure: this.deps.microstructure } : {}) });
+            // 同一录制源,只是记住这次读到的快照给账本复用;判断输入与原来完全一致。
+            const micro = memoMicro(this.deps.microstructure), bars = toResearchBars(ks, ms, c.as_of);
+            let answer: Awaited<ReturnType<typeof judgeWithBars>>;
+            try { answer = await judgeWithBars(ir, snapshot, bars, { ...runtime, ...(micro.source ? { microstructure: micro.source } : {}) }); }
+            catch (e) { this.recordGate(r, ir, c, snapshot, bars, ms, null, `judge_threw:${(e as Error).message}`, micro, runtime.model_profile, started); throw e; }
             judgeFollow = answer.action === 'follow';
-            this.event(r, judgeFollow ? 'agent_follow' : 'agent_skip', answer.reason_codes.join(',') || answer.action, symbol, { candidate_id: snapshot.id, judge: answer });
+            this.event(r, judgeFollow ? 'agent_follow' : 'agent_skip', answer.reason_codes.join(',') || answer.action, symbol, { candidate_id: snapshot.id, judge: answer, layer: 'judge', code: judgeFollow ? 'ir_judge_follow' : 'ir_judge_skip' });
+            this.recordGate(r, ir, c, snapshot, bars, ms, answer, null, micro, runtime.model_profile, started);
           }
         }
         const active = this.deps.threads(id).filter(isOpen);
@@ -461,26 +585,35 @@ export class StrategyRunner {
         let skip = same.length > 1 ? 'ambiguous_position:同币多条活动线程需先对账' : !current && active.length >= r.max_open ? 'max_open:已达本运行同时持仓上限' : null;
         if (ir.order?.min_rr && (c.rr === null || c.rr < ir.order.min_rr)) skip = 'min_rr:候选不满足 IR 盈亏比要求';
         if (!judgeFollow) skip = 'ir_judge_skip';
-        if (skip) this.event(r, 'skip', skip, symbol);
+        if (skip) this.event(r, 'skip', skip, symbol, skip === 'ir_judge_skip' ? { layer: 'judge', code: 'ir_judge_skip' } : reasonData(skip));
         else if (r.mode !== 'signal_only') {
           let follow = true;
           if (r.mode === 'agent' && !ir.judge) {
             let answer: RunFilterResult;
             try { answer = parseRunFilter(await this.deps.filter(r, c, ir)); }
             catch (e) { answer = { decision: 'skip', reason: `过滤超时或解析失败:${(e as Error).message}` }; }
-            follow = answer.decision === 'follow'; this.event(r, follow ? 'agent_follow' : 'agent_skip', answer.reason, symbol);
+            follow = answer.decision === 'follow'; this.event(r, follow ? 'agent_follow' : 'agent_skip', answer.reason, symbol, { layer: 'judge', code: follow ? 'agent_follow' : 'agent_skip', judge: 'llm' });
+          } else if (r.mode === 'jev' && !ir.judge) {
+            // §9.56 jev 模式由 Jev 决定做不做:Jev 说跟才开仓;说跳过、调不到、超时或预算用完都不开,并记下原因。
+            const v = await this.jevGate(r, ir, c, ks, ms);
+            follow = v.code === 'jev_follow';
+            this.event(r, follow ? 'agent_follow' : 'agent_skip', follow ? `Jev 放行:${v.reason}` : v.code === 'jev_skip' ? `Jev 跳过:${v.reason}` : `Jev 不可用,按跳过:${v.reason}`, symbol,
+              { layer: 'judge', code: v.code, judge: 'jev', decision_id: v.row?.decision_id ?? null, judge_live_id: v.row?.id ?? null });
           }
           if (follow && this.canRun(id)) {
             const result = await this.executeCandidate(r, c, ir, current);
             // 没发出任何订单的临时失败(标记价取不到/限流/网络)不消费这根 K 线:放回去,15 秒后重试同一根
             if (result.outcome !== 'opened' && result.outcome !== 'unknown' && result.outcome !== 'skipped' && isTransient(result.reason)) {
               this.store.release(id, symbol, as_of); retryBars = true;
-              this.event(r, 'skip', `临时失败,15 秒后重试:${result.reason}`, symbol, { as_of, transient: true });
+              this.event(r, 'skip', `临时失败,15 秒后重试:${result.reason}`, symbol, { as_of, transient: true, layer: 'execution', code: 'transient' });
               continue;
             }
             const accepted = result.outcome === 'opened';
             traded = accepted && r.mode !== 'confirm';
-            this.event(r, result.outcome === 'unknown' ? 'error' : result.outcome === 'skipped' ? 'skip' : accepted ? r.mode === 'confirm' ? 'order_pending' : 'order_opened' : 'order_rejected', result.reason, symbol, { thread_id: result.thread_id ?? null, ...(result.outcome === 'unknown' ? { execution_unknown: true } : {}) });
+            const structured = result.outcome === 'unknown' ? { layer: 'execution' as const, code: 'execution_unknown' }
+              : result.outcome === 'skipped' ? reasonData(result.reason)
+              : !accepted ? { layer: result.layer ?? reasonData(result.reason, 'execution').layer, code: result.code ?? reasonData(result.reason, 'execution').code, ...(result.gates?.length ? { gates: result.gates } : {}) } : {};
+            this.event(r, result.outcome === 'unknown' ? 'error' : result.outcome === 'skipped' ? 'skip' : accepted ? r.mode === 'confirm' ? 'order_pending' : 'order_opened' : 'order_rejected', result.reason, symbol, { thread_id: result.thread_id ?? null, ...(result.outcome === 'unknown' ? { execution_unknown: true } : {}), ...structured });
           }
         }
         if (judgeFollow && r.publish_asp && this.canRun(id)) await this.publish(r, c, traded);
@@ -498,6 +631,50 @@ export class StrategyRunner {
       if (r.status === 'running') { r.status = 'error'; r.error = message; r.next_scan_at = null; }
       this.event(r, 'error', message); this.update(r);
     }
+  }
+  private liveRun(r: StrategyRun) { return { id: r.id, strategy_id: r.strategy_id, strategy_name: r.strategy_name, timeframe: r.timeframe, ir_hash: r.ir_hash, market: r.market }; }
+  private emitLive(row: JudgeLiveRecord | null): void { if (row) try { this.deps.emit('judge.live', row); } catch { /* SSE 失败不影响运行 */ } }
+  /**
+   * 影子判断:fire-and-forget。不 await(不给下单链路加任何延迟,也不占 serial 队列);
+   * 整个调用包在 runShadowJudge 里永不抛错,外层再兜一层 try + .catch,异常绝不进 scanInner 的 catch。
+   * 同时在途上限 JEV_SHADOW_MAX_INFLIGHT,超了记一条 shadow_busy;stop() 会中止并等在途的收尾。
+   */
+  private shadowJudge(r: StrategyRun, ir: StrategyIR, c: RunCandidate, ks: Kline[], ms: number): void {
+    try {
+      const busy = this.shadows.size >= JEV_SHADOW_MAX_INFLIGHT, factory = this.deps.jevShadow!;
+      const p = Promise.resolve().then(() => runShadowJudge({ run: this.liveRun(r), ir, candidate: { symbol: c.symbol, as_of: c.as_of, direction: c.direction, entry_ref: c.entry_ref, stop: c.stop, target: c.target, rr: c.rr },
+        bars: toResearchBars(ks, ms, c.as_of), timeframe_ms: ms, factory: busy ? () => 'shadow_busy' : factory, ledger: this.judgeLedger, signal: this.shadowAbort.signal, now: this.now }))
+        .then(row => this.emitLive(row)).catch(() => {});
+      this.shadows.add(p); void p.finally(() => this.shadows.delete(p));
+    } catch { /* 影子判断失败不影响下单 */ }
+  }
+  /**
+   * §9.56 运行模式 jev:无 IR judge 块的候选由 Jev(默认模板 take + quality,与影子判断同一条链)作真门。
+   * 永不抛错;没接 Jev / 决策模型未绑定 / 预算用尽 / 超时 / 出错 → code=jev_unavailable,调用方按跳过处理。账本行 mode='gate'。
+   */
+  private async jevGate(r: StrategyRun, ir: StrategyIR, c: RunCandidate, ks: Kline[], ms: number): Promise<JevVerdict> {
+    if (!this.deps.jevShadow) return { row: null, action: null, reason: 'jev_not_connected', code: 'jev_unavailable' };
+    const ac = new AbortController(), abort = () => ac.abort();
+    this.shadowAbort.signal.addEventListener('abort', abort, { once: true });
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const judged = runJevJudge({ run: this.liveRun(r), ir, candidate: { symbol: c.symbol, as_of: c.as_of, direction: c.direction, entry_ref: c.entry_ref, stop: c.stop, target: c.target, rr: c.rr },
+        bars: toResearchBars(ks, ms, c.as_of), timeframe_ms: ms, factory: this.deps.jevShadow, ledger: this.judgeLedger, signal: ac.signal, now: this.now }, 'gate');
+      const timeout = new Promise<JevVerdict>(resolve => { timer = setTimeout(() => { ac.abort(); resolve({ row: null, action: null, reason: `jev_timeout:${JEV_GATE_TIMEOUT_MS}ms`, code: 'jev_unavailable' }); }, JEV_GATE_TIMEOUT_MS); });
+      const v = await Promise.race([judged, timeout]);
+      this.emitLive(v.row);
+      return v;
+    } catch (e) { return { row: null, action: null, reason: `jev_failed:${(e as Error).message}`, code: 'jev_unavailable' }; }
+    finally { if (timer) clearTimeout(timer); this.shadowAbort.signal.removeEventListener('abort', abort); }
+  }
+  /** 挡单判断的账本行:只记录,异常吞掉,不改变挡单结果。 */
+  private recordGate(r: StrategyRun, ir: StrategyIR, c: RunCandidate, snapshot: JudgeCandidateSnapshot | null, bars: readonly ResearchBar[], _ms: number,
+    result: JudgeResult | null, error: string | null, micro: ReturnType<typeof memoMicro>, profile: FrozenModelProfile | null, started: number): void {
+    try {
+      const requested = !!micro.source && !!ir.judge && needsMicrostructure(ir.judge);
+      this.emitLive(this.judgeLedger.record(gateRecord({ run: this.liveRun(r), ir, snapshot, bars, candidate: { symbol: c.symbol, as_of: c.as_of, direction: c.direction, entry_ref: c.entry_ref, stop: c.stop, target: c.target, rr: c.rr },
+        result, error, micro: { requested, snapshot: micro.snapshot() }, profile, wall_ms: Math.round(performance.now() - started) })));
+    } catch { /* 账本失败不影响挡单语义 */ }
   }
   private async executeCandidate(r: StrategyRun, c: RunCandidate, ir: StrategyIR, current?: StrategyThread): Promise<RunOpenResult> {
     const reject = (reason: string): RunOpenResult => ({ outcome: 'skipped', reason });
@@ -616,9 +793,9 @@ export class StrategyRunner {
         const t = this.deps.threads(r.id).find(t => t.id === original.id);
         if (!allowed()) return;
         if (!t || t.status !== 'in_position') break;
-        const clock = this.deps.clock ?? performance.now.bind(performance), start = clock();
+        const clock = this.deps.clock ?? irCpuClock, start = clock(), wallStart = performance.now();
         const out = runExit(ir, t, ks, at, { ...state, first_tp_filled_at: position?.first_tp_filled_at });
-        if (clock() - start > 200) throw new Error(`slow_ir: ${t.symbol} 持仓 IR 超过 200ms`);
+        if (clock() - start > IR_CPU_BUDGET_MS || performance.now() - wallStart > IR_WALL_CEILING_MS) throw new Error(`slow_ir: ${t.symbol} 持仓 IR 超过 ${IR_CPU_BUDGET_MS}ms CPU(或 ${IR_WALL_CEILING_MS}ms 墙钟)`);
         if (!allowed()) return;
         if (out.stop !== null && !move_pending) {
           const new_stop = decimal(out.stop);
@@ -666,7 +843,12 @@ export class StrategyRunner {
     } } finally { this.ticking = false; }
   }
   start(): void { if (this.timer) return; this.closed = false; this.timer = setInterval(() => { void this.tick().catch(() => {}); }, 15_000); this.timer.unref(); void this.tick().catch(() => {}); }
-  async stop(): Promise<void> { this.closed = true; if (this.timer) clearInterval(this.timer); this.timer = null; this.off(); await this.chain; }
+  async stop(): Promise<void> {
+    this.closed = true; if (this.timer) clearInterval(this.timer); this.timer = null; this.off(); await this.chain;
+    this.shadowAbort.abort(); await Promise.allSettled([...this.shadows]);
+  }
+  /** 测试/收尾用:等在途影子判断结束。 */
+  async settleShadows(): Promise<void> { while (this.shadows.size) await Promise.allSettled([...this.shadows]); }
 }
 export function strategyBlock(r: StrategyRun, version = r.version, timeframe = r.timeframe): NonNullable<PublishEvent['strategy']> { return { id: r.strategy_id, name: r.strategy_name, version, timeframe, run_id: r.id }; }
 

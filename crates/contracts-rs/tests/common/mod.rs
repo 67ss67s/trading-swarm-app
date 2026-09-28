@@ -22,7 +22,7 @@ pub fn fixtures_dir() -> PathBuf {
     contracts_dir().join("fixtures")
 }
 
-/// `https://trading-swarm.dev/schema/common.json` → `<schema_dir>/common.json`。
+/// `https://trade-gate.dev/schema/common.json` → `<schema_dir>/common.json`。
 struct LocalRetriever {
     dir: PathBuf,
 }

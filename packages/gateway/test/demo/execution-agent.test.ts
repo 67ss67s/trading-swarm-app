@@ -54,7 +54,7 @@ function backend(mode: 'ok' | 'garbage' | 'hang' | 'reject', extra: Partial<Cons
 }
 
 beforeAll(() => {
-  dir = mkdtempSync(path.join(os.tmpdir(), 'tswarm-agent-test-'));
+  dir = mkdtempSync(path.join(os.tmpdir(), 'tgate-agent-test-'));
   script = path.join(dir, 'fake-cli.cjs');
   writeFileSync(script, SCRIPT);
 });
@@ -88,7 +88,7 @@ describe('AgentMcpBackend write ops', () => {
     expect(args[args.indexOf('--disallowedTools') + 1]).toContain('Bash');
     expect(args[args.indexOf('--model') + 1]).toBe('sonnet');
     // cwd is a scratch dir, never the repo (so no CLAUDE.md / project settings are loaded)
-    expect(rows[0]!.cwd).not.toContain('trading-swarm/packages');
+    expect(rows[0]!.cwd).not.toContain('trade-gate/packages');
     const cfg = JSON.parse(readFileSync(args[args.indexOf('--mcp-config') + 1]!, 'utf8')) as { mcpServers: Record<string, { type: string; url: string }> };
     expect(cfg.mcpServers[DEFAULT_MCP_NAME]!.type).toBe('http');
     expect(cfg.mcpServers[DEFAULT_MCP_NAME]!.url).toContain('agent.binance.com');

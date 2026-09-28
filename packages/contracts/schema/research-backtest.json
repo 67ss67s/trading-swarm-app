@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://trading-swarm.local/schema/research-backtest.json",
+  "$id": "https://trade-gate.local/schema/research-backtest.json",
   "title": "ResearchBacktest",
   "anyOf": [
     {
@@ -806,6 +806,17 @@
               "type": "null"
             }
           ]
+        },
+        "execution_gate": {
+          "anyOf": [
+            {
+              "$ref": "research.json#/$defs/ExecutionGateStats"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "该资产(篮子 = 两腿相加)在下单决策时刻被执行层阈值挡单的统计;null = 旧口径(不套执行层)"
         }
       },
       "required": [
@@ -1075,6 +1086,17 @@
             "maxLength": 4000
           },
           "maxItems": 64
+        },
+        "execution_gate": {
+          "anyOf": [
+            {
+              "$ref": "research.json#/$defs/ExecutionGateStats"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "报告级执行层统计 = 各单资产相加(不含篮子,避免重复计数),阈值快照冻结在 thresholds;null = 旧口径(旧报告/显式不套执行层)"
         }
       },
       "required": [

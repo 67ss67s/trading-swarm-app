@@ -47,7 +47,7 @@ const RAW_ROLES: Record<RoleId, RoleMeta> = {
   portfolio_manager: { role: 'portfolio_manager', callsign: 'BOOK', title: 'Portfolio Manager', desk: '组合台', color: '#f4a261', shape: 'boxy', room: 'book', roomName: '账本墙', page: 'trade', pageLabel: '交易' },
   risk_sentinel: { role: 'risk_sentinel', callsign: 'SENTINEL', title: 'Risk Sentinel', desk: '风控哨台', color: '#ff5d8f', shape: 'wide', room: 'sentinel', roomName: '瞭望塔', page: 'settings', pageLabel: '设置 · 风控' },
   executor: { role: 'executor', callsign: 'EXEC', title: 'Executor', desk: '执行台', color: '#4fd1c5', shape: 'blob', room: 'exec', roomName: '交易台', page: 'agent', pageLabel: 'Agent · 执行' },
-  asp_agent: { role: 'asp_agent', callsign: 'MARKET', title: 'ASP Agent', desk: '市场台', color: '#7fd1ff', shape: 'wide', room: 'market', roomName: '小铺子', page: 'market', pageLabel: '信号市场' },
+  asp_agent: { role: 'asp_agent', callsign: 'MARKET', title: 'ASP Agent', desk: '市场台', color: '#7fd1ff', shape: 'wide', room: 'market', roomName: '小铺子', page: 'market', pageLabel: 'OKX.AI' },
 };
 
 export const ROLES = Object.fromEntries(Object.entries(RAW_ROLES).map(([k, v]) => [k, tr(v)])) as Record<RoleId, RoleMeta>;

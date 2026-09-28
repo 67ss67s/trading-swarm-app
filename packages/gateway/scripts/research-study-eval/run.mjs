@@ -12,7 +12,7 @@ const gate=opt('gate','g1'),network=opt('network','deny'),profile=opt('profile',
 if(!['deny','allow'].includes(network)||!['ci','release'].includes(profile))throw Error('invalid_network_or_profile');
 if(network==='deny')await import('./network-deny.mjs');
 else if(!Number.isSafeInteger(Number(opt('max-calls','0')))||Number(opt('max-calls','0'))<1||!/^(0|[1-9]\d*)(\.\d{1,12})?$/.test(opt('max-usd',''))||Number(opt('max-usd','0'))<=0||gate!=='g3'||opt('approved-by','')!=='Jacky'||!opt('connection-id','')||!opt('max-calls','')||!opt('max-usd',''))throw Error('paid_g3_requires_Jacky_approval_connection_and_budgets');
-const output=(value)=>{const text=JSON.stringify(value,null,2)+'\n',path=opt('output','');if(path){const resolved=resolve(path),forbidden=resolve(homedir(),'.trading-swarm-okx/demo');if(resolved===forbidden||resolved.startsWith(forbidden+'/'))throw Error('forbidden_runtime_directory');writeFileSync(resolved,text);}process.stdout.write(text);};
+const output=(value)=>{const text=JSON.stringify(value,null,2)+'\n',path=opt('output','');if(path){const resolved=resolve(path),forbidden=resolve(homedir(),'.trade-gate-okx/demo');if(resolved===forbidden||resolved.startsWith(forbidden+'/'))throw Error('forbidden_runtime_directory');writeFileSync(resolved,text);}process.stdout.write(text);};
 if(gate==='g1'){
  if(network!=='deny'||opt('provider','stub')!=='stub')throw Error('g1_offline_stubs_only');
  const {runG1}=await import('../../src/demo/research/study-eval/g1.ts');

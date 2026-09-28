@@ -12,7 +12,7 @@
 import type { DemoStore } from '../store.js';
 
 const BASE = 'https://www.okx.ai';
-const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36 trading-swarm/1.0';
+const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36 trade-gate/1.0';
 const CATALOG_KEY = 'market.catalog';
 const CATALOG_TTL_MS = 6 * 3_600_000;
 const DETAIL_TTL_MS = 10 * 60_000;

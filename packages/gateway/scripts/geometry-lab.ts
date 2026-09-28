@@ -1,6 +1,6 @@
 // Geometry Lab (docs/research/geometry-lab-2026-09-23.md): who places a breakout's stop / target better?
 //
-//   npx jiti packages/gateway/scripts/geometry-lab.ts import   [--db <lab.sqlite>] [--source-db ~/.trading-swarm-okx/demo/state.sqlite]
+//   npx jiti packages/gateway/scripts/geometry-lab.ts import   [--db <lab.sqlite>] [--source-db ~/.trade-gate-okx/demo/state.sqlite]
 //   npx jiti packages/gateway/scripts/geometry-lab.ts run-a    [--db …]                       # candidates + arm A on everything (0 model calls)
 //   npx jiti packages/gateway/scripts/geometry-lab.ts pilot    [--db …] --n 20 --arms B,C,D --max-calls 160 [--concurrency 4] [--model zai/glm-5.3]
 //   npx jiti packages/gateway/scripts/geometry-lab.ts report   [--db …] [--md out.md] [--arms B,D]
@@ -27,7 +27,7 @@ const opt = (k: string, d: string): string => {
   const i = argv.indexOf(`--${k}`);
   return i >= 0 && argv[i + 1] ? argv[i + 1]! : d;
 };
-const DB = opt('db', '$TMPDIR/geometry-lab.sqlite');
+const DB = opt('db', '/tmp/trade-gate-scratch/geometry-lab.sqlite');
 const SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'DOGEUSDT'];
 const store = new LabStore(DB);
 
@@ -80,7 +80,7 @@ function summaryTable(rows: ArmSummary[]): string {
 
 async function main() {
   if (cmd === 'import') {
-    const src = opt('source-db', join(homedir(), '.trading-swarm-okx/demo/state.sqlite'));
+    const src = opt('source-db', join(homedir(), '.trade-gate-okx/demo/state.sqlite'));
     const got = store.importFrom(src, SYMBOLS);
     for (const d of got) console.log(`${d.symbol} ${d.bars.length} bars ${new Date(d.bars[0]!.open_time).toISOString()} → ${new Date(d.bars.at(-1)!.close_time + 1).toISOString()} (${d.source_id.slice(0, 12)})`);
     return;

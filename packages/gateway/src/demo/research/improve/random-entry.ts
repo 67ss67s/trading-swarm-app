@@ -9,7 +9,7 @@
  *   实际笔数随持仓长短浮动,逐次记录。固定种子(seed + 第 k 次),同输入逐位可复现;缺省 20 次取分布。
  * 只支持 engine v4 路径:IR 带 order 块(订单周期执行核)时返回 null 并写原因。
  */
-import type { StrategyIR } from '@trading-swarm/contracts';
+import type { StrategyIR } from '@trade-gate/contracts';
 import { registry } from '../primitives/index.js';
 import { numericBars, viewBars } from '../engine.js';
 import { irWarmup, resolveRequest, strategyNodes } from '../strategy.js';
@@ -24,7 +24,7 @@ export const RANDOM_ENTRY_SEED = 20260923;
 type Candidate = { entry: Record<string, unknown> | null; reason: string };
 
 /** irCandidate 在信号成立之后的那一段:止损原语给初始止损,fixed_r_target / structure_target / pivot_target 给目标(与 irCandidate 同优先级)。 */
-export function forcedCandidate(ir: StrategyIR, ctx: { bars: import('@trading-swarm/contracts').ResearchBar[]; i: number; timeframe_ms: number }): Candidate {
+export function forcedCandidate(ir: StrategyIR, ctx: { bars: import('@trade-gate/contracts').ResearchBar[]; i: number; timeframe_ms: number }): Candidate {
   const stop = registry.get(ir.risk.stop.primitive)!.compute(ctx, ir.risk.stop.params).stop, close = Number(ctx.bars[ctx.i]?.close);
   if (!(stop && Number.isFinite(stop) && stop > 0 && stop < close)) return { entry: null, reason: 'invalid_stop' };
   // 与 irCandidate 同优先级:fixed_r_target > structure_target > pivot_target(2026-09-23 结构口径缺省止盈);都没有 = 不设止盈

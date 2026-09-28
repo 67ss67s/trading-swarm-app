@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { adaptService, adaptSubscriptions, marketSubscriptionAction, resolveCatalogService } from '../src/api/market-adapt';
+import { adaptInbox, adaptInboxStatus, adaptService, adaptSubscriptions, marketSubscriptionAction, resolveCatalogService, classifyDelivery } from '../src/api/market-adapt';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -88,5 +88,29 @@ describe('subscription status adaptation', () => {
 
   it('keeps string status values when statusName is omitted', () => {
     expect(adaptSubscriptions({ subscriptions: [{ job_id: 'job', remote: { status: 'active' } }] }).subscriptions[0]?.status_name).toBe('ACTIVE');
+  });
+});
+
+describe('inbox status counters', () => {
+  it('uses per-status counts: trade = order+expired, intel = analysis+report+intel+status+arbitrage, unreadable = invalid, failed = fetch_failed', () => {
+    const s = adaptInboxStatus({ received: 133, dlq: 61, analysis: 1, counts: { order: 6, expired: 1, analysis: 1, report: 7, intel: 37, status: 3, arbitrage: 2, invalid: 4, fetch_failed: 2, system: 59, notice: 16, duplicate: 4, message: 1 } });
+    expect(s).toMatchObject({ ledger_total: 133, ingested: 7, skipped_analysis: 50, bad_rows: 4, dlq_count: 2 });
+  });
+  it('old gateways without counts keep the legacy mapping', () => {
+    expect(adaptInboxStatus({ received: 132, dlq: 61, analysis: 1 })).toMatchObject({ ingested: 70, skipped_analysis: 1, bad_rows: 61, dlq_count: 61 });
+  });
+  it('new non-executable parse statuses never render as unreadable rows', () => {
+    const { rows } = adaptInbox({ deliveries: ['report', 'intel', 'status', 'message', 'arbitrage', 'notice', 'invalid'].map((parse_status, i) => ({ delivery_id: `d${i}`, parse_status, raw: 'x', errors: [] })) });
+    expect(rows.map((r) => r.parse_status)).toEqual(['analysis', 'analysis', 'analysis', 'analysis', 'analysis', 'system', 'bad']);
+  });
+});
+
+describe('classifyDelivery info-only type-header lines', () => {
+  const base = { parse_status: null, signal_type: null, envelopeOnly: false, signal: null } as const;
+  it('does not show Info only / Status only lines as trade signals', () => {
+    expect(classifyDelivery({ ...base, content: '【Futures】BTC-USDT-SWAP, ETH-USDT-SWAP | Market brief | BTC bullish | Info only, no order | Trading Swarm' })).toBe('intel');
+    expect(classifyDelivery({ ...base, content: '【Futures】BTC-USDT-SWAP | Microstructure | BTC: $2.79M liquidated | Info only, no order | Trading Swarm' })).toBe('alert');
+    expect(classifyDelivery({ ...base, content: '【Futures】BTC-USDT-SWAP | No active setup | Strategy 15m scanning | Status only, no order | Trading Swarm' })).toBe('intel');
+    expect(classifyDelivery({ ...base, content: '【Futures】BTC-USDT-SWAP | LONG 3x | Market | Reference Price 64120 | Stop Loss 63400 | Valid for 4h' })).toBe('trade');
   });
 });

@@ -13,8 +13,28 @@ import { MODELS_EN } from '@/components/models/i18n-en';
 import { STRATEGY_LOOP_EN } from '@/components/agent-strategy/i18n-en';
 import { START_EN } from '@/components/start/i18n-en';
 import { FLOOR_EN } from '@/components/floor-v4/i18n-en-floor';
+import { MARKET_EN } from '@/components/market/i18n-en';
+import { MATRIX_UX_EN } from '@/components/matrix-study/i18n-en';
+import { JUDGE_LIVE_EN } from '@/components/judge-live/i18n-en';
+import { STRATEGY_RESEARCH_EN } from '@/components/strategy-research/i18n-en';
+import { TRADE_EN } from '@/components/trade/i18n-en';
+import { RESEARCH_PAGE_EN } from '@/components/research-workbench/i18n-en-page';
+import { JUDGE_A_EN } from './i18n-en-judge-a';
+import { JUDGE_B_EN } from './i18n-en-judge-b';
+import { RESEARCH_WB_EN } from '@/components/research-workbench/i18n-en';
 
 export const EN: Record<string, string> = {
+  // 2026-09-26 评审版补漏:放最前,同名 key 以后面各页已有译法为准
+  ...JUDGE_A_EN,
+  ...JUDGE_B_EN,
+  ...RESEARCH_WB_EN,
+  ...RESEARCH_PAGE_EN,
+  ...STRATEGY_RESEARCH_EN, // 策略研究流程页
+  ...JUDGE_LIVE_EN, // Jev 判断流:放最前,同名 key 以各页已有译法为准
+  ...TRADE_EN, // 交易页改版(components/trade):同上,放前面
+  ...MARKET_EN,
+  // 09-25 批量验证改版:放最前,同名 key 以后面各页已有的译法为准
+  ...MATRIX_UX_EN,
   ...BACKTEST_REPORT_EN,
   ...EVOLUTION_EN,
   ...WATCH_EN,
@@ -819,6 +839,7 @@ export const EN: Record<string, string> = {
   'agent 在管': 'agent is managing',
   '不属于任何线程,agent 不会管它的离场': 'not part of any thread — the agent will not manage its exit',
   '无主': 'Orphan',
+  '外部持仓(不是本演示开的)': 'External position (not opened by this demo)',
   '交易所止损 {price}': 'exchange stop {price}',
   '没有止损': 'no stop',
   '交给 agent': 'Hand to agent',
@@ -2258,7 +2279,7 @@ export const EN: Record<string, string> = {
   "agent 把关:信号作为证据交给 agent 判断,同向才进待办": "Agent-gated: the signal is handed to the agent as evidence; only same-direction verdicts reach the to-do list",
   "copy 模式下 open 信号自动开仓(仍过全部闸);其余动作人工": "In copy mode, open signals auto-execute (still through every gate); everything else is manual",
   "queue · 只读轮询 okx-a2a 队列(已验证)": "queue · read-only polling of the okx-a2a queue (verified)",
-  "trading-swarm 信号市场订阅:投递进本机网关账本,人工/agent 判定后才执行。": "trading-swarm Signal Market subscription: deliveries land in the local gateway ledger and execute only after human/agent review.",
+  "trade-gate 信号市场订阅:投递进本机网关账本,人工/agent 判定后才执行。": "trade-gate Signal Market subscription: deliveries land in the local gateway ledger and execute only after human/agent review.",
   "valid_until 不可信(解析不出/早于原发时间,含倒挂):这条永远进不了可执行状态": "valid_until is untrustworthy (unparseable / earlier than publish time): this signal can never become executable",
   "watch · 常驻 okx-a2a user watch(实验)": "watch · resident okx-a2a user watch (experimental)",
   "watch 通道": "watch channel",
@@ -2281,7 +2302,7 @@ export const EN: Record<string, string> = {
   "下架后新买家看不到你;已有订阅照常投递到期。随时可以再上架。": "New buyers won't see you; existing subscriptions keep receiving until they expire. You can republish any time.",
   "下架失败": "Unpublish failed",
   "不入场": "No entry",
-  "不走 OKX 自己的自动交易授权(autotrade);信号进本机账本,执行只发生在 trading-swarm 的闸门之后。": "OKX's own autotrade consent is not used; signals land in the local ledger and execution only happens after trading-swarm's gates.",
+  "不走 OKX 自己的自动交易授权(autotrade);信号进本机账本,执行只发生在 trade-gate 的闸门之后。": "OKX's own autotrade consent is not used; signals land in the local ledger and execution only happens after trade-gate's gates.",
   "且是启动补拉的历史信号": "and it is a backfilled historical signal",
   "两条通道不能同开:watch 是破坏性读,会把队列吃空。切换后网关重启采集器。": "The two channels cannot run together: watch is a destructive read that drains the queue. Switching restarts the collector.",
   "买家 agent 收到的就是这段:一行人话 + 一个 JSON。": "This is exactly what buyer agents receive: one human line plus one JSON.",
@@ -2298,6 +2319,8 @@ export const EN: Record<string, string> = {
   "信号已超龄": "Signal is stale",
   "信号市场": "Signal Market",
   "信号市场设置": "Signal Market settings",
+  "OKX.AI": "OKX.AI",
+  "OKX.AI 设置": "OKX.AI settings",
   "信号流": "Signal feed",
   "充值": "Deposit",
   "先去交易页核对该线程/挂单实际状态;这个按钮只清标记,不动钱": "Check the thread/orders on the trade page first; this button only clears the flag, no money moves",
@@ -2479,7 +2502,7 @@ export const EN: Record<string, string> = {
   "缺口": "Shortfall",
   "翻页失败": "Paging failed",
   "胜": "wins",
-  "自动交易:open 信号自动开仓,仍过 trading-swarm 全部闸门(止损必需、名义上限、每日上限、反向敞口);管理动作一律人工": "Auto-trade: open signals execute automatically, still through every trading-swarm gate (stop required, notional cap, daily cap, opposite exposure); management actions stay manual",
+  "自动交易:open 信号自动开仓,仍过 trade-gate 全部闸门(止损必需、名义上限、每日上限、反向敞口);管理动作一律人工": "Auto-trade: open signals execute automatically, still through every trade-gate gate (stop required, notional cap, daily cap, opposite exposure); management actions stay manual",
   "自动续费": "Auto-renew",
   "自动续费已开": "Auto-renew enabled",
   "补拉": "Backfill",
@@ -3032,6 +3055,12 @@ export const EN: Record<string, string> = {
   "Agent 把关": "Agent review",
   "每笔我确认": "Confirm each order",
   "只发信号": "Signals only",
+  "直接做": "Direct",
+  "Jev 判断": "Jev judgment",
+  "LLM 判断": "LLM judgment",
+  "每笔我确认(旧)": "Confirm each (legacy)",
+  "命中后由 Jev 判断跟不跟,判不跟就不下;价格仍由策略定。": "Jev decides whether to take each trigger; a skip means no order. The strategy still sets the prices.",
+  "命中后让 LLM 判断做不做;价格仍由策略定,模型改不了。": "An LLM decides whether to trade on each trigger. The strategy sets the prices; the model cannot change them.",
   "策略命中就按代码算好的止损止盈下单,不问模型。": "When the strategy triggers, place an order with the stop and target calculated by code. No model call.",
   "命中后让 Agent 判断做不做;价格仍由策略定,Agent 改不了。": "The Agent decides whether to trade on each trigger. The strategy sets the prices; the Agent cannot change them.",
   "命中后生成待批订单,你点确认才下。": "Each trigger creates an order awaiting approval. It is submitted only after you confirm.",
@@ -3096,7 +3125,7 @@ export const EN: Record<string, string> = {
   "运行规则": "Run rules",
   "它会怎么跑": "How it runs",
   "还没在运行。点右上「运行策略」,运行器会按下面这套规则每根 K 线收盘扫币、下单或发信号。": "Not running yet. Click “Run strategy” at the top right to scan assets, place orders or publish signals under these rules at each candle close.",
-  "这版规则(IR)编译后,每个角色拿到哪几条规则、由代码还是模型执行。「Agent 把关」模式下模型只决定做不做;其余模式全程代码。": "The compiled rules (IR) show each role’s rules and whether code or a model executes them. In Agent review mode, the model only decides whether to trade. All other modes run entirely in code.",
+  "这版规则(IR)编译后,每个角色拿到哪几条规则、由代码还是模型执行。「Jev 判断」「LLM 判断」模式下模型只决定做不做;其余模式全程代码。": "The compiled rules (IR) show each role’s rules and whether code or a model executes them. In Jev judgment and LLM judgment modes, the model only decides whether to trade. All other modes run entirely in code.",
   // 运行与部署页面补漏
   "继续": "Resume",
   "详情页签": "Strategy detail tabs",
@@ -3239,6 +3268,7 @@ export const EN: Record<string, string> = {
   '钱': 'Money',
   '拖到 EXEC 工位运行': 'Drag to EXEC\'s desk to run',
   '当前策略': 'Current strategy',
+  '没下单': 'Not taken',
   '拖到 EXEC 运行': 'drag to EXEC to run',
   '团队动态': 'Team activity',
   '你': 'You',
@@ -3255,4 +3285,59 @@ export const EN: Record<string, string> = {
   '楼层(新)': 'Floor (new)',
   '网关连接中断(多半在重启),恢复后页面会自动刷新,不用手动刷新': 'Gateway connection lost (probably restarting). The page refreshes itself once it is back.',
   '网关暂时连不上(多半在重启),恢复后自动刷新': 'Gateway unreachable (probably restarting); will refresh automatically.',
+  // §9.55 九个 agent 名册 / 对话
+  '总协调:汇总团队、把你的目标派给合适的人': 'Coordinator: sums up the team and routes your goal to the right agent',
+  '信息与发现:筛候选、盯观察列表': 'Intel & discovery: screens candidates, watches the watchlist',
+  '交易论点:判断某个币、复查线程': 'Trade theses: judges a coin, reviews threads',
+  '研究:推荐 → 批量验证 → 存成策略': 'Research: recommend → batch-validate → save as strategy',
+  '组合:账户敞口、簇集中度、止损预算': 'Portfolio: account exposure, cluster concentration, stop budget',
+  '风控:开放告警、为什么挡新开仓': 'Risk: open alerts, why new entries are blocked',
+  '复盘:平仓复盘卡与教训': 'Review: trade cards and lessons',
+  '执行:待批意图、执行通道与回执': 'Execution: pending intents, channel and receipts',
+  'OKX.AI 信号市场:身份、服务、订阅、接单与领款': 'OKX.AI signal market: identity, services, subscriptions, orders and payouts',
+  '团队现在都在忙什么?': 'What is the team busy with?',
+  '今天的值班简报': 'Today\'s duty brief',
+  '有哪些待我处理的交接?': 'Which handoffs need me?',
+  '筛一轮短线候选': 'Screen short-term candidates',
+  '全市场扫描前几名是谁?': 'Who tops the market-wide scan?',
+  '观察列表里哪个最值得看?': 'Which watchlist coin is most worth a look?',
+  '复查一下持仓的线程': 'Review the open threads',
+  '看一下 BTC': 'Look at BTC',
+  '推荐几个币和周期': 'Recommend a few coins and timeframes',
+  '最近一次实验结果': 'Latest experiment result',
+  '我的策略里哪条回测最好?': 'Which of my strategies backtests best?',
+  '现在的总敞口和簇集中度': 'Current gross exposure and cluster concentration',
+  '止损预算还剩多少?': 'How much stop budget is left?',
+  '有没有没保护的腿?': 'Any unprotected legs?',
+  '现在有哪些风控告警?': 'What risk alerts are open?',
+  '为什么挡了新开仓?': 'Why are new entries blocked?',
+  '怎么解除这个告警?': 'How do I clear this alert?',
+  '复盘最近的交易': 'Review recent trades',
+  '模型判断值不值?': 'Is the model judgment worth it?',
+  '最近提炼了哪些教训?': 'What lessons were distilled lately?',
+  '有哪些待批的意图?': 'Which intents await approval?',
+  '现在的执行通道是什么?': 'What is the current execution channel?',
+  '上一笔单的回执': 'Receipt of the last order',
+  '你是谁?我们的 ASP 现在什么状态?': 'Who are you? What is our ASP status?',
+  '我们上架了哪些服务?': 'Which services have we listed?',
+  '最近有订阅或接单吗?': 'Any recent subscriptions or orders?',
+  '有可以领的款吗?': 'Anything to claim?',
+  '正在想': 'thinking',
+  '正在查': 'looking up',
+  '正在调': 'calling',
+  '已关': 'off',
+  '出错': 'error',
+  '你在跟 {name} 说话': 'You\'re talking to {name}',
+  '跟 {name} 说点什么…(Enter 发送,Shift+Enter 换行)': 'Say something to {name}… (Enter to send, Shift+Enter for newline)',
+  '选择 agent': 'Choose an agent',
+  '九个 agent(和楼层同一条对话)': 'Nine agents (same thread as the floor)',
+  '其它会话': 'Other sessions',
+  '(旧会话)': '(legacy)',
+  'agent 的对话删不掉,只能清空': 'An agent\'s thread can\'t be deleted, only cleared',
+  '读 ASP 总览': 'Read ASP overview',
+  '看上架的服务': 'List listed services',
+  '看接单与交付': 'List orders & deliveries',
+  '看订阅者': 'List subscribers',
+  '看信号收件箱': 'List signal inbox',
+  '模型收到的完整上下文在公开演示版里不展示(约 {n} 字符)。': 'The full context the model received is not shown in the public demo (about {n} characters).',
 };

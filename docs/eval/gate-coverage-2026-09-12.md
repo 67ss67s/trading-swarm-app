@@ -96,7 +96,7 @@
 - `gate-event-blackout-exit-allowed`:同一个封锁窗口里的 EXIT,「事件封锁」必须 `passed=true` 且理由写明「只拦开仓」——这道闸不能把人困在仓位里。
 - `gate-council-entry-timing-limit-allowed`:同一个 `entry_timing=pending` 的议会结果,提议换成限价则「策略共识」放行。
 
-**一处接法上的将就**:`eventBlackoutGate` / `MarketEvent` 还没从 `packages/gateway/src/demo/index.ts` 转出,而这一轮不动 gateway 源码,所以 `gate-coverage.ts` / `gen-gates.ts` 走了 `@trading-swarm/gateway/dist/demo/events.js` 的深路径(gateway 没有 `exports` 字段,NodeNext 下可解析)。gateway 那边补一行 export 之后应当改回 `demo.*`。另外三条判定都从 `demo` 的公开面拿得到,没有将就。
+**一处接法上的将就**:`eventBlackoutGate` / `MarketEvent` 还没从 `packages/gateway/src/demo/index.ts` 转出,而这一轮不动 gateway 源码,所以 `gate-coverage.ts` / `gen-gates.ts` 走了 `@trade-gate/gateway/dist/demo/events.js` 的深路径(gateway 没有 `exports` 字段,NodeNext 下可解析)。gateway 那边补一行 export 之后应当改回 `demo.*`。另外三条判定都从 `demo` 的公开面拿得到,没有将就。
 
 **两处纯抽取**(判定与文案一字未改,只为让 eval 能调到它们):
 - `unknownOrderGate(hasUnknownIntent)` ← `runtime.ts:1981` 的内联一行;

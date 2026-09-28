@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://trading-swarm.local/schema/research-batch.json",
+  "$id": "https://trade-gate.local/schema/research-batch.json",
   "title": "ResearchBatchPortfolioPrimitive",
   "description": "批量策略研究(docs/research/batch-study-2026-09-23.md)用的组合级原语:横截面动量调仓(portfolio_xsmom)、永续资金费套利两腿(portfolio_carry)。它们作用在资产池上,不是单资产 StrategyIR 的一段,所以不进 research.json 的原语表;实现见 packages/gateway/src/demo/research/primitives/portfolio-*.ts。",
   "anyOf": [

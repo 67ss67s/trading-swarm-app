@@ -6,7 +6,7 @@
  * 20/50 均线策略的信号是 ema_cross{fast,slow}、离场是 indicator_cross_exit{args.period, compare_args.period},
  * 两处必须一起缩放,否则「入场 25/63、离场还是 20/50」就不是同一个策略的邻域了。
  */
-import type { StrategyIR, StrategyPrimitive } from '@trading-swarm/contracts';
+import type { StrategyIR, StrategyPrimitive } from '@trade-gate/contracts';
 import type { Candidate } from '../types.js';
 
 export const PERIOD_KEY = /(^|_)(period|length|len|lookback|window|fast|slow|signal|bars|n|span|swing_length|atr_period|ema_period|ema_fast|ema_slow|adx_period|count)$/i;

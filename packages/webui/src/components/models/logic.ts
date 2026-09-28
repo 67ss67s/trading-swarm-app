@@ -105,12 +105,12 @@ export function pickModelForConnection(role: ModelRole, conn: ModelConnection, c
 
 /** status==='ok' 的连接数(顶栏胶囊的 n) */
 export function okConnectionCount(view: ModelsView | null | undefined): number {
-  return view ? view.connections.filter((c) => c.status === 'ok').length : 0;
+  return (view?.connections ?? []).filter((c) => c.status === 'ok').length;
 }
 
 /** 某角色是不是「绑定了,但绑的连接失效」——楼层 / 顶栏红点 */
 export function roleBindingBroken(view: ModelsView | null | undefined, role: ModelRole): boolean {
-  if (!view) return false;
+  if (!view?.effective || !view.bindings || !view.connections) return false; // 公网演示的锁定占位没有这些字段
   if (view.effective[role]?.source !== 'binding') return false;
   const b = view.bindings.find((x) => x.role === role);
   const conn = b?.connection_id ? view.connections.find((c) => c.id === b.connection_id) : null;

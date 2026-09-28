@@ -4,7 +4,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
-import type { StrategyIR } from '@trading-swarm/contracts';
+import type { StrategyIR } from '@trade-gate/contracts';
 import type { Budget, Candidate, Evaluation, GeneratorName, Objective, OverfitLedger } from './types.js';
 
 export type JobStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted';

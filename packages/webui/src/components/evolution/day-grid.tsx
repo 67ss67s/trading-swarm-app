@@ -11,6 +11,7 @@ import type { EvoDay, EvoStatus } from '@/api/evolution';
 import { getLang, t, tmap } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { fillDays, groupByMonth, lastNDays, moveIndex, statusColor, type MonthBlock } from './grid-logic';
+import { st } from '@/lib/server-text-en';
 
 export const EVO_STATUS_LABEL: Record<EvoStatus, string> = tmap({ good: '好于基线', ok: '接近基线', bad: '差于基线', none: '没有记录 / 未结算' });
 
@@ -45,7 +46,7 @@ function pct(v: number | null): string {
 }
 
 export function dayAria(d: EvoDay): string {
-  return `${d.date} · ${EVO_STATUS_LABEL[d.status]}${d.headline ? ` · ${d.headline}` : ''}`;
+  return `${d.date} · ${EVO_STATUS_LABEL[d.status]}${d.headline ? ` · ${st(d.headline)}` : ''}`;
 }
 
 export function DayGrid({ days, mode = 'month', from, to, compactDays = 30, cell, gap, selectedDate, onSelect, label, className, tipSide = 'top' }: DayGridProps) {
@@ -165,7 +166,7 @@ export function DayGrid({ days, mode = 'month', from, to, compactDays = 30, cell
             <span className="num font-medium">{tip.day.date}</span>
             <span className="text-muted-foreground">{EVO_STATUS_LABEL[tip.day.status]}</span>
           </div>
-          {tip.day.headline ? <div className="mt-0.5 whitespace-normal">{tip.day.headline}</div> : null}
+          {tip.day.headline ? <div className="mt-0.5 whitespace-normal">{st(tip.day.headline)}</div> : null}
           {tip.day.events ? <div className="text-muted-foreground">{t('{n} 个进化事件', { n: tip.day.events })}</div> : null}
         </div>
       ) : null}

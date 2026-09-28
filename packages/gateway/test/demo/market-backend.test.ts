@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { openStateDb, type StateDb } from '../../src/state-db.js';
 import { DemoStore } from '../../src/demo/store.js';
-import { MarketInbox, parseFileDelivery, parseTextSignal, stripFileSecrets, type QueueRow } from '../../src/demo/asp-agent/inbox.js';
+import { MarketInbox, isSellerSideMirror, parseFileDelivery, parseTextSignal, stripFileSecrets, type QueueRow } from '../../src/demo/asp-agent/inbox.js';
 import { MarketCli, type CliRunner, CliError } from '../../src/demo/asp-agent/cli.js';
 import { MarketPublisher, type PublishEvent } from '../../src/demo/asp-agent/publisher.js';
 import { MarketAftersales } from '../../src/demo/asp-agent/aftersales.js';
@@ -18,6 +18,34 @@ const ok = (v: unknown) => ({ code: 0, stdout: JSON.stringify({ ok: true, data: 
 const event = (patch: Partial<PublishEvent> = {}): PublishEvent => ({ event_id: 'e1', kind: 'entry_filled', signal_time: now, symbol: 'BTCUSDT', direction: 'long', price: '60000', stop_loss: '59000', take_profit: ['62000'], reason: '突破 / Breakout', thread_id: 't1', realized_r: null, backend: 'okx_atk', paper: false, ...patch });
 const listing = { name: 'Market Agent', description: '结构研究', service_name: '市场结构研究信号', service_description: '推送合约研究信号', pricing: 'monthly_trial', fee: '10' };
 function inbox(s: DemoStore, extra: Partial<ConstructorParameters<typeof MarketInbox>[0]> = {}) { return new MarketInbox({ store: s, settings: () => ({ ...DEFAULT_MARKET_SETTINGS, enabled: true }), session: () => 's1', now: () => now, system: async () => {}, emit: () => {}, ...extra }); }
+describe('seller-side mirrors and per-service fanout', () => {
+  it('skips our own outbound mirrors and orders addressed to our ASP identity', () => {
+    expect(isSellerSideMirror('📤 [Sent] Trading Swarm#13866 (you) → Jacky#13529\nJob: 0x1', ['13866'])).toBe(true);
+    expect(isSellerSideMirror('📥 [Received] SecAgent#1791 → Trading Swarm#13866 (you)\nJob: 0x2', ['13866'])).toBe(true);
+    expect(isSellerSideMirror('📥 [Received] Trading Swarm#13866 → Jacky#13529 (you)\nJob: 0x3', ['13866'])).toBe(false);
+    expect(isSellerSideMirror('【合约信号】BTC-PERP | LONG', ['13866'])).toBe(false);
+  });
+  it('strategy-signal publisher only fans out to jobs of the signal service', async () => {
+    const s = store(); const delivered: string[] = [];
+    const runner: CliRunner = async (_b, args) => {
+      if (args[1] === 'subscribe-active') return ok([{ jobId: 'sig1', serviceId: 'svc-signal' }, { jobId: 'intel1', serviceId: 'svc-intel' }, { jobId: 'nosid' }]);
+      if (args[1] === 'my-subscriptions') return ok({ list: [{ jobId: 'nosid', serviceId: 'svc-signal' }] });
+      if (args[1] === 'deliver') { delivered.push(args[2]!); return ok({ sent: true }); }
+      return ok({});
+    };
+    const p = new MarketPublisher({ store: s, cli: new MarketCli(runner), settings: () => ({ ...DEFAULT_PUBLISHER_SETTINGS, enabled: true, backend_filter: ['okx', 'paper', 'binance'], publish_orders: true, publish_analysis: true }), aspId: async () => '13866', emit: () => {}, serviceId: () => 'svc-signal' });
+    await p.publish({ event_id: 'e-sig', kind: 'strategy_signal', signal_time: now, symbol: 'BTCUSDT', direction: 'long', price: '1', stop_loss: '0.9', take_profit: ['1.2'], reason: 'r', thread_id: null, realized_r: null, backend: 'okx', paper: false, market: 'perp', signal_only: true, valid_until: now + 3600_000 });
+    expect(delivered).toEqual(['sig1', 'nosid']);
+  });
+  it('paused strategy-signal product pushes nothing', async () => {
+    const s = store(); const calls: string[] = [];
+    const runner: CliRunner = async (_b, args) => { calls.push(args[1]!); return ok([{ jobId: 'sig1', serviceId: 'svc-signal' }]); };
+    const p = new MarketPublisher({ store: s, cli: new MarketCli(runner), settings: () => ({ ...DEFAULT_PUBLISHER_SETTINGS, enabled: true, backend_filter: ['okx'], publish_orders: true }), aspId: async () => '13866', emit: () => {}, serviceId: () => 'svc-signal', paused: () => true });
+    expect(await p.publish({ event_id: 'e-p', kind: 'strategy_signal', signal_time: now, symbol: 'BTCUSDT', direction: 'long', price: '1', stop_loss: '0.9', take_profit: ['1.2'], reason: 'r', thread_id: null, realized_r: null, backend: 'okx', paper: false, market: 'perp', signal_only: true })).toBeNull();
+    expect(calls).toEqual([]);
+  });
+});
+
 describe('durable market inbox', () => {
   it('deliveryId dedup is durable, append-only and independent of message_id', async () => {
     const s = store(); const a = inbox(s);
@@ -49,8 +77,9 @@ describe('durable market inbox', () => {
   });
   it('system envelopes never enter the signal ledger; malformed/analysis rows do', async () => {
     const system = vi.fn(async () => {}); const s = store(); const a = inbox(s, { system });
-    await a.accept([{ ...row(), content: JSON.stringify({ agentId: 'a1', message: { source: 'system', event: 'sub_renew', jobId: 'j1' } }) }, row('a', { signal_type: 'analysis' }), { ...row('b'), content: 'not JSON' }]);
-    expect(system).toHaveBeenCalledOnce(); expect(a.rows()).toHaveLength(2); expect(a.capture()).toHaveLength(0); expect(a.status()).toMatchObject({ dlq: 1, analysis: 1 });
+    // 'not JSON' 这种未识别纯文本按新规则是中性 message,不再进 DLQ;真正坏掉的信号对象(order 缺 symbol)才是 invalid。
+    await a.accept([{ ...row(), content: JSON.stringify({ agentId: 'a1', message: { source: 'system', event: 'sub_renew', jobId: 'j1' } }) }, row('a', { signal_type: 'analysis' }), { ...row('b'), content: 'not JSON' }, row('c', { symbol: '' })]);
+    expect(system).toHaveBeenCalledOnce(); expect(a.rows()).toHaveLength(3); expect(a.capture()).toHaveLength(0); expect(a.status()).toMatchObject({ dlq: 1, analysis: 1, counts: { message: 1, invalid: 1, analysis: 1 } });
   });
   it('watch and queue are mutually exclusive and switch tears down the child', async () => {
     const s = store(); let transport: 'watch' | 'queue' = 'watch'; let onLine = (_: string) => {}; const stop = vi.fn(); const readQueue = vi.fn(async () => []);
@@ -65,7 +94,7 @@ describe('publisher', () => {
   it('sequential fanout freezes subscribers; replay never sends again; retry only failed jobs', async () => {
     const s = store(); const delivered: string[] = []; let active = 0; let peak = 0; let fail = true;
     const runner: CliRunner = async (_bin, args, timeout) => {
-      expect(timeout).toBe(20000);
+      expect(timeout).toBe(args[1] === 'deliver' ? 120_000 : 20000); // deliver 要上传长文本,给足 120s
       if (args[1] === 'subscribe-active') return ok({ list: [{ jobId: 'j1' }, { jobId: 'j2' }] });
       expect(args[1]).toBe('deliver'); delivered.push(args[2]!); active++; peak = Math.max(peak, active); await Promise.resolve(); active--;
       return args[2] === 'j2' && fail ? { code: 1, stdout: '{}', stderr: 'failed' } : ok({ sent: true });
@@ -150,7 +179,7 @@ describe('text-line signals (Alpha Engine style)', () => {
     const r = i.rows({ limit: 5 })[0]!; expect(r).toMatchObject({ parse_status: 'order', signal_type: 'order' });
     expect(r.signal).toMatchObject({ symbol: 'ONEUSDT', side: 'long', action: 'open', entry_kind: 'ladder', entry_prices: ['0.005365', '0.005408'], stop: '0.003476', valid_until: now + 4 * 3600_000 });
     // 守护里无头 Claude 的「信号送达」回执把同一行再发一遍:必须合成同一条,不能双计。
-    const echo = '【信号送达】「trading-swarm · Alpha」(Alpha Engine #10521)\n\n【合约信号】ONE-PERP | LONG 1x | 入场 0.005365-0.005408 | SL 0.003476 | TP1 0.007292 | 仓位 5% | 4h 内有效\n\n该订阅为仅接收模式';
+    const echo = '【信号送达】「trade-gate · Alpha」(Alpha Engine #10521)\n\n【合约信号】ONE-PERP | LONG 1x | 入场 0.005365-0.005408 | SL 0.003476 | TP1 0.007292 | 仓位 5% | 4h 内有效\n\n该订阅为仅接收模式';
     expect(await i.accept([{ id: 'ua:t2', job_id: '0xa36d', message_id: 'agent-message:inbound:echo1', content: echo, llm_content: null, payload_json: null, created_at: new Date(now + 60_000).toISOString() }])).toEqual({ scanned: 0, duplicates: 1 });
     expect(i.rows({ limit: 5 })).toHaveLength(1);
   });

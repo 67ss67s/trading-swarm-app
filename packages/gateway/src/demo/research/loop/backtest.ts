@@ -1,4 +1,4 @@
-import type { ResearchRequest, StrategyIR } from "@trading-swarm/contracts";
+import type { ResearchRequest, StrategyIR } from "@trade-gate/contracts";
 import { compileStrategy, irWarmup, requestHorizon } from "../strategy.js";
 import { ResearchService } from "../service.js";
 import { ResearchStore } from "../store.js";
@@ -9,7 +9,7 @@ import { hash } from "../primitives.js";
 import { FAST_ENGINE_MARK } from "../engine.js";
 import { STRATEGY_SPEC_VERSION } from "../strategy-spec.js";
 import { runBacktestReport, reportForRun, reportByKey, okxLoader, rowsToBars, mergeBars, normalizeSymbol, WARMUP_BARS, type BarsLoader, type LoadedBars } from "../backtest-report.js";
-import type { BacktestReport } from "@trading-swarm/contracts";
+import type { BacktestReport } from "@trade-gate/contracts";
 import type { Instrument, Window, MarketData } from "../data/index.js";
 import { failure, result, type ToolContext, type ToolResult } from "./tools.js";
 const execution: ResearchRequest["execution"] = {

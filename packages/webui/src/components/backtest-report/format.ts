@@ -3,7 +3,7 @@
  * 契约里收益 / 回撤 / 胜率 / 敞口 / 单笔收益一律是**小数**(0.0737 = 7.37%);drawdown 是正数幅度,
  * max_drawdown 正负都可能 —— 视图统一显示成红色负数。null / NaN 一律 '—'。
  */
-import type { BacktestAsset, BacktestMetrics, BacktestReport, BacktestScoreLabel } from '@trading-swarm/contracts';
+import type { BacktestAsset, BacktestMetrics, BacktestReport, BacktestScoreLabel } from '@trade-gate/contracts';
 import { getLang, t, tmap } from '@/lib/i18n';
 
 export type MetricKey = keyof BacktestMetrics;
@@ -220,7 +220,7 @@ export function spanLabel(fromMs: number, toMs: number): string {
 
 export function monthShort(m: number): string {
   if (getLang() === 'en') return ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][m] ?? String(m + 1);
-  return `${m + 1}月`;
+  return `${m + 1}月`; // i18n-ignore(en 在上一行已返回)
 }
 
 export function dateLocale(): string {

@@ -18,7 +18,7 @@ export function rustReadBridge(binary: string): ReadBridge {
     child.on('close', () => {
       try {
         const v = JSON.parse(out);
-        if (!v.ok || !v.result?.namespace) return finish(new Error(`只读 MCP 失败：${String(v.error ?? 'invalid_response')}；请检查只读桥的币安登录`));
+        if (!v.ok || !v.result?.namespace) return finish(new Error(`只读 MCP 失败：${String(v.error ?? 'invalid_response')}；请检查原客户端的币安登录`));
         finish(undefined, v.result);
       } catch { finish(new Error('只读 MCP 响应格式错误；未调用模型')); }
     });

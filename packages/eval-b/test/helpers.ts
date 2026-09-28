@@ -1,4 +1,4 @@
-import { demo } from '@trading-swarm/gateway';
+import { demo } from '@trade-gate/gateway';
 
 import type { EvalCase } from '../src/types.js';
 

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://trading-swarm.dev/schema/demo_portfolio_capacity.json",
+  "$id": "https://trade-gate.dev/schema/demo_portfolio_capacity.json",
   "title": "DemoPortfolioCapacity",
   "description": "Portfolio Manager 典型止损容量估算；不是执行授权。金额为十进制字符串，不能计算的字段显式 null。",
   "type": "object",

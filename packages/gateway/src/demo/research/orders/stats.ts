@@ -1,6 +1,6 @@
 /** BacktestPlanStats:计划层统计(契约 research-orders.json 已写明每个字段口径)。
  * fill_rate 只算走完时效的计划(filled/(filled+no_fill));replaced/cancelled/blocked/pending 不进分母,免得被替换的单把成交率拖低。 */
-import type { BacktestPlan, BacktestPlanStats } from '@trading-swarm/contracts';
+import type { BacktestPlan, BacktestPlanStats } from '@trade-gate/contracts';
 const avg = (xs: number[]) => xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
 export function planStats(plans: BacktestPlan[], counters: { ignored?: number; blocked?: number; added?: number } = {}): BacktestPlanStats {
   const by = (s: BacktestPlan['status']) => plans.filter((p) => p.status === s).length;

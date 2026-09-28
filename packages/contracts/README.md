@@ -1,7 +1,7 @@
-# @trading-swarm/contracts
+# @trade-gate/contracts
 
 The single source of truth for every "shape that crosses a process/language boundary" in
-trading-swarm: the six动钱 records (Intent / ExecutableOrderPlan / Authorization / ExecutionAttempt /
+trade-gate: the six动钱 records (Intent / ExecutableOrderPlan / Authorization / ExecutionAttempt /
 ExchangeOrderObservation / Fill), plus PositionEffect / AccountSnapshot / ExecPolicy / ExecEvent
 and the gateway↔execd RPC framing — defined once as JSON Schema (`schema/*.json`), never by hand
 in TypeScript. `crates/contracts-rs` is the Rust side of the same source; see

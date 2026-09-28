@@ -14,8 +14,9 @@ import {
   type FunnelThresholds,
   type SeriesBundle,
 } from '../../src/demo/funnel.js';
-import { scanChecklist } from '../../src/demo/review-metrics.js';
+import { BREAKOUT_WINDOW, CHASE_ATR_MAX, RETEST_VOL_MIN, scanChecklist, type ScanThresholds } from '../../src/demo/review-metrics.js';
 import { tfFeatures } from '../../src/demo/market.js';
+import { lastClosedIndex } from '../../src/demo/backtest.js';
 import { openStateDb } from '../../src/state-db.js';
 import { DemoStore } from '../../src/demo/store.js';
 import { ensureBreakoutRetestV2, scanThresholdsOf } from '../../src/demo/strategies.js';
@@ -84,7 +85,7 @@ describe('funnel — 现行 breakout 判据恒为假', () => {
     expect(metrics.filter((m) => m.broke_up).length).toBe(1);
   });
 
-  it('自带答案的序列:现行规则 0 个候选,换成 prior 口径后正好 1 个', () => {
+  it('自带答案的序列:旧 self 口径 0 次收破,现行(prior)口径正好 1 次', () => {
     const base = breakoutSeries();
     const s = bundle(base);
     const from = base[25]!.close_time;
@@ -92,9 +93,23 @@ describe('funnel — 现行 breakout 判据恒为假', () => {
     const { metrics } = computeMetrics(s, '15m', from, to);
     const brk = metrics.filter((m) => evaluateBar(m, { ...CURRENT_THRESHOLDS, breakout_level: 'self' }).pass.breakout);
     expect(brk).toHaveLength(0);
-    const brkPrior = metrics.filter((m) => evaluateBar(m, { ...CURRENT_THRESHOLDS, breakout_level: 'prior' }).pass.breakout);
-    expect(brkPrior).toHaveLength(1);
-    expect(brkPrior[0]!.vol_ratio).toBeGreaterThan(1.5); // 突破那根确实是放量的
+    const brkCurrent = metrics.filter((m) => evaluateBar(m, CURRENT_THRESHOLDS).pass.breakout);
+    expect(brkCurrent).toHaveLength(1);
+    expect(brkCurrent[0]!.vol_ratio).toBeGreaterThan(1.5); // 突破那根确实是放量的
+  });
+
+  it('现行口径:收破与追单距离都量前 20 根(不含当根),突破那根距离不再恒为 0', () => {
+    const base = breakoutSeries();
+    const s = bundle(base);
+    const { metrics } = computeMetrics(s, '15m', base[25]!.close_time, base[base.length - 1]!.close_time);
+    const m = metrics.find((x) => x.broke_up)!;
+    const cur = evaluateBar(m, CURRENT_THRESHOLDS);
+    expect(cur.dir).toBe('long');
+    expect(cur.level).toBe(m.hi20_prev);
+    expect(cur.dist_atr).toBeCloseTo((m.close - m.hi20_prev) / m.atr, 9);
+    expect(cur.dist_atr).toBeGreaterThan(0.5); // 收在 103、前 20 根高 101:走出去约 2/ATR,不是含当根口径的 ~0.24
+    // 旧 self 口径量的是本根自己的上影线(103.5 − 103)。
+    expect(evaluateBar(m, { ...CURRENT_THRESHOLDS, breakout_level: 'self' }).dist_atr).toBeCloseTo((m.hi20 - m.close) / m.atr, 9);
   });
 
   it('回踩窗口放宽到 12 根后,突破之后的 11 根也算数', () => {
@@ -124,11 +139,20 @@ describe('funnel — 边际杀伤与阶梯', () => {
     const out = funnelForSeries('TESTUSDT', bundle(base), base[25]!.close_time, base[base.length - 1]!.close_time);
     expect(out.bars).toBeGreaterThan(30);
     for (const c of out.conditions) expect(c.marginal_kills).toBeLessThanOrEqual(out.bars - c.pass);
-    // 现行规则下 breakout 通过 0 次,于是它一个人吃掉全部杀伤、其余六条必然是 0。
+    // 现行规则已是修过的口径:突破那根收破、放量、在射程内 → 正好 1 个候选。
+    expect(out.conditions.find((c) => c.key === 'breakout')!.pass).toBe(1);
+    expect(out.joint).toBe(1);
+    expect(out.conditions_fixed).toEqual(out.conditions); // 兼容字段,现行口径下与 conditions 相同
+  });
+
+  it('旧 self 口径复现:breakout 通过 0 次,一个人吃掉全部杀伤;conditions_fixed 换回现行口径', () => {
+    const base = breakoutSeries(80, 40);
+    const out = funnelForSeries('TESTUSDT', bundle(base), base[25]!.close_time, base[base.length - 1]!.close_time, { thresholds: { breakout_level: 'self' } });
     const brk = out.conditions.find((c) => c.key === 'breakout')!;
     expect(brk.pass).toBe(0);
     for (const c of out.conditions) if (c.key !== 'breakout') expect(c.marginal_kills).toBe(0);
     expect(out.joint).toBe(0);
+    expect(out.conditions_fixed.find((c) => c.key === 'breakout')!.pass).toBe(1);
   });
 
   it('阶梯单调:每一级的联合通过数都不小于前一级', () => {
@@ -138,8 +162,18 @@ describe('funnel — 边际杀伤与阶梯', () => {
     for (let i = 1; i < out.ladder.length; i++) {
       expect(out.ladder[i]!.joint, `${out.ladder[i]!.key} 不该比 ${out.ladder[i - 1]!.key} 少`).toBeGreaterThanOrEqual(out.ladder[i - 1]!.joint);
     }
-    expect(out.ladder[0]!.joint).toBe(0);
-    expect(out.ladder.at(-1)!.joint).toBeGreaterThan(0);
+    expect(out.ladder[0]!.key).toBe('current');
+    expect(out.ladder[0]!.joint).toBe(1); // 现行规则不再恒为 0:突破那根本身就是一个候选
+    expect(out.ladder.at(-1)!.joint).toBeGreaterThan(out.ladder[0]!.joint);
+  });
+
+  it('阶梯没有与现行规则等价的重复级,也不再有 F(突破位修正)级', () => {
+    const patches = LADDER.map((r) => JSON.stringify({ ...CURRENT_THRESHOLDS, ...r.patch }));
+    expect(new Set(patches).size).toBe(LADDER.length);
+    for (const r of LADDER) {
+      expect(r.label.startsWith('F')).toBe(false);
+      expect(r.patch.breakout_level).toBeUndefined();
+    }
   });
 
   it('每一级的联合通过数都 ≥ 现行规则(放宽不会挡掉原本通过的根)', () => {
@@ -255,6 +289,120 @@ describe('scanChecklist — 突破位口径与策略门槛', () => {
     expect(th.breakout_window).toBe(1);
     expect(th.atr_pct_floor).toBeUndefined();
   });
+});
+
+// ---------------------------------------------------------------- funnel 现行口径 ≡ scanChecklist
+
+/** 可复现的伪随机数(mulberry32)。 */
+function rng(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** 带趋势切换与放量尖峰的 15m 随机游走,1h / 4h 由它聚合,三条序列时间上严格对齐。 */
+function randomBundle(n: number, seed: number): SeriesBundle {
+  const r = rng(seed);
+  const tf = 15 * MIN;
+  const base: Kline[] = [];
+  let px = 100;
+  let drift = 0;
+  for (let i = 0; i < n; i++) {
+    if (i % 240 === 0) drift = (r() - 0.5) * 0.004; // 每 60 小时换一次方向/力度
+    const open = px;
+    const close = open * (1 + drift + (r() - 0.5) * 0.012);
+    const high = Math.max(open, close) * (1 + r() * 0.004);
+    const low = Math.min(open, close) * (1 - r() * 0.004);
+    const volume = 100 * (0.5 + r()) * (r() < 0.08 ? 3 + r() * 3 : 1);
+    base.push(bar(tf, i, open, high, low, close, volume));
+    px = close;
+  }
+  const agg = (k: number): Kline[] => {
+    const out: Kline[] = [];
+    for (let g = 0; (g + 1) * k <= base.length; g++) {
+      const grp = base.slice(g * k, (g + 1) * k);
+      out.push({
+        open_time: grp[0]!.open_time,
+        open: grp[0]!.open,
+        high: String(Math.max(...grp.map((x) => Number(x.high)))),
+        low: String(Math.min(...grp.map((x) => Number(x.low)))),
+        close: grp.at(-1)!.close,
+        volume: String(grp.reduce((a, x) => a + Number(x.volume), 0)),
+        close_time: grp.at(-1)!.close_time,
+      });
+    }
+    return out;
+  };
+  return { base, h1: agg(4), h4: agg(16), d1: [], funding: [] };
+}
+
+describe('funnel 现行规则 ≡ scanChecklist(同一组 K 线逐根对拍)', () => {
+  it('CURRENT_THRESHOLDS 的追单上限 / 量比 / 突破窗口就是 review-metrics 的常量', () => {
+    expect(CURRENT_THRESHOLDS.chase_atr_max).toBe(CHASE_ATR_MAX);
+    expect(CURRENT_THRESHOLDS.retest_vol_min).toBe(RETEST_VOL_MIN);
+    expect(CURRENT_THRESHOLDS.breakout_window).toBe(BREAKOUT_WINDOW);
+    expect(CURRENT_THRESHOLDS.breakout_level).toBe('prior');
+    expect(CURRENT_THRESHOLDS.vol_mode).toBe('current');
+    expect(CURRENT_THRESHOLDS.trend_mode).toBe('both');
+    expect(CURRENT_THRESHOLDS.atr_floor_mult).toBe(1);
+  });
+
+  const cases: { name: string; funnel: Partial<FunnelThresholds>; checklist: ScanThresholds | undefined }[] = [
+    { name: '现行(v1 默认参数)', funnel: {}, checklist: undefined },
+    { name: '窗口 12 + 量比 1.5 + 追单 1.0(策略参数改过)', funnel: { breakout_window: 12, retest_vol_min: 1.5, chase_atr_max: 1 }, checklist: { breakout_window: 12, retest_vol_min: 1.5, chase_atr_max: 1 } },
+  ];
+  for (const c of cases) {
+    it(`逐根判定一致:${c.name}`, () => {
+      const s = randomBundle(1900, 20260927);
+      const from = s.base[1300]!.close_time;
+      const to = s.base.at(-1)!.close_time;
+      const { metrics, index } = computeMetrics(s, '15m', from, to);
+      expect(metrics.length).toBeGreaterThan(500);
+      const th: FunnelThresholds = { ...CURRENT_THRESHOLDS, ...c.funnel };
+      const seen = { long: 0, short: 0, none: 0, retest: 0, within: 0, outside: 0, watch: 0 };
+      for (let k = 0; k < metrics.length; k++) {
+        const m = metrics[k]!;
+        const i = index[k]!;
+        const i1 = lastClosedIndex(s.h1, m.t);
+        const i4 = lastClosedIndex(s.h4, m.t);
+        // 与 computeMetrics / backtest barFeatures 同窗口:15m 60 根、1h 120 根、4h 80 根。
+        const features = [
+          tfFeatures('15m', s.base.slice(Math.max(0, i - 59), i + 1)),
+          tfFeatures('1h', s.h1.slice(Math.max(0, i1 - 119), i1 + 1)),
+          tfFeatures('4h', s.h4.slice(Math.max(0, i4 - 79), i4 + 1)),
+        ];
+        const chk = scanChecklist(features, s.base.slice(0, i + 1), c.checklist)!;
+        const ev = evaluateBar(m, th);
+        const at = `bar ${i}`;
+        expect(ev.pass.atr_ok, at).toBe(chk.atr_ok);
+        expect(ev.dir_trend, at).toBe(chk.trend_agree);
+        expect(ev.watch_eligible, at).toBe(chk.watch_eligible);
+        if (chk.trend_agree !== null) {
+          expect(ev.dist_atr, at).toBeCloseTo(chk.dist_to_break_atr!, 6);
+          expect(ev.pass.within_chase, at).toBe(chk.within_chase);
+          expect(ev.retest_confirmed, at).toBe(chk.retest_confirmed);
+          seen[chk.trend_agree]++;
+          if (chk.retest_confirmed) seen.retest++;
+          if (chk.within_chase) seen.within++;
+          else seen.outside++;
+        } else seen.none++;
+        if (chk.watch_eligible) seen.watch++;
+      }
+      // 对拍不是空转:两个方向、不同向、回踩确认、射程内外、WATCH 都真的出现过。
+      expect(seen.long).toBeGreaterThan(0);
+      expect(seen.short).toBeGreaterThan(0);
+      expect(seen.none).toBeGreaterThan(0);
+      expect(seen.retest).toBeGreaterThan(0);
+      expect(seen.within).toBeGreaterThan(0);
+      expect(seen.outside).toBeGreaterThan(0);
+      expect(seen.watch).toBeGreaterThan(0);
+    });
+  }
 });
 
 // ---------------------------------------------------------------- v2 草稿

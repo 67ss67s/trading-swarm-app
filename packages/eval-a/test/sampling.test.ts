@@ -1,4 +1,4 @@
-// Multi-sample runs (docs/eval/denoise-plan-2026-09-04.md, merged with the external review): mode selection,
+// Multi-sample runs (docs/eval/denoise-plan-2026-09-04.md, merged with the Codex review): mode selection,
 // pairwise-disagreement noise floor, 4/5 stability rule, per-sample hard invariants vs stable-only action metrics,
 // and --resume redoing single-sample episodes.
 
@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { demo } from '@trading-swarm/gateway';
+import type { demo } from '@trade-gate/gateway';
 import { loadCases, pickMode, runCases } from '../src/run.js';
 import { boundaryPairs, buildReport, loadEpisodes, isStable, pairwiseDisagreement, summarizeSampling } from '../src/report.js';
 import type { EpisodeRecord } from '../src/types.js';

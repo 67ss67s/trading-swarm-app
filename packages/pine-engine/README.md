@@ -1,4 +1,4 @@
-# @trading-swarm/pine-engine — trading-swarm 自己的 Pine 引擎
+# @trade-gate/pine-engine — trade-gate 自己的 Pine 引擎
 
 研究引擎的「Pine 脚本目录」用它跑原生 PineScript v5/v6:任何 Pine 指标先进目录、过准入门
 (因果 / 确定性 / 有数值输出 / 实测预热,合成 + 真实行情两套数据都要过),通过后才能被
@@ -23,8 +23,8 @@
 调试时可以单独起一个(同样的沙箱参数,临时端口):
 
 ```bash
-npm start -w @trading-swarm/pine-engine      # 打印 {"event":"ready","port":…}
-npm run smoke -w @trading-swarm/pine-engine  # 自己起一个跑冒烟;PINE_ENGINE_URL=… 则打现成的
+npm start -w @trade-gate/pine-engine      # 打印 {"event":"ready","port":…}
+npm run smoke -w @trade-gate/pine-engine  # 自己起一个跑冒烟;PINE_ENGINE_URL=… 则打现成的
 ```
 
 ## 沙箱
@@ -68,6 +68,6 @@ AGPL-3.0 发布,许可全文见 `LICENSE`。
 
 **AGPL 边界就是进程边界**:PineTS 只存在于这个独立子进程里;gateway 只 resolve 本包的**路径**
 并以独立进程启动它,通过本地 HTTP 通信,**绝不 import PineTS 或本包代码**。改 gateway 时守住这条:
-不要在 `packages/gateway` 里 `import 'pinets'` 或 `require('@trading-swarm/pine-engine')`。
+不要在 `packages/gateway` 里 `import 'pinets'` 或 `require('@trade-gate/pine-engine')`。
 
 目录里 `source='community'` 的脚本必须自带 `license` 字段,准入报告会连同许可一起留痕。

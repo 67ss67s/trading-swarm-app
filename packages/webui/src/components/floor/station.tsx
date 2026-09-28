@@ -38,7 +38,7 @@ export function AgentStation({ a, meta, selected, onSelect, pulse, step, motion,
       onClick={onSelect} role="button" tabIndex={0} aria-pressed={selected}
       aria-label={`${m.callsign} · ${m.desk} · ${STATE_LABEL[a.presence.state]}`}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(); } }}
-      title={a.enabled ? a.name : `${a.name}(${t('还没接线')})${a.note ? `:${a.note}` : ''}`}>
+      title={a.enabled ? t(a.name) : `${t(a.name)}(${t('还没接线')})${a.note ? `:${t(a.note)}` : ''}`}>
       {a.presence.state !== 'off' ? <span aria-hidden="true" className={cn('of-spot', (a.presence.state === 'working' || thinking) && 'of-spot-live')} /> : null}
       {big ? <span aria-hidden="true" className="of-council-core"><i /><b /></span> : null}
       {showBubble ? <span className={cn('of-desk-bubble', bubbleClass, pulse?.kind === 'say' && 'of-typewriter')} title={bubble ?? undefined}>

@@ -3,7 +3,7 @@
 // reduceReview (what a review judgment is allowed to do per status), openingBlockers, threadClientPrefix.
 
 import { describe, expect, it } from 'vitest';
-import { newThread, openingBlockers, reconcileThread, reduceReview, threadClientPrefix, type ThreadFacts } from '../../src/demo/threads.js';
+import { ENTRY_MISS_SPACING_MS, newThread, openingBlockers, reconcileThread, reduceReview, threadClientPrefix, type ThreadFacts } from '../../src/demo/threads.js';
 import type { Judgment, OpenOrderView, PositionView, StrategyThread, Workflow } from '../../src/demo/types.js';
 import type { OrderStatusView } from '../../src/demo/execution.js';
 import { DEFAULT_WORKFLOW } from '../../src/demo/workflow.js';
@@ -134,10 +134,13 @@ describe('reconcileThread: pending_entry', () => {
     expect(r1.next.attention).toBe('ORDER_UNKNOWN');
     expect(r1.next.entry_lookup_misses).toBe(1);
 
+    // 同一个 now(同一份缓存窗口)再查一次不重复计数(09-26 stuck-entry)
+    expect(reconcileThread(r1.next, mkFacts({ position: null, entry_order: null })).changed).toBe(false);
     let cur = r1.next;
-    for (let i = 0; i < 6; i++) {
-      const r = reconcileThread(cur, mkFacts({ position: null, entry_order: null }));
-      expect(r.next.status).toBe('pending_entry'); // still pending no matter how many misses
+    for (let i = 1; i <= 6; i++) {
+      const r = reconcileThread(cur, mkFacts({ now: 2000 + i * ENTRY_MISS_SPACING_MS, position: null, entry_order: null }));
+      // 纯函数永远不写终态:次数与时长够了也只是 verify_absent(请求 runtime 做新鲜复核)
+      expect(r.next.status).toBe('pending_entry');
       expect(r.next.attention).toBe('ORDER_UNKNOWN');
       cur = r.next;
     }

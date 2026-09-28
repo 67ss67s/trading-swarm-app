@@ -5,7 +5,7 @@
  *   下半 = 原始日志(可折叠),给排错看。
  *
  * react-query key 约定见 src/App.tsx 顶部注释:['activity'](SSE `activity` 直接 prepend)与
- * ['logs'](SSE `log` prepend),本页不自己开 SSE 连接。
+ * ['logs'](SSE `log` prepend),本页不自己开 SSE 连接；分页快照用子 key，最新页每 5 秒更新，避免 SSE 插入改变历史游标。
  */
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -78,7 +78,9 @@ function ActivityRow({ item }: { item: ActivityItem }) {
 }
 
 function ActivityFeed() {
-  const activityQ = useQuery({ queryKey: ['activity'], queryFn: () => api.activity(300), retry: 0 });
+  const [cursors, setCursors] = useState<Array<{ at: number; id: string }>>([]);
+  const cursor = cursors.at(-1);
+  const activityQ = useQuery({ queryKey: ['activity', 'page', cursor ?? null], refetchInterval: cursor ? false : 5_000, queryFn: () => api.activity(50, cursor?.at, cursor?.id), retry: 0 });
   const [group, setGroup] = useState<GroupFilter>('all');
   const [q, setQ] = useState('');
 
@@ -120,6 +122,12 @@ function ActivityFeed() {
           <Search className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('搜币种 / 关键词')} className="h-7 pl-7 text-[12px]" />
         </div>
+      </div>
+      <div className="flex gap-2 border-b px-3 py-1 text-[11px]">
+        <Button size="xs" variant="outline" disabled={!cursor} onClick={() => setCursors([])}>{t('最新')}</Button>
+        <Button size="xs" variant="outline" disabled={!cursor} onClick={() => setCursors(v => v.slice(0, -1))}>{t('上一页')}</Button>
+        <span>{t('第 {n} 页 · 每页最多 {max} 条 · 筛选当前页', { n: cursors.length + 1, max: 50 })}</span>
+        <Button size="xs" variant="outline" disabled={!activityQ.data?.next_before || activityQ.isFetching} onClick={() => { const next = activityQ.data?.next_before; if (next) setCursors(v => [...v, next]); }}>{t('更早')}</Button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="flex flex-col gap-0.5 p-2">
@@ -168,7 +176,9 @@ function levelClass(level: LogEntry['level']): string {
 type LevelFilter = 'all' | LogEntry['level'];
 
 function RawLogs({ expanded, onToggle }: { expanded: boolean; onToggle: () => void }) {
-  const logsQ = useQuery({ queryKey: ['logs'], queryFn: () => api.logs(500) });
+  const [cursors, setCursors] = useState<number[]>([]);
+  const cursor = cursors.at(-1);
+  const logsQ = useQuery({ queryKey: ['logs', 'page', cursor ?? null], refetchInterval: cursor ? false : 5_000, queryFn: () => api.logs(100, cursor), enabled: expanded });
   const [level, setLevel] = useState<LevelFilter>('all');
   const logs = logsQ.data?.logs ?? [];
   const visible = level === 'all' ? logs : logs.filter((l) => l.level === level);
@@ -192,6 +202,12 @@ function RawLogs({ expanded, onToggle }: { expanded: boolean; onToggle: () => vo
                 {lv === 'all' ? t('全部') : LEVEL_LABEL[lv]}
               </Button>
             ))}
+          </div>
+          <div className="flex gap-2 border-b px-3 py-1 text-[11px]">
+            <Button size="xs" variant="outline" disabled={!cursor} onClick={() => setCursors([])}>{t('最新')}</Button>
+            <Button size="xs" variant="outline" disabled={!cursor} onClick={() => setCursors(v => v.slice(0, -1))}>{t('上一页')}</Button>
+            <span>{t('第 {n} 页 · 每页最多 {max} 条 · 筛选当前页', { n: cursors.length + 1, max: 100 })}</span>
+            <Button size="xs" variant="outline" disabled={!logsQ.data?.next_before_id || logsQ.isFetching} onClick={() => { const next = logsQ.data?.next_before_id; if (next) setCursors(v => [...v, next]); }}>{t('更早')}</Button>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
             <div className="flex flex-col gap-0.5 p-2">

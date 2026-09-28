@@ -1,6 +1,6 @@
 # 指标库(`packages/gateway/src/demo/indicators.ts`)
 
-从 8794 控制台(`~/Desktop/trade-switch-rs`,`backend/crates/console-core/src/indicators.rs` 的 34 个 ta-lib 指标)移植过来的技术指标库,再补上 8794 没有、但判断/策略需要的那几个(VWAP、Supertrend、Keltner、Donchian、Squeeze、Ichimoku、成交量分布)。
+从 8794 控制台(`<separate console repo>`,`backend/crates/console-core/src/indicators.rs` 的 34 个 ta-lib 指标)移植过来的技术指标库,再补上 8794 没有、但判断/策略需要的那几个(VWAP、Supertrend、Keltner、Donchian、Squeeze、Ichimoku、成交量分布)。
 
 在此之前,模型能看到的全部「技术面」只有四样:EMA20/50、ATR14、20 根高低、量比。这份库把它扩到 35 个指标族,并且走三条路出去:
 
@@ -132,7 +132,7 @@ scanChecklist(features, klines);    // 显式给 K 线
 
 | 8794 的东西 | 为什么没搬 |
 |---|---|
-| 自定义指标引擎(Pine runner + AI 翻译成 Rhai 脚本,`custom_indicators.rs` / `IndicatorsPage.tsx`) | 那是一整套用户自写指标的子系统(沙箱化的脚本运行时、Pine→Rhai 的模型翻译、每用户存储),不是指标库本身。trading-swarm 这边没有对应的用户产物概念 |
+| 自定义指标引擎(Pine runner + AI 翻译成 Rhai 脚本,`custom_indicators.rs` / `IndicatorsPage.tsx`) | 那是一整套用户自写指标的子系统(沙箱化的脚本运行时、Pine→Rhai 的模型翻译、每用户存储),不是指标库本身。trade-gate 这边没有对应的用户产物概念 |
 | `indicator_series_generic` 的 O(n²) 前缀重算 | 8794 除 sma/ema/rsi 外的每条历史序列都是在每个递增前缀上重算一次 `indicator_value`。这里每个指标本来就是一次 O(n) 扫出整条序列,不需要这条退化路径 |
 | `GET /api/market/indicator-series?name=` (单条序列端点) | `/api/market/indicators?set=<单个名字>` 已经覆盖,不再单开一个路由 |
 | Rhai 辅助函数库(`crossover` / `valuewhen` / `barssince` / `ffill` …) | 只有自定义脚本引擎需要它们 |

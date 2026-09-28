@@ -1,6 +1,6 @@
 import { checkIR,irWarmup,timeframeMillis } from './strategy.js';
 import { createHash } from 'node:crypto';
-import { validate, type ResearchDataset, type ResearchRequest } from '@trading-swarm/contracts';
+import { validate, type ResearchDataset, type ResearchRequest } from '@trade-gate/contracts';
 export const ENGINE_VERSION = 'research-spot-next-open-v1';
 export const SCALE = 100_000_000n;
 /** 账本使用 8 位定点数，禁止 Number 金额进入记账。指标统计才使用 Number。 */

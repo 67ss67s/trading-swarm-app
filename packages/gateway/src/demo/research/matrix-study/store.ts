@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import { BotRegistry, type BotRole } from '../../bots.js';
 import { hash } from '../primitives.js';
+import { judgeStageWorst } from './manifest.js';
 import type { CellResult, DevResult, MatrixEvent, MatrixManifest, MatrixStage, MatrixState, MatrixStudyRow, MatrixStudyStatus } from './types.js';
 
 type Raw = Record<string, unknown>;
@@ -54,7 +55,9 @@ export class MatrixStudyStore {
       const prior = this.byKey(input.idempotency_key);
       if (prior) { if (prior.manifest_hash !== input.manifest_hash && hash(prior.manifest.spec) !== hash(input.manifest.spec)) throw Error('idempotency_conflict'); return prior; }
       const id = `ms_${randomUUID().replace(/-/g, '').slice(0, 20)}`, at = this.now(), m = input.manifest, st = emptyState();
-      st.progress.total = m.cells.filter((c) => c.applicability === 'applicable').reduce((a, c) => a + c.variants.length, 0);
+      // 两段式:第一阶段 code 格变体 + 补跑最坏 K 格(入选后按实际名单改)
+      st.progress.total = m.judge_stage ? m.cells.filter((c) => c.applicability === 'applicable' && c.arm === 'code').reduce((a, c) => a + c.variants.length, 0) + judgeStageWorst(m).trials_max : m.cells.filter((c) => c.applicability === 'applicable').reduce((a, c) => a + c.variants.length, 0);
+      if (m.judge_stage) st.judge_stage = { mode: 'candidates', max_cells: m.judge_stage.max_cells, status: 'pending', eligible: 0, selected: [] };
       this.db.prepare('INSERT INTO research_matrix_studies(id,idempotency_key,research_program_id,manifest_hash,protocol_hash,manifest_json,status,stage,state_json,lease_token,lease_until,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,NULL,NULL,?,?)')
         .run(id, input.idempotency_key, m.spec.research_program_id, input.manifest_hash, m.protocol_hash, JSON.stringify(m), 'queued', 'queued', JSON.stringify(st), at, at);
       const ins = this.db.prepare('INSERT INTO research_study_cells(study_id,cell_id,applicability,cell_json) VALUES (?,?,?,?)');
@@ -160,6 +163,12 @@ export class MatrixStudyStore {
       this.db.prepare('UPDATE research_study_attempts SET status=?,error_code=?,finished_at=? WHERE attempt_id=?').run(status, error_code, at, a.attempt_id);
       this.db.prepare('UPDATE research_study_evaluations SET status=?,result_json=COALESCE(?,result_json),error_code=?,updated_at=? WHERE evaluation_id=?').run(status, result === null || result === undefined ? null : JSON.stringify(result), error_code, at, a.evaluation_id);
     });
+  }
+  /** 本 Study 全部已完成的开发视图评估(segment='dev',每个试验取最近一条);读视图重算评分卡 / 三档用,不含留出 */
+  devResults(study_id: string): Map<string, DevResult> {
+    const out = new Map<string, DevResult>();
+    for (const r of this.db.prepare("SELECT trial_id,result_json FROM research_study_evaluations WHERE study_id=? AND segment='dev' AND status='completed' AND result_json IS NOT NULL ORDER BY updated_at").all(study_id) as Raw[]) out.set(String(r.trial_id), JSON.parse(String(r.result_json)) as DevResult);
+    return out;
   }
   putCandidate(study_id: string, trial_id: string, segment: string, candidate_id: string, snapshot: unknown, decision: unknown): void {
     this.db.prepare('INSERT OR IGNORE INTO research_study_candidates VALUES (?,?,?,?,?,?)').run(study_id, trial_id, segment, candidate_id, JSON.stringify(snapshot), decision === null ? null : JSON.stringify(decision));

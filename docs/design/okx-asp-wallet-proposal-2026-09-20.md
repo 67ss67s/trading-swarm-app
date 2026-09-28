@@ -23,7 +23,7 @@ OnchainOS 这一侧有三样东西和我们相关:
 
 ## 2. 三种接法,建议做 A + B
 
-### A. trading-swarm 作为**买家侧**:把 ASP 订阅信号接进现有「跟单」页(推荐,先做)
+### A. trade-gate 作为**买家侧**:把 ASP 订阅信号接进现有「跟单」页(推荐,先做)
 
 现在的跟单 session 已经有「外部交易员信号 → agent 判断依据 → 人工 apply/skip/reconcile,零自动交易所写」
 这条完整流水线(bridge 触发)。ASP 订阅信号在语义上就是另一种交易员信号源:
@@ -41,7 +41,7 @@ OnchainOS 这一侧有三样东西和我们相关:
   我们只读结果;理由:订阅涉及 EIP-712 签名和付费确认,平台要求走它的确认卡片,复刻一遍风险高。
   第二阶段可以在前端嵌一个「搜索信号服务」(`agent search` / `service-match`)+ 一键把订阅命令复制到终端。
 
-### B. trading-swarm 作为**ASP**:把我们的策略/信号发成一个 A2A 月订阅服务(适合参赛,第二步做)
+### B. trade-gate 作为**ASP**:把我们的策略/信号发成一个 A2A 月订阅服务(适合参赛,第二步做)
 
 - 注册一个 ASP 身份(需要:品牌名、描述、头像图片、服务名、类型 A2A、定价 `2` 月订阅或 `3` 带试用)。
   注册是对话式流程(consent、QA、确认卡),**用 `okx-ai` 技能在 Claude 里跑一次**即可,不需要写代码。
@@ -75,7 +75,7 @@ OnchainOS 这一侧有三样东西和我们相关:
 ## 3b. 本机现状(只读探测,2026-09-20)
 
 - Agentic Wallet 已登录(Google,Account 1),`okx-a2a` 守护在跑,User 身份 Agent #13529「Jacky」在,
-  当前**没有活跃订阅**(09-12 试过 ASP #8136 / service 36563 的 3 天试用,见 ~/Desktop/okx-signal-lab)。
+  当前**没有活跃订阅**(09-12 试过 ASP #8136 / service 36563 的 3 天试用,见 <local tool>)。
 - 那次的经验直接回答了问题 2:投递落在 `~/.okx-agent-task/sqlite/session-store.sqlite` 的
   `pending_gateway_deliveries`,是**消费即删的队列**,不是台账;okx-signal-lab 的 collect.py 就是靠轮询它归档的。
   所以方案 A 的信号源可以直接复用这条路(读队列 → 落我们自己的表),不必先啃 XMTP 守护的 agent 会话协议。

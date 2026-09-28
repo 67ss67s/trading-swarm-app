@@ -2,7 +2,7 @@
  * Radar 角色的编排层:把 screener.ts(纯计算)接到运行时——定时(短线 12h / 中线 72h / 周线 7d)、
  * 暂停跳过、bot_runs 记账、radar → gate_captain 的交接、提案应用(只改 watchlist)。
  *
- * 设计:docs/design/trading-swarm-bot-team-guide-2026-09-04.ipynb §11.1 与 docs/design/screener-radar-2026-09-05.md。
+ * 设计:docs/design/trade-gate-bot-team-guide-2026-09-04.ipynb §11.1 与 docs/design/screener-radar-2026-09-05.md。
  *
  * 红线:
  *   - 这里没有任何一条路径能改 workflow 里除 `watchlist` 之外的字段(proposalPatch 只产出 watchlist)。

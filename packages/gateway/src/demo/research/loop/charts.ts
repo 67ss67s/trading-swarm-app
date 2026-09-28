@@ -20,7 +20,7 @@ import type {
   LoopChartSeries,
   LoopChartTemplate,
   LoopSpec,
-} from "@trading-swarm/contracts";
+} from "@trade-gate/contracts";
 
 export const CHART_VERSION = "research-chart/v1" as const;
 export const BASE_CAPITAL = 10000;

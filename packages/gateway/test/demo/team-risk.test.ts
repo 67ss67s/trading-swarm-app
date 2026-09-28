@@ -1,5 +1,5 @@
 // Portfolio Manager(portfolio.ts)+ Risk Sentinel(risk.ts / team-store.ts)。全部纯代码,零模型、零网络。
-// 场景清单来自 docs/design/team-roles-2026-09-06.md §3.8 / §4.8(评审稿的验收项):BTC+ETH 同簇超限、
+// 场景清单来自 docs/design/team-roles-2026-09-06.md §3.8 / §4.8(Codex 稿的验收项):BTC+ETH 同簇超限、
 // 同币多空 gross 不抵销、挂单只一边成交的最坏净额、待批 intent 与真实挂单去重、止损预算不被盈利仓抵销、
 // 质量不 ok 不放行、latch(high 不自动解除)、warn 滞回、ack 不放行。
 import { afterEach, describe, expect, it } from 'vitest';

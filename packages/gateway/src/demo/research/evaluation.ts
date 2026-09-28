@@ -1,6 +1,6 @@
 import { resolveRequest } from './strategy.js';
 /** Decision-level counterfactuals. These labels are created AFTER replay and never reach a decider. */
-import type { ResearchDataset, ResearchRequest } from '@trading-swarm/contracts';
+import type { ResearchDataset, ResearchRequest } from '@trade-gate/contracts';
 import { candidateAt, type RunResult } from './engine.js';
 import { SpotLedger } from './ledger.js';
 import { bootstrapCI } from '../replay-stats.js';

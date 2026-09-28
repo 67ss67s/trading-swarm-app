@@ -1,9 +1,9 @@
 {
-  "name": "@trading-swarm/eval-b",
+  "name": "@trade-gate/eval-b",
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "description": "trading-swarm 判断链的离线、可复现评测 harness（实现 B）",
+  "description": "trade-gate 判断链的离线、可复现评测 harness（实现 B）",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
@@ -12,6 +12,6 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@trading-swarm/gateway": "*"
+    "@trade-gate/gateway": "*"
   }
 }

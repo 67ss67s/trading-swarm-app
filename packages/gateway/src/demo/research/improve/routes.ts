@@ -9,7 +9,7 @@
  * 错误约定同 routes-research.ts:含 not_found → 404,busy/conflict → 409,其余 400。
  */
 import type { IncomingMessage } from 'node:http';
-import type { StrategyIR } from '@trading-swarm/contracts';
+import type { StrategyIR } from '@trade-gate/contracts';
 import type { RouteContext, RouteHandler } from '../../http-extra.js';
 import { timeframeMillis } from '../strategy.js';
 import { StrategyStore } from '../strategies/store.js';

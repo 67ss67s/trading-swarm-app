@@ -1,6 +1,6 @@
 # 策略闭环 v2 · 判断账本 · 策略自定义证据 · 事件区(2026-09-12)
 
-Jacky 09-12 提的五件事的设计与派工。前置:09-09 复审的 must-fix(撤单事实链 P0、议会钳降、mergeVerdict、range 取数、tick 整数对齐、Radar 票池、cap 出队复查、方向/时机拆裁决)在三个 worktree 并行修,本文的实现都建立在那批合并之后。
+Jacky 09-12 提的五件事的设计与派工。前置:09-09 Codex 复审的 must-fix(撤单事实链 P0、议会钳降、mergeVerdict、range 取数、tick 整数对齐、Radar 票池、cap 出队复查、方向/时机拆裁决)在三个 worktree 并行修,本文的实现都建立在那批合并之后。
 
 ## 0. 现状一句话
 
@@ -41,7 +41,7 @@ Jacky 09-12 提的五件事的设计与派工。前置:09-09 复审的 must-fix(
 attribution 现在只出记忆提案。改成结构化:`AttributionProposal.kind ∈ {param, rule_wording, checklist_item}` 已有,加落地路径——`param` 类直接进 Lab 探针队列(下一轮验证),验证达标才 `createVersion`;`rule_wording`/`checklist_item` 类仍走记忆人批。每条策略每版本记 `strategy_events` 台账(谁触发、依据数据、前后状态),策略页画晋升时间线。
 
 ### 1.4 派工
-`strategy-loop.ts`(新,状态机 + 门 + 台账)、`strategy-hypothesis.ts`(新,假设生成 prompt + 校验)、strategies.ts(shadow 字段、retire 逻辑)、strategy-lab.ts(探针队列吃 attribution)、runtime(虚拟线程结算)、routes-strategies(台账/时间线接口 §9.27)。主线一包。
+`strategy-loop.ts`(新,状态机 + 门 + 台账)、`strategy-hypothesis.ts`(新,假设生成 prompt + 校验)、strategies.ts(shadow 字段、retire 逻辑)、strategy-lab.ts(探针队列吃 attribution)、runtime(虚拟线程结算)、routes-strategies(台账/时间线接口 §9.27)。opus 一包。
 
 ## 2. 上线策略切换给 agent 真跑
 
@@ -68,7 +68,7 @@ UI:策略页一键「启用/停用」+ 状态徽章,盯盘参数页显示当前�
 
 周报指标(Reviewer 批次里代码算,不用模型):`judgment_alpha = mean(R_model − R_council)` 按策略分层、`override_rate`(模型与议会不一致的比例)与 `override_alpha`(不一致时谁对)、复查 regret。**结论口径**:alpha ≈ 0 且 override_alpha < 0 → 模型没有增量,该关掉模型让议会直接下单(省钱);alpha > 0 只在某族 → 模型只在该族用。
 
-派工:`judgment-ledger.ts`(新)+ runtime 落库钩子 + `GET /api/judgment-ledger/summary`(§9.29)+ 复盘页一张表。主线一包,与第 1 包无文件重叠(只加 runtime 一处钩子)。
+派工:`judgment-ledger.ts`(新)+ runtime 落库钩子 + `GET /api/judgment-ledger/summary`(§9.29)+ 复盘页一张表。opus 一包,与第 1 包无文件重叠(只加 runtime 一处钩子)。
 
 ## 4. 策略自定义指标/事件(减黑盒)
 
@@ -112,11 +112,11 @@ interface MarketEvent {
 5. **成为开单依据**:不是让事件直接下单,而是让它成为议会里的一票——新策略族 `event_driven`(如"解锁前 24h 做空/上币首日冲高回落"),走第 1 节同一条晋升阶梯,量得出才上。
 
 ### 5.3 派工
-`events.ts`(新:实体、分类器、日历、impact 回填)、info.ts(capture 钩子)、triggers.ts(event 触发种类)、runtime(timer 与 brief 调度)、`routes-events.ts`(§9.30:列表/详情/手动补录/标记)、前端 `#/events` 页。主线一包;与第 1/3 包无重叠(triggers.ts 只加枚举)。
+`events.ts`(新:实体、分类器、日历、impact 回填)、info.ts(capture 钩子)、triggers.ts(event 触发种类)、runtime(timer 与 brief 调度)、`routes-events.ts`(§9.30:列表/详情/手动补录/标记)、前端 `#/events` 页。opus 一包;与第 1/3 包无重叠(triggers.ts 只加枚举)。
 
 ## 6. 实施顺序
 
-1. 第一波(进行中):must-fix 三 worktree → 合并 → 全量测试 → **paper 通道重启跑一周对照**(外部评审 建议的三段式,不直接切真钱)。
+1. 第一波(进行中):must-fix 三 worktree → 合并 → 全量测试 → **paper 通道重启跑一周对照**(Codex 建议的三段式,不直接切真钱)。
 2. 第二波并行:第 3 包(判断账本)+ 第 5 包(事件区)。
 3. 第三波:第 1+2+4 包(策略闭环 + 切换 + 自定义证据,同一人)。
 4. 前端:策略时间线、账本表、事件页,契约 §9.27–9.30 写好后派 webui session。

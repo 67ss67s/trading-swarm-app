@@ -1,4 +1,4 @@
-import type { ResearchBar } from '@trading-swarm/contracts';
+import type { ResearchBar } from '@trade-gate/contracts';
 export const FINE_MS=15*60_000;
 export const NULL_TIMEFRAMES={ '15m':FINE_MS,'4h':16*FINE_MS,'1d':96*FINE_MS } as const;
 export function rng(seed:number):()=>number {let s=seed>>>0;return()=>{s=(1664525*s+1013904223)>>>0;return(s+0.5)/2**32;};}

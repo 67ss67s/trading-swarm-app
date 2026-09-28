@@ -489,15 +489,6 @@ export function IntelPage() {
   const state = marketStateQ.data ?? null;
   const workflow = workflowQ.data ?? null;
 
-  if (marketStateQ.isLoading) {
-    return (
-      <div className="flex h-full flex-col gap-3">
-        <Skeleton className="h-16 w-full" />
-        <Skeleton className="h-32 w-full" />
-        <Skeleton className="min-h-0 w-full flex-1" />
-      </div>
-    );
-  }
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
@@ -510,13 +501,13 @@ export function IntelPage() {
               <NewsStream state={state} now={now} />
               <DataSide state={state} />
             </div>
-            <HistoryFolds />
           </div>
         ) : (
           <Workspace className="flex h-48 items-center justify-center">
-            <div className="text-[12.5px] text-muted-foreground">{t('信息员还没跑过。')}</div>
+            <div className="text-[12.5px] text-muted-foreground">{marketStateQ.isLoading ? t('态势加载中…') : marketStateQ.isError ? t('态势加载失败，请稍后重试。') : t('信息员还没跑过。')}</div>
           </Workspace>
         )}
+        <HistoryFolds />
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 /** StrategyIR.order → 意图 / 管理回调 / 编译检查。 */
 import { describe, it, expect } from 'vitest';
-import type { StrategyIR, ResearchBar } from '@trading-swarm/contracts';
+import type { StrategyIR, ResearchBar } from '@trade-gate/contracts';
 import { orderIntents, orderManager, resolveOrder, evalLevel, mirrorBars, runOrderPath, defaultExpiryBars } from '../../../../src/demo/research/orders/index.js';
 import { defaultIR, checkIR, rulesOf, repairIR, node, compileConstraints } from '../../../../src/demo/research/strategy.js';
 import { checkIRSpec } from '../../../../src/demo/research/strategy-spec.js';

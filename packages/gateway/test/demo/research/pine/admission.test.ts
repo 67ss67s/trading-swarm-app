@@ -8,7 +8,7 @@ import {
   admitScript, syntheticBars, leadingNulls, samplePoints, ADMISSION_METHOD_VERSION, ADMISSION_MARKET_BARS,
   syntheticSuite, marketSuite, defaultSuites, type AdmissionSuite, type PineDatasetSource,
 } from '../../../../src/demo/research/pine/admission.js';
-import type { ResearchDataset } from '@trading-swarm/contracts';
+import type { ResearchDataset } from '@trade-gate/contracts';
 import type { PineRunInput, PineRunResult } from '../../../../src/demo/research/pine/client.js';
 
 const bars = syntheticBars(120);

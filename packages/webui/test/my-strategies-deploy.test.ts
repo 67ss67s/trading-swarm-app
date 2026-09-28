@@ -3,7 +3,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import type { BindingRoleSlice, ResearchStrategy } from '@trading-swarm/contracts';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { BindingRoleSlice, ResearchStrategy } from '@trade-gate/contracts';
 import type { AllocatorView, StrategyView } from '@/api/types';
 
 vi.mock('@/api/client', () => ({ api: {}, researchApi: {} }));
@@ -53,15 +54,19 @@ describe('部署页签渲染', () => {
     expect((html.match(/data-executor="code"/g) ?? []).length).toBe(1);
   });
   it('部署状态:未下发 / 已下发(导入策略提示实盘仍跑旧文本)', () => {
-    const none = renderToStaticMarkup(createElement(DeployStatusCard, { strategy: rs({ lab_strategy_id: null, origin: { session_id: null, inquiry_id: null, source: 'research_loop' } }), deployment: null }));
+    // 09-25:卡片按钮改成「设为 agent 当前策略」(SetAgentStrategyButton 用 react-query),渲染要包一层 QueryClientProvider
+    const withQc = (el: ReturnType<typeof createElement>) => createElement(QueryClientProvider, { client: new QueryClient() }, el);
+    const none = renderToStaticMarkup(withQc(createElement(DeployStatusCard, { strategy: rs({ lab_strategy_id: null, origin: { session_id: null, inquiry_id: null, source: 'research_loop' } }), deployment: null })));
     expect(none).toContain('data-deployed="no"');
     expect(none).toContain('还没有下发到实盘');
     const d = deploymentOf(rs(), [spec({ active: true, activatable: true })], alloc())!;
-    const yes = renderToStaticMarkup(createElement(DeployStatusCard, { strategy: rs(), deployment: d }));
+    const yes = renderToStaticMarkup(withQc(createElement(DeployStatusCard, { strategy: rs(), deployment: d })));
     expect(yes).toContain('data-deployed="yes"');
     expect(yes).toContain('data-mode="paper"');
     expect(yes).toContain('在票池');
-    expect(yes).toContain('旧的文本规则版本');
+    expect(yes).toContain('旧策略库里那条文本规则版本已经不再开仓');
+    expect(yes).toContain('设为 agent 当前策略');
+    expect(yes).not.toContain('去实盘部署台');
   });
   it('规则未编码的草稿:没有绑定,只列缺什么', () => {
     const html = renderToStaticMarkup(createElement(BindingPreview, { binding: null, unmapped: [{ code: 'funding_primitive_missing', path: 'signal', severity: 'block', message: '缺资金费率极值原语', source: 'import' }] }));

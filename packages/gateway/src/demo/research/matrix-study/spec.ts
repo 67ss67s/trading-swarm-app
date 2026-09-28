@@ -3,7 +3,7 @@ import { templateJudge, type JudgeTemplateCombination } from '../judge/templates
  * 矩阵研究规格:请求体 → 完整 MatrixStudySpec(缺省值、校验、推荐预填)。跑前一次做完,之后只读。
  * 推荐预填只取 eligible 格子(HORIZON_TIMEFRAMES 映射到本首版支持的周期;1h/12h 不在首版矩阵里,写进 notes)。
  */
-import type { StrategyJudge } from '@trading-swarm/contracts';
+import type { StrategyJudge } from '@trade-gate/contracts';
 import { hash } from '../primitives.js';
 import type { FamilyKey } from '../batch/families.js';
 import type { FrozenModelProfile } from '../judge/types.js';
@@ -21,6 +21,9 @@ export const DEFAULT_PROTOCOL: MatrixProtocol = { version: 'matrix_v1', alpha: 0
 export const MAX_SYMBOLS = 6;
 /** 「我的策略」行最多几条(与资产上限同量级,避免矩阵爆炸) */
 export const MAX_STRATEGIES = 6;
+/** Jev 两段式:第一阶段后最多补跑几格 code_judge(缺省 12,上限 48) */
+export const DEFAULT_JUDGE_STAGE_MAX_CELLS = 12;
+export const MAX_JUDGE_STAGE_CELLS = 48;
 
 /**
  * 缺省判断要素(§9.53 C 的 DEFAULT_JUDGE 形状,按 contracts StrategyJudge 写):
@@ -51,6 +54,17 @@ function profileOf(v: unknown): FrozenModelProfile | null {
   if (!['judge_answers_v1','judge_answers_v2_rounding_001'].includes(String(p.parser_version)) || p.retry_policy !== 'none') throw Error('model_profile_invalid');
   usdUnits(p.max_call_usd as string);
   return p as unknown as FrozenModelProfile;
+}
+
+/** origin.batch:前端「自动拆批」把同一批海选串起来(只做标记,不影响计算) */
+function batchOf(v: unknown): { id: string; index: number; total: number } | null {
+  if (v === undefined || v === null) return null;
+  const o = obj(v, 'origin.batch');
+  if (Object.keys(o).some((k) => !['id', 'index', 'total'].includes(k))) throw Error('origin.batch_unknown_fields');
+  if (typeof o.id !== 'string' || !/^[A-Za-z0-9_.:-]{1,80}$/.test(o.id)) throw Error('origin.batch.id_invalid');
+  const total = int(o.total, 'origin.batch.total', 1, 50, 1), index = int(o.index, 'origin.batch.index', 1, total, 1);
+  if (o.total === undefined || o.index === undefined) throw Error('origin.batch_invalid');
+  return { id: o.id, index, total };
 }
 
 export interface SpecContext {
@@ -101,7 +115,7 @@ export function prefillFromRecommendation(r: AssetRecommendation): { spec: Parti
 /** 请求体(spec 片段 + 可选 recommendation_id)→ 完整规格;未知字段报错,不静默丢 */
 export function normalizeSpec(raw: unknown, ctx: SpecContext): MatrixStudySpec {
   const b0 = obj(raw, 'spec');
-  const known = new Set(['auto_finalize', 'portfolio', 'origin', 'research_program_id', 'symbols', 'timeframes', 'families', 'strategies', 'market', 'sides', 'arms', 'judge_templates', 'judge', 'model_profile', 'window_days', 'to_ms', 'split', 'purge_bars', 'iterate', 'budget', 'protocol', 'recommendation_id']);
+  const known = new Set(['auto_finalize', 'portfolio', 'origin', 'research_program_id', 'symbols', 'timeframes', 'families', 'strategies', 'market', 'sides', 'arms', 'judge_templates', 'judge', 'model_profile', 'window_days', 'to_ms', 'split', 'purge_bars', 'iterate', 'budget', 'protocol', 'recommendation_id', 'judge_stage', 'judge_stage_max_cells']);
   const extra = Object.keys(b0).filter((k) => !known.has(k));
   if (extra.length) throw Error(`unknown_fields:${extra.join(',')}`);
   let b = b0;
@@ -163,15 +177,21 @@ export function normalizeSpec(raw: unknown, ctx: SpecContext): MatrixStudySpec {
   };
   const pf = obj(b.portfolio, 'portfolio'), og = obj(b.origin, 'origin');
   if (Object.keys(pf).some((k) => k !== 'risk_pct' && k !== 'max_open')) throw Error('portfolio_unknown_fields');
-  if (Object.keys(og).some((k) => k !== 'chat_session_id')) throw Error('origin_unknown_fields');
+  if (Object.keys(og).some((k) => k !== 'chat_session_id' && k !== 'batch')) throw Error('origin_unknown_fields');
+  const batch = batchOf(og.batch);
+  // 两段式:缺省 'all'(旧研究与不传的 API 调用行为不变);K 只在 candidates 下有意义
+  const judge_stage = b.judge_stage === undefined || b.judge_stage === null ? 'all' : b.judge_stage === 'all' || b.judge_stage === 'candidates' ? b.judge_stage : (() => { throw Error('judge_stage_invalid'); })();
+  if (b.judge_stage_max_cells !== undefined && judge_stage !== 'candidates') throw Error('judge_stage_max_cells_requires_candidates');
+  const judge_stage_max_cells = int(b.judge_stage_max_cells, 'judge_stage_max_cells', 1, MAX_JUDGE_STAGE_CELLS, DEFAULT_JUDGE_STAGE_MAX_CELLS);
   const research_program_id = b.research_program_id === undefined ? programIdOf(symbols, market) : String(b.research_program_id);
   if (!/^[A-Za-z0-9_.:-]{1,160}$/.test(research_program_id)) throw Error('research_program_id_invalid');
   return {
-    research_program_id, symbols, timeframes, families, strategies, market, sides, arms, judge, ...(judge_templates ? { judge_templates } : {}), model_profile, window_days, to_ms, split,
+    research_program_id, symbols, timeframes, families, strategies, market, sides, arms, judge, ...(judge_templates ? { judge_templates } : {}), model_profile,
+    judge_stage, ...(judge_stage === 'candidates' ? { judge_stage_max_cells } : {}), window_days, to_ms, split,
     purge_bars: int(b.purge_bars, 'purge_bars', 0, 5000, DEFAULT_PURGE_BARS), iterate, budget, protocol,
     recommendation_id: typeof b.recommendation_id === 'string' ? b.recommendation_id : null,
     auto_finalize: b.auto_finalize === undefined ? true : typeof b.auto_finalize === 'boolean' ? b.auto_finalize : (() => { throw Error('auto_finalize_invalid'); })(),
     portfolio: { risk_pct: numIn(pf.risk_pct, 'portfolio.risk_pct', 0.01, 5, 0.5), max_open: int(pf.max_open, 'portfolio.max_open', 1, 30, 3) },
-    origin: { chat_session_id: og.chat_session_id === undefined || og.chat_session_id === null ? null : typeof og.chat_session_id === 'string' && og.chat_session_id.length <= 200 ? og.chat_session_id : (() => { throw Error('origin.chat_session_id_invalid'); })() },
+    origin: { chat_session_id: og.chat_session_id === undefined || og.chat_session_id === null ? null : typeof og.chat_session_id === 'string' && og.chat_session_id.length <= 200 ? og.chat_session_id : (() => { throw Error('origin.chat_session_id_invalid'); })(), ...(batch ? { batch } : {}) },
   };
 }

@@ -1,5 +1,5 @@
 import { define } from './registry.js';
-import type { ResearchBar, StrategyIR } from '@trading-swarm/contracts';
+import type { ResearchBar, StrategyIR } from '@trade-gate/contracts';
 import { stdev } from '../improve/stats.js';
 export const next_open_market=define('next_open_market','entry','主动交易在下一根 open 成交',()=>0,()=>({pass:true}));
 export const risk_fraction=define('risk_fraction','sizing','按权益风险比例和初始止损距离计算数量',()=>0,(_ctx,p)=>({sizing:{allocation:'equal_risk',risk_fraction:String(p.fraction),max_allocation:String(p.max_allocation)}}));

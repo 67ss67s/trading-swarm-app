@@ -18,7 +18,7 @@ export type StrategyState =
 export type Action = 'NO_TRADE' | 'WATCH' | 'PROPOSE' | 'HOLD' | 'ADD' | 'REDUCE' | 'EXIT' | 'INVALIDATE';
 export type Direction = 'long' | 'short';
 /**
- * Execution backend. `paper` = in-process simulator; `demo` = the Rust tswarm-demo-exec child;
+ * Execution backend. `paper` = in-process simulator; `demo` = the Rust tgate-demo-exec child;
  * `cli` = the official binance-cli (Agent OS channel); `agent_mcp` = an agent CLI driving Binance's
  * official MCP server (execution-agent.ts); `mcp` = the gateway itself calling that same MCP server
  * over its own OAuth token, through a human-confirmed tool map (execution-mcp.ts) — no model at all.
@@ -764,6 +764,8 @@ export interface StrategyThread {
   attention: string | null;
   /** Consecutive `getOrder === null` for the entry order (propagation delay is not a negative fact). */
   entry_lookup_misses: number;
+  /** 09-26:上一次**计数**的 miss 时刻(同一份缓存的 null 不重复计数)。 */
+  entry_lookup_miss_at?: number | null;
   /** 入场调用进行中(CID 已持久化、请求可能还没到交易所):巡检在宽限内不查此 CID,不报 ORDER_UNKNOWN。调用返回即清空。 */
   /** 撤单请求尚未以同 CID 终态与累计成交量确认；独立于保护 attention。 */
   entry_cancel_pending?: boolean;
@@ -822,6 +824,7 @@ export interface ChatMessage {
 
 export interface ChatSession {
   id: string;
+  canonical: boolean;
   title: string;
   created_at: number;
   updated_at: number;

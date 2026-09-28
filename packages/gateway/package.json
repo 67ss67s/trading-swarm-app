@@ -1,5 +1,5 @@
 {
-  "name": "@trading-swarm/gateway",
+  "name": "@trade-gate/gateway",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -18,7 +18,7 @@
     "@binance/binance-cli": "^1.3.0",
     "@okx_ai/okx-trade-cli": "1.4.7",
     "@okx_ai/okx-trade-mcp": "1.4.7",
-    "@trading-swarm/contracts": "*",
+    "@trade-gate/contracts": "*",
     "ccxt": "^4.5.0"
   }
 }

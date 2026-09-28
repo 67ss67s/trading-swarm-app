@@ -1,5 +1,5 @@
 // Execution backends (docs/demo/README.md §5.8). `paper` is an in-process simulator; `demo` talks
-// to the Rust `tswarm-demo-exec` child over NDJSON — that process is the only one holding the
+// to the Rust `tgate-demo-exec` child over NDJSON — that process is the only one holding the
 // Binance demo key (AGENTS.md rule 1 still holds in the demo).
 
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
@@ -121,7 +121,7 @@ export interface ExecBackend {
   /**
    * `ambiguous: true` = 请求可能已经到交易所了(写超时 / OKX 50004),结果**未知**:
    * 调用方要把意图留在 unknown、等新鲜仓位收敛,不能写成 failed。Binance 的实现不带这个字段
-   * (undefined),行为不变(review #7)。
+   * (undefined),行为不变(codex-review #7)。
    */
   closePosition(symbol: string, client_order_id: string, market?: Market): Promise<{ closed: boolean; receipt: unknown; error: string | null; ambiguous?: boolean }>;
   reducePosition(symbol: string, qty: string, client_order_id: string, market?: Market): Promise<OrderReceipt>;
@@ -559,11 +559,11 @@ export class DemoExecError extends Error {
 export function defaultDemoExecBin(repoRoot: string): string {
   const fromEnv = process.env['TG_DEMO_EXEC_BIN'];
   if (fromEnv) return fromEnv;
-  for (const p of ['target/exec-core/release/tswarm-demo-exec', 'target/exec-core/debug/tswarm-demo-exec', 'target/release/tswarm-demo-exec', 'target/debug/tswarm-demo-exec']) {
+  for (const p of ['target/exec-core/release/tgate-demo-exec', 'target/exec-core/debug/tgate-demo-exec', 'target/release/tgate-demo-exec', 'target/debug/tgate-demo-exec']) {
     const full = path.join(repoRoot, p);
     if (existsSync(full)) return full;
   }
-  return path.join(repoRoot, 'target/exec-core/debug/tswarm-demo-exec');
+  return path.join(repoRoot, 'target/exec-core/debug/tgate-demo-exec');
 }
 
 export class DemoBackend implements ExecBackend {
@@ -582,13 +582,13 @@ export class DemoBackend implements ExecBackend {
   ) {}
 
   async start(): Promise<void> {
-    if (!existsSync(this.bin)) throw new Error(`tswarm-demo-exec not found at ${this.bin} (build: CARGO_TARGET_DIR=target/exec-core cargo build -p exec-core --bin tswarm-demo-exec)`);
+    if (!existsSync(this.bin)) throw new Error(`tgate-demo-exec not found at ${this.bin} (build: CARGO_TARGET_DIR=target/exec-core cargo build -p exec-core --bin tgate-demo-exec)`);
     const child = spawn(this.bin, [], { stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, NO_PROXY: `${process.env['NO_PROXY'] ?? ''},localhost,127.0.0.1` } });
     this.child = child;
     child.stderr.on('data', (d) => this.log('info', `[demo-exec] ${String(d).trim()}`));
     const rl = readline.createInterface({ input: child.stdout });
     const helloPromise = new Promise<void>((resolve, reject) => {
-      const t = setTimeout(() => reject(new Error('tswarm-demo-exec: no hello within 30s')), 30_000);
+      const t = setTimeout(() => reject(new Error('tgate-demo-exec: no hello within 30s')), 30_000);
       rl.on('line', (line) => {
         let msg: { id: number | null; ok: boolean; result?: unknown; error?: RpcError };
         try {
@@ -602,7 +602,7 @@ export class DemoBackend implements ExecBackend {
           if (msg.ok) {
             this.hello = (msg.result ?? {}) as Record<string, unknown>;
             resolve();
-          } else reject(new Error(`tswarm-demo-exec hello failed: ${msg.error?.message}`));
+          } else reject(new Error(`tgate-demo-exec hello failed: ${msg.error?.message}`));
           return;
         }
         const p = msg.id === null ? undefined : this.pending.get(msg.id);
@@ -614,13 +614,13 @@ export class DemoBackend implements ExecBackend {
       });
     });
     child.on('exit', (code) => {
-      this.log('error', `tswarm-demo-exec exited with code ${code}`);
+      this.log('error', `tgate-demo-exec exited with code ${code}`);
       for (const p of this.pending.values()) p.reject(new DemoExecError(p.op, { kind: 'transport', message: 'demo-exec exited', ambiguous: true }));
       this.pending.clear();
       this.child = null;
     });
     await helloPromise;
-    this.log('info', `tswarm-demo-exec ready: ${JSON.stringify(this.hello)}`);
+    this.log('info', `tgate-demo-exec ready: ${JSON.stringify(this.hello)}`);
   }
 
   async stop(): Promise<void> {

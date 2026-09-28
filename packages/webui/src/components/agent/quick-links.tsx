@@ -1,13 +1,13 @@
 /**
- * Agent 页右栏入口条(2026-09-25 改版):与新手旅程一致 —— 开始清单 → 矩阵研究 → 我的策略 → 复盘。
+ * Agent 页右栏入口条(2026-09-25 改版):与新手旅程一致 —— 开始清单 → 策略研究 → 我的策略 → 复盘。
  * 研究工作台 / 判断记录 / 信号市场 / 进化 在侧栏导航里,对话里的深链也会直接带过去。
  */
-import { FileClock, Grid3x3, ListTodo, Shapes } from 'lucide-react';
+import { FileClock, FlaskConical, ListTodo, Shapes } from 'lucide-react';
 import { t } from '@/lib/i18n';
 
 export const AGENT_QUICK_LINKS = [
   { href: '#start', label: '开始清单', icon: ListTodo },
-  { href: '#matrix-study', label: '矩阵研究', icon: Grid3x3 },
+  { href: '#strategy-research', label: '策略研究', icon: FlaskConical },
   { href: '#my-strategies', label: '我的策略', icon: Shapes },
   { href: '#history', label: '复盘', icon: FileClock },
 ] as const;

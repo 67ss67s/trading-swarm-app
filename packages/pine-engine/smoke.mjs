@@ -1,5 +1,5 @@
 /**
- * 真机冒烟(可选,手动跑):`npm run smoke -w @trading-swarm/pine-engine`
+ * 真机冒烟(可选,手动跑):`npm run smoke -w @trade-gate/pine-engine`
  * 默认自己用 launch.js 起一个沙箱引擎(临时端口),跑完收掉;给了 PINE_ENGINE_URL 就打那个现成的引擎
  * (比如网关托管的那个,端口看 GET /api/research/pine/health)。
  * 用合成 K 线跑一段 RSI + EMA 脚本,核对:

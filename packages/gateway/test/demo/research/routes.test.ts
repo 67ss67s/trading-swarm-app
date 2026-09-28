@@ -18,7 +18,7 @@ function app(){
  vi.spyOn(globalThis,'setInterval').mockReturnValue({unref(){}} as any);
  const state=openStateDb(':memory:');
  const brain={name:'fixture',complete:async()=>{throw new Error('A must not call model');}};
- const rt=Object.assign(new EventEmitter(),{workflow:DEFAULT_WORKFLOW,brainFor:()=>brain,mainBrain:()=>brain,cliCommandFor:()=>null});
+ const rt=Object.assign(new EventEmitter(),{workflow:DEFAULT_WORKFLOW,brainFor:()=>brain,brainForRole:()=>brain,mainBrain:()=>brain,cliCommandFor:()=>null});
  const store={marketDb:state.db};const server=createServer(rt as unknown as DemoRuntime,store as DemoStore);clean.push(()=>{server.close();state.close();});
  return async(path:string,body?:unknown,origin='http://127.0.0.1:5191')=>{
   const headers:Record<string,unknown>={};let status=0,text='';
@@ -73,7 +73,7 @@ describe('第二轮完整 HTTP 路径：IR / universe / diagnostics / attributio
   const call=app(),d=fixture(),created=await call('/api/research/universes',{symbols:['BTCUSDT','SOLUSDT'],timeframe:'1h',from_ms:d.bars[0]!.open_time,to_ms:d.bars.at(-1)!.close_time,market_factor:{kind:'btc',symbols:['BTCUSDT']}}),id=created.json.id;
   expect((await call('/api/research/studies',study(id))).status).toBe(201);
   const ir=defaultIR();delete ir.regime;ir.signal=[node('volume_surge',{lookback:5,multiple:0})];ir.exit=[node('chandelier_trail',{atr_period:5,multiple:2}),node('fixed_r_target',{r:2},true)];
-  const compiled=await call('/api/research/strategies/compile',{ir,timeframe:'1h'});expect(compiled.status).toBe(200);expect(compiled.json.ok).toBe(true);expect((await call("/api/research/primitives")).json.items).toHaveLength(62);
+  const compiled=await call('/api/research/strategies/compile',{ir,timeframe:'1h'});expect(compiled.status).toBe(200);expect(compiled.json.ok).toBe(true);expect((await call("/api/research/primitives")).json.items).toHaveLength(63);
   const {dataset_id:_,policy:__,...base}=params(id),request={...base,universe_id:id,strategy_ir:ir,arms:['a_rules'],repeats:1};
   const parent=await call('/api/research/runs',request);expect(parent.status,JSON.stringify(parent.json)).toBe(202);
   const wait=async(runId:string)=>{let result;for(let i=0;i<500;i++){await new Promise<void>(resolve=>setImmediate(resolve));result=await call(`/api/research/runs/${runId}/result`);if(result.json.status!=='running'&&result.json.status!=='queued')return result;}throw new Error('run did not finish');};

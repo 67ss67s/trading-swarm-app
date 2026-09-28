@@ -1,5 +1,5 @@
 // 改进环测试用的合成资产池(确定性几何随机游走,只做工程验证,不是经济证据)
-import type { ResearchBar, StrategyIR } from '@trading-swarm/contracts';
+import type { ResearchBar, StrategyIR } from '@trade-gate/contracts';
 import { node } from '../../../../src/demo/research/strategy.js';
 import { synthBars } from '../backtest-report-fixtures.js';
 import type { BarsLoader } from '../../../../src/demo/research/backtest-report.js';

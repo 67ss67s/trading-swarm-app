@@ -26,6 +26,8 @@ export interface ReviewerOptions {
 
 export class Reviewer {
   private timer: NodeJS.Timeout | null = null;
+  private nextTick: number | null = null;
+  nextCheckAt(): number | null { return this.timer ? this.nextTick : null; }
   private running: Promise<unknown> | null = null;
   private readonly reflectImpl: (brain: Brain, cards: readonly TradeCard[], existing: readonly string[]) => Promise<ReflectResult>;
   private readonly now: () => number;
@@ -39,7 +41,8 @@ export class Reviewer {
   }
 
   start(): void {
-    this.timer = setInterval(() => void this.maybeBatch('timer').catch(() => {}), TICK_MS);
+    this.nextTick = this.now() + TICK_MS;
+    this.timer = setInterval(() => { this.nextTick = this.now() + TICK_MS; void this.maybeBatch('timer').catch(() => {}); }, TICK_MS);
     this.timer.unref?.();
   }
   stop(): void {

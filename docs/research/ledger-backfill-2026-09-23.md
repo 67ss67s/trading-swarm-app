@@ -1,8 +1,8 @@
 # 判断账本历史回填:提前离场到底有多贵(2026-09-23)
 
 > 工单:`docs/design/judgment-exit-redesign-2026-09-23.md` §6 P0-1。零模型调用,不改交易行为。
-> 数据:主库 `~/.trading-swarm/demo/state.sqlite`(18801)的 `.backup` 副本;**现网库没有写过一个字节**。
-> K 线:`~/.trading-swarm/demo/klines` 的一份副本(scratchpad);只有 KORUUSDT 15m/1h 缓存里没有,补拉了几次币安 fapi 公共 K 线,写进的也是副本。所有需要的区间都拿到了,没有缺 K 线的行。
+> 数据:主库 `~/.trade-gate/demo/state.sqlite`(18801)的 `.backup` 副本;**现网库没有写过一个字节**。
+> K 线:`~/.trade-gate/demo/klines` 的一份副本(scratchpad);只有 KORUUSDT 15m/1h 缓存里没有,补拉了几次币安 fapi 公共 K 线,写进的也是副本。所有需要的区间都拿到了,没有缺 K 线的行。
 
 ## 0. 结论
 
@@ -147,7 +147,7 @@
 复跑方法:
 
 ```bash
-sqlite3 ~/.trading-swarm/demo/state.sqlite ".backup /tmp/ledger-copy.sqlite"
+sqlite3 ~/.trade-gate/demo/state.sqlite ".backup /tmp/ledger-copy.sqlite"
 cd packages/gateway
 NODE_USE_ENV_PROXY=1 HTTPS_PROXY=http://127.0.0.1:7897 npx jiti scripts/ledger-backfill.ts \
   --db /tmp/ledger-copy.sqlite --klines-dir <缓存副本目录> --json /tmp/backfill.json   # 加 --dry-run 只算不写

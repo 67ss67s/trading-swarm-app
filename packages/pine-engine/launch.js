@@ -1,5 +1,5 @@
 /**
- * 手动单独起引擎(调试用):`npm start -w @trading-swarm/pine-engine`。
+ * 手动单独起引擎(调试用):`npm start -w @trade-gate/pine-engine`。
  * 平时不用它——网关启动时自己托管拉起(packages/gateway/src/demo/research/pine/engine-host.ts)。
  * 这里按与托管器相同的规则拼权限参数:只读本包 + 依赖(pinets 及其传递依赖)的真实目录,其余全拒。
  * 端口默认 0(系统分配),就绪后 stdout 打一行 {"event":"ready","port":…}。

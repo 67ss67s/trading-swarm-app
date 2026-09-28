@@ -2,7 +2,7 @@
 // 模型复盘文本逐句核数字(对不上的句子剥掉)、执行状态叙述仍归代码;验证回答由代码亮出复盘提示。
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
-import type { BacktestReport } from "@trading-swarm/contracts";
+import type { BacktestReport } from "@trade-gate/contracts";
 import { openStateDb } from "../../../../src/state-db.js";
 import { LoopStore, DEFAULT_BUDGET } from "../../../../src/demo/research/loop/store.js";
 import { Budget } from "../../../../src/demo/research/loop/budget.js";

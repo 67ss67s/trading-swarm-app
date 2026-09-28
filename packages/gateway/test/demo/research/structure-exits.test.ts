@@ -1,7 +1,7 @@
 /** 结构口径(2026-09-23):止盈止损按图上结构放、盈亏比不拦单、止损 <0.5×ATR 不做、不按 R 补止盈。
  * 另含与几何实验室(geometry-lab/core.ts,只读 import)同一段数据同一信号的价位对拍。 */
 import { describe, it, expect } from 'vitest';
-import type { ResearchBar, ResearchRequest, StrategyIR } from '@trading-swarm/contracts';
+import type { ResearchBar, ResearchRequest, StrategyIR } from '@trade-gate/contracts';
 import { pivots, viewAt, findCandidates, armA, enumerateLevels, stopAtr, DEFAULT_SIGNAL } from '../../../src/demo/geometry-lab/core.js';
 import { registry } from '../../../src/demo/research/primitives/index.js';
 import { atrSeries } from '../../../src/demo/research/primitives/indicators.js';

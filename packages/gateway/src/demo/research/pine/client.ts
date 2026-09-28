@@ -1,5 +1,5 @@
 /**
- * Pine 引擎(@trading-swarm/pine-engine,由网关托管的 PineTS 子进程,见 engine-host.ts)HTTP 客户端。
+ * Pine 引擎(@trade-gate/pine-engine,由网关托管的 PineTS 子进程,见 engine-host.ts)HTTP 客户端。
  *
  * 职责:把 {script, inputs, bars, timeframe} 送进引擎,拿回每个 plot 的、与 bars 一一对齐的序列。
  * 地址从托管器拿(临时端口,每次启动都可能不同),不写死端口。
@@ -13,7 +13,7 @@
  */
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import type { ResearchBar } from '@trading-swarm/contracts';
+import type { ResearchBar } from '@trade-gate/contracts';
 import { pineEngineHealth, pineEngineHost } from './engine-host.js';
 import { PINE_SOURCES } from './inputs-schema.js';
 

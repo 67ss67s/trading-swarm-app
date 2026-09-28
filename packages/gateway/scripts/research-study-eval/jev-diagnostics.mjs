@@ -5,7 +5,7 @@ import {resolve,dirname,join} from 'node:path';
 import {homedir} from 'node:os';
 const args=process.argv.slice(2),get=k=>args[args.indexOf('--'+k)+1],input=get('input'),output=get('output');
 if(!args.includes('--input')||!args.includes('--output'))throw Error('usage: --input sanitized-responses.json --output diagnostics.json');
-const forbidden=resolve(homedir(),'.trading-swarm-okx/demo'),p=realpathSync(input);
+const forbidden=resolve(homedir(),'.trade-gate-okx/demo'),p=realpathSync(input);
 if(p===forbidden||p.startsWith(forbidden+'/'))throw Error('forbidden_runtime_directory');
 const rows=JSON.parse(readFileSync(p,'utf8')).responses;if(!Array.isArray(rows))throw Error('responses_required');
 const hits=[],unknown={};

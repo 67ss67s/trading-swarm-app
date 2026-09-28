@@ -1,10 +1,10 @@
 import type { IncomingMessage } from "node:http";
-import type { StrategyIR } from "@trading-swarm/contracts";
+import type { StrategyIR } from "@trade-gate/contracts";
 import type { RouteContext, RouteHandler } from "../http-extra.js";
 import type { ResearchStore } from "./store.js";
 import type { ResearchService } from "./service.js";
 import { getBacktestReport, listBacktestReports, reportBars, runBacktestReport } from "./backtest-report.js";
-import type { BacktestReplay } from "@trading-swarm/contracts";
+import type { BacktestReplay } from "@trade-gate/contracts";
 import { timeframeMillis } from "./strategy.js";
 import { smcOverlay, smcParamsFromIR, type SmcOverlayOut } from "./primitives/smc.js";
 /**

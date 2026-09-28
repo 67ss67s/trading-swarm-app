@@ -57,6 +57,7 @@ import { AnimatePresence, AnimatedNumber, Reveal, motion } from '@/components/re
 import { RulesCard, useRunRules } from '@/components/research-workbench/rules-card';
 import { UniverseScreenPanel, tfLabel } from '@/components/research-workbench/screen-panel';
 import { StrategyBuilder } from '@/components/research-workbench/strategy-builder';
+import type { SeedAsset } from '@/components/research-workbench/seed-dataset';
 import { Pane, Workspace } from '@/components/pane';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -65,6 +66,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { MatrixStudyPanel } from '@/components/matrix-study/panel';
+import { DivisionNote, familyLabel } from '@/components/matrix-study/shared';
+import { matrixApi } from '@/api/matrix-study';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { fmtDateTime, fmtDuration } from '@/lib/format';
@@ -108,7 +111,7 @@ const PRECHECK_LABEL: Record<string, string> = tmap({ signal_frequency: '信号�
 /** 右栏视图:结果(对话里选中的产物)/ 实验详情 / 策略构建 / 资产筛选。旧能力一个不少。 */
 type PanelView = 'artifact' | 'run' | 'builder' | 'screen' | 'pine' | 'matrix';
 const PANEL_VIEWS: PanelView[] = ['artifact', 'run', 'builder', 'screen', 'pine', 'matrix'];
-const PANEL_VIEW_LABEL: Record<PanelView, string> = tmap({ artifact: '结果', run: '实验', builder: '策略构建', screen: '资产筛选', pine: 'Pine 目录', matrix: '矩阵研究' });
+const PANEL_VIEW_LABEL: Record<PanelView, string> = tmap({ artifact: '结果', run: '实验', builder: '策略构建', screen: '资产筛选', pine: 'Pine 目录', matrix: '批量验证' });
 
 /** 当前会话 id 记在本机:刷新回来还是同一条会话(内容一律从 GET /sessions/:id 恢复)。 */
 const SESSION_STORE = 'tg.research.session';
@@ -233,7 +236,24 @@ function readableTitle(run: ResearchRunSummary, dataset: ResearchDatasetSummary 
 // 页面
 
 export function ResearchPage() {
+  return <ResearchWorkbench />;
+}
+
+export interface ResearchWorkbenchProps {
+  /**
+   * 嵌进「策略研究」流程页第 3 步(#strategy-research?step=refine):地址栏属于流程页,研究台不读也不改 hash;
+   * 从海选带过来的试验走 matrixSeed(换一组 = 父组件换 key 重挂)。
+   */
+  embedded?: boolean;
+  matrixSeed?: { study: string; trial: string } | null;
+  /** 嵌入时「回到海选」:交给流程页切步骤 */
+  onBackToScout?: (studyId: string) => void;
+}
+
+/** 研究台主体:独立页 #research 与「策略研究」第 3 步(精修)共用 */
+export function ResearchWorkbench({ embedded = false, matrixSeed: seedFromProps = null, onBackToScout }: ResearchWorkbenchProps) {
   const qc = useQueryClient();
+  const hashQuery = () => (embedded ? '' : window.location.hash.split('?')[1] ?? '');
   const capsQ = useQuery({ queryKey: ['research', 'capabilities'], queryFn: researchApi.capabilities, refetchInterval: 30_000 });
   const runsQ = useQuery({ queryKey: ['research', 'runs'], queryFn: researchApi.runs, refetchInterval: 15_000 });
   const runs = runsQ.data?.items ?? [];
@@ -270,7 +290,7 @@ export function ResearchPage() {
   }, [sessionId]);
   // 从「我的策略」跳来(#research?strategy_id=&new=1 或 &session=):new=1 开新会话并把草稿策略绑上去,session= 恢复那个会话。
   // 只在进页时读一次 hash,处理完把参数从地址栏去掉,刷新不重复建会话。
-  const hashParams = useRef(new URLSearchParams(window.location.hash.split('?')[1] ?? ''));
+  const hashParams = useRef(new URLSearchParams(hashQuery()));
   const [linkedStrategyId, setLinkedStrategyId] = useState<string | null>(() => hashParams.current.get('strategy_id'));
   const hashHandled = useRef(false);
   useEffect(() => {
@@ -287,7 +307,7 @@ export function ResearchPage() {
         return researchApi.attachMyStrategySession(sid, s.id).then(() => void qc.invalidateQueries({ queryKey: ['research', 'my-strategies'] }));
       }).catch((e: Error) => toast.error(e.message));
     } else hashHandled.current = true;
-    if (hashHandled.current) window.history.replaceState(null, '', '#research');
+    if (hashHandled.current && !embedded) window.history.replaceState(null, '', '#research');
   }, [sessionsQ.isSuccess, sessions]);
   // 记住的会话被删了/换了机器:落到最近一条
   useEffect(() => {
@@ -337,7 +357,7 @@ export function ResearchPage() {
 
   const [selectedId, setSelectedId] = useState<string | null>(() => {
     try {
-      return new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('run');
+      return new URLSearchParams(hashQuery()).get('run');
     } catch {
       return null;
     }
@@ -349,6 +369,8 @@ export function ResearchPage() {
   const [view, setView] = useState<PanelView>('artifact');
   const [seedUniverse, setSeedUniverse] = useState<ResearchUniverse | null>(null);
   const [seedIr, setSeedIr] = useState<{ ir: StrategyIR; timeframe: string; warmup?: number } | null>(null);
+  // 从海选带进来的那一组(币 · 周期 · 市场):策略构建的数据集下拉框按它选
+  const [seedAsset, setSeedAsset] = useState<SeedAsset | null>(null);
   const [builderSeedText, setBuilderSeedText] = useState('');
 
   // 布局状态机:chat_only(对话一栏居中)→ chat_with_artifact(右侧结果面板打开)。
@@ -356,14 +378,14 @@ export function ResearchPage() {
   // 深链 #research?run=<id> 进来时直接打开实验视图;普通进入默认 chat_only。
   const [panelOpen, setPanelOpen] = useState(() => {
     try {
-      return !!new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('run');
+      return !!new URLSearchParams(hashQuery()).get('run');
     } catch {
       return false;
     }
   });
   useEffect(() => {
     try {
-      if (new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('run')) setView('run');
+      if (new URLSearchParams(hashQuery()).get('run')) setView('run');
     } catch {
       /* 无 hash */
     }
@@ -408,6 +430,27 @@ export function ResearchPage() {
     setNarrowView('panel');
   };
 
+  // 批量验证 v2「在研究台继续打磨」:#research?matrix_study=<id>&trial=<trial_id> → 取这一组的资产 / 周期 / 策略族 / IR,
+  // 打开「策略构建」并预填(IR + 周期 + 一句描述)。只读一次,处理完把参数从地址栏去掉。
+  const [matrixSeed, setMatrixSeed] = useState<{ study_id: string; label: string } | null>(null);
+  const matrixHandled = useRef(false);
+  useEffect(() => {
+    if (matrixHandled.current) return;
+    matrixHandled.current = true;
+    const p = embedded ? new URLSearchParams(seedFromProps ? { matrix_study: seedFromProps.study, trial: seedFromProps.trial } : {}) : new URLSearchParams(hashQuery()), sid = p.get('matrix_study'), trial = p.get('trial');
+    if (!sid || !trial) return;
+    void matrixApi.trial(sid, trial).then((d) => {
+      const c = d.cell, fam = c.family_name ?? familyLabel(c.family), side = c.side === 'long' ? t('做多') : t('做空');
+      const label = `${c.symbol.replace(/USDT$/, '')} ${c.timeframe} · ${fam} · ${side}`;
+      const m = d.scorecard?.metrics;
+      setSeedIr({ ir: d.ir, timeframe: c.timeframe });
+      setSeedAsset({ symbol: c.symbol, timeframe: c.timeframe, market: c.market });
+      setBuilderSeedText(t('来自批量验证:{label}({market})。选择段 {ret},{n} 笔。在这里逐条改规则,再回测。', { label, market: c.market === 'perp' ? t('永续') : t('现货'), ret: m ? `${m.total_return >= 0 ? '+' : ''}${(m.total_return * 100).toFixed(1)}%` : '—', n: m?.trades ?? '—' }));
+      setMatrixSeed({ study_id: sid, label });
+      openPanel('builder');
+    }).catch((e: Error) => toast.error(e.message)).finally(() => { if (!embedded) window.history.replaceState(null, '', '#research'); });
+  }, []);
+
   /** 对话里点一张图/表:打开右侧结果面板,并把它记成追问的引用对象。 */
   const openArtifact = (id: string) => {
     setSelectedArtifactId(id);
@@ -422,7 +465,7 @@ export function ResearchPage() {
 
   const submitRevision = async (command: ResearchRevisionCommand, key: string) => {
     const sid = await ensureSession();
-    if (!sid) throw Error('无法创建会话，请稍后重试');
+    if (!sid) throw Error(t('无法创建会话，请稍后重试'));
     const response = await researchApi.researchCommand(sid, { command, idempotency_key: key });
     qc.setQueryData<ResearchSessionDetail>(['research', 'session', sid], (old) => old ? { ...old,
       messages: old.messages.some((m) => m.id === response.message.id) ? old.messages : [...old.messages, response.message],
@@ -496,7 +539,7 @@ export function ResearchPage() {
           onOpenLegacy={() => setLegacyOpen(true)}
           onOpenHistory={() => setHistoryOpen(true)}
           runCount={runs.length}
-          onOpenMatrix={() => openPanel('matrix')}
+          onOpenMatrix={embedded && onBackToScout ? () => onBackToScout('') : () => openPanel('matrix')}
         />
       ) : null}
 
@@ -507,6 +550,15 @@ export function ResearchPage() {
             <span>{t('正在为「我的策略」里的草稿构建:这个会话里的回测会自动存成它的版本')}</span>
             <a className="ml-auto text-primary hover:underline" href={`#my-strategies?id=${encodeURIComponent(linkedStrategyId)}`}>{t('查看策略')}</a>
             <button className="text-muted-foreground hover:text-foreground" onClick={() => setLinkedStrategyId(null)} title={t('隐藏')}><X className="size-3" /></button>
+          </div>
+        ) : null}
+        {!embedded ? <div className="shrink-0 border-b px-3 py-1"><DivisionNote here="research" /></div> : null}
+        {matrixSeed ? (
+          <div className="flex shrink-0 items-center gap-2 border-b bg-primary/5 px-3 py-1.5 text-[11px] text-muted-foreground">
+            <Grid3x3 className="size-3 text-primary" />
+            <span>{t('从批量验证带过来:{label},已放进「策略构建」', { label: matrixSeed.label })}</span>
+            <a className="ml-auto text-primary hover:underline" href={`#matrix-study?id=${encodeURIComponent(matrixSeed.study_id)}`} onClick={embedded && onBackToScout ? (e) => { e.preventDefault(); onBackToScout(matrixSeed.study_id); } : undefined}>{embedded ? t('回到海选') : t('回到批量验证')}</a>
+            <button className="text-muted-foreground hover:text-foreground" onClick={() => setMatrixSeed(null)} title={t('隐藏')}><X className="size-3" /></button>
           </div>
         ) : null}
         <SessionChat
@@ -549,13 +601,13 @@ export function ResearchPage() {
         style={panelHidden ? { display: 'none' } : narrow ? { display: 'flex', flex: '1 1 0%' } : { display: 'flex', flex: '0 0 auto', width: panelWidth, maxWidth: `calc(100% - ${sidebarCollapsed ? 36 : 228}px - 383px)` }}
       >
         <div className="flex h-8 shrink-0 items-center gap-1 border-b bg-muted/40 px-2">
-          {PANEL_VIEWS.map((v) => (
+          {PANEL_VIEWS.filter((v) => !(embedded && v === 'matrix')).map((v) => (
             <Button key={v} size="xs" variant={view === v ? 'secondary' : 'ghost'} onClick={() => setView(v)}>
               {v === 'artifact' ? <LineChart /> : v === 'run' ? <FlaskConical /> : v === 'builder' ? <Wand2 /> : v === 'pine' ? <Braces /> : v === 'matrix' ? <Grid3x3 /> : <Telescope />} {PANEL_VIEW_LABEL[v]}
             </Button>
           ))}
           <div className="ml-auto flex items-center gap-1">
-            {(context.selected_run_id || (view === 'run' && selectedId)) ? <Button size="xs" variant="ghost" onClick={() => setSettingsRunId(context.selected_run_id || selectedId)}>设置</Button> : null}
+            {(context.selected_run_id || (view === 'run' && selectedId)) ? <Button size="xs" variant="ghost" onClick={() => setSettingsRunId(context.selected_run_id || selectedId)}>{t('设置')}</Button> : null}
             {narrow ? (
               <Button size="xs" variant="ghost" onClick={() => setNarrowView('chat')}>
                 {t('回到对话')}
@@ -584,12 +636,15 @@ export function ResearchPage() {
             <UniverseScreenPanel onNewExperiment={(u) => openNew(null, { universe: u })} />
           ) : view === 'builder' ? (
             <StrategyBuilder
+              key={matrixSeed ? `matrix:${matrixSeed.label}` : 'builder'}
               initialIr={seedIr?.ir ?? run?.manifest.request.strategy_ir ?? null}
+              initialTimeframe={seedIr?.timeframe}
               seedText={builderSeedText}
               onUseIr={(ir, timeframe, warmup) => openNew(null, { ir: { ir, timeframe, warmup } })}
               execution={run?.manifest.request.execution ?? { ...DEFAULT_EXEC, sizing_mode: 'unit_notional' }}
               orderGate={frozenGate(run?.manifest.request.order_gate)}
               seedDatasetId={run?.manifest.request.dataset_id ?? null}
+              seedAsset={matrixSeed ? seedAsset : null}
             />
           ) : run ? (
             <>
@@ -1643,7 +1698,7 @@ function TradesTab({ arms, primaryArm, onPrimary, onFocus }: { arms: ResearchArm
                 ) : null}
                 <TableCell>
                   {REASON_LABEL[tr.reason] ?? tr.reason}
-                  {tr.timing === 'intrabar_unknown' ? <span className="ml-1 text-[10px] text-warn" title={t('bar 内触发顺序未知')}>bar 内</span> : null}
+                  {tr.timing === 'intrabar_unknown' ? <span className="ml-1 text-[10px] text-warn" title={t('bar 内触发顺序未知')}>{t('bar 内')}</span> : null}
                 </TableCell>
               </TableRow>
             ))}

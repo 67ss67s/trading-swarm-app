@@ -1,7 +1,7 @@
 # Eval report — stub-v2-smoke
 
 - brain: `stub` (model `stub`), prompt `demo-playbook-v5.1`
-- cases: `~/Desktop/trading-swarm/packages/eval-a/cases/v2` (set `v2`, 118 cases in set, 118 episodes in this run)
+- cases: `<repo>/packages/eval-a/cases/v2` (set `v2`, 118 cases in set, 118 episodes in this run)
 - 晋升结论: **PROMOTE_CANDIDATE** — 硬不变量全 PASS,schema/symmetry 达标
 
 ## 分项指标

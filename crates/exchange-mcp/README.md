@@ -1,6 +1,6 @@
 # exchange-mcp —— Binance MCP / OAuth 半边(A1)
 
-execd 里唯一持有 OAuth token 的地方。职责:发现(PRM → AS 元数据)、PKCE 授权码流程(public client,client_id 走 CIMD)、token 文件原子替换(`~/.trading-swarm/secrets/oauth-binance.json`,0600)、refresh 单飞状态机、MCP Streamable HTTP 客户端(手写,不用 rmcp)、`tools/list` 快照钉版与漂移守卫。
+execd 里唯一持有 OAuth token 的地方。职责:发现(PRM → AS 元数据)、PKCE 授权码流程(public client,client_id 走 CIMD)、token 文件原子替换(`~/.trade-gate/secrets/oauth-binance.json`,0600)、refresh 单飞状态机、MCP Streamable HTTP 客户端(手写,不用 rmcp)、`tools/list` 快照钉版与漂移守卫。
 
 ## 模块
 
@@ -15,10 +15,10 @@ execd 里唯一持有 OAuth token 的地方。职责:发现(PRM → AS 元数据
 | `classify` | 探针用:按名字/描述猜写类工具、找 `clientOrderId` 形状的字段、找子账户标识工具 |
 | `secret` / `error` / `http` | 脱敏字符串、错误分类(`Unauthorized/SessionLost/RateLimited/Transport/InvalidClient/Revoked/WafChallenge…`)、系统代理 reqwest |
 
-## 探针 `tswarm-mcp-probe`
+## 探针 `tgate-mcp-probe`
 
 ```
-CARGO_TARGET_DIR=target/exchange-mcp cargo run -p exchange-mcp --bin tswarm-mcp-probe -- <子命令>
+CARGO_TARGET_DIR=target/exchange-mcp cargo run -p exchange-mcp --bin tgate-mcp-probe -- <子命令>
 
 discover                         # 只读:401 挑战 + PRM + AS 元数据(已对真实端点验证通过)
 probe-client [--client-id URL]   # 只读:bogus code 打 token 端点。invalid_client = CIMD 文档没上线/不一致;invalid_grant = Binance 接受了我们的 client_id

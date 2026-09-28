@@ -1,7 +1,7 @@
 // EvalCase → demo.EpisodeInputs. This is the seam that guarantees the eval feeds the *same* context
 // builder the live loop uses; nothing about evidence or staleness is computed here.
 
-import { demo } from '@trading-swarm/gateway';
+import { demo } from '@trade-gate/gateway';
 import type { EvalCase, Trigger } from './types.js';
 
 /** `trigger:<kind>` 标签里合法的事件名(判断图的事件边就是按这个 kind 分的)。 */

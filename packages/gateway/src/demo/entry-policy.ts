@@ -17,6 +17,7 @@ import { HORIZON_POLICY, threadHorizon, type StrategyHorizon } from './horizon.j
 import type { ScanChecklist } from './review-metrics.js';
 import type { TfFeatures } from './market.js';
 import type { Direction, Kline, StrategyThread } from './types.js';
+import { flagLabel, noWord, yesWord } from './output-language.js';
 
 export const ENTRY_POLICY_VERSION = 'entry-v1';
 
@@ -65,6 +66,16 @@ export function distToBreakAtr(base: TfFeatures | undefined, side: Direction | n
   return Number.isFinite(level) && level > 0 ? Math.abs(base.last_close - level) / base.atr14 : null;
 }
 
+/**
+ * 价格**越过**突破位多少 ATR(带符号):做多 (px - level)/atr,做空 (level - px)/atr。正数 = 已经追出去,
+ * 负数 = 还在突破位不利侧(做多在下方),那不是追单。「追」只有一个方向,判追单一律用这个,
+ * 别拿 {@link distToBreakAtr} 的绝对值判(09-28:做多挂在自己给的回踩区里,被绝对距离判成追单撤掉)。
+ */
+export function chaseBeyondAtr(px: number, level: number | null, atr: number | null, side: Direction | null): number | null {
+  if (!side || level === null || !Number.isFinite(level) || !(level > 0) || atr === null || !(atr > 0) || !(px > 0)) return null;
+  return (side === 'long' ? px - level : level - px) / atr;
+}
+
 const dp = (n: number): number => (n > 100 ? 1 : n > 1 ? 3 : 6);
 const fmt = (n: number, ref: number): string => n.toFixed(dp(ref));
 
@@ -91,12 +102,17 @@ export function entryStyleAdvice(inp: EntryStyleInputs): EntryStyleAdvice {
   const chk = inp.checklist;
   const base = inp.base;
   const retest = chk?.retest_confirmed ?? false;
-  // 距突破位的距离**自己算**,量到「这根之前」的 20 根极值:清单里的 dist_to_break_atr 用的是含当根的
-  // swing_high_20/low_20,而刚突破的那根自己就是极值,距离恒等于 0——拿它当追单判据等于闸永不触发
-  // (与 scanChecklist 里 retest 用 _prev、距离用含当根是同一处历史不一致)。特征缺失时退回清单的数。
+  // 距突破位的距离**自己算**,量到「这根之前」的 20 根极值。09-27 之前清单里的 dist_to_break_atr 量的是含当根的
+  // swing_high_20/low_20(刚突破的那根自己就是极值,距离恒等于 0,拿它当追单判据等于闸永不触发);现在
+  // scanChecklist 也量到 _prev,两边同口径。这里仍自己算,是因为 side 可能与清单的趋势方向不同。特征缺失时退回清单的数。
   const dist = distToBreakAtr(base, inp.side) ?? chk?.dist_to_break_atr ?? null;
   const zoneAtr = HORIZON_POLICY[inp.horizon ?? 'intraday'].entry_zone_atr;
-  const far = dist !== null && dist > MARKET_CHASE_ATR;
+  // 追单只看有利侧:做多价在突破位下方不算追。特征缺失、只剩清单那个不带方向的数时,照旧按它判。
+  const beyondLevel = base && inp.side ? (inp.side === 'long' ? (base.swing_high_20_prev ?? base.swing_high_20) : (base.swing_low_20_prev ?? base.swing_low_20)) : null;
+  const beyond = base ? chaseBeyondAtr(base.last_close, beyondLevel, base.atr14, inp.side) : null;
+  const chase = beyond ?? chk?.dist_to_break_atr ?? null;
+  const belowBreak = beyond !== null && beyond < 0;
+  const far = chase !== null && chase > MARKET_CHASE_ATR;
   const recommended: 'market' | 'limit' = inp.style === 'limit_only' && inp.entry_mode !== 'market_ok' ? 'limit' : retest && !far ? 'market' : 'limit';
   // 拒绝要有客观依据:距离算不出来时不拦(证据缺失不是拒单理由)。
   // limit_only 是另一条口径:不看距离,市价本身就不许用,除非策略规则写了 market_ok。
@@ -113,7 +129,13 @@ export function entryStyleAdvice(inp: EntryStyleInputs): EntryStyleAdvice {
     const anchor = usable.length ? (inp.side === 'long' ? Math.max(...usable) : Math.min(...usable)) : inp.mark;
     const low = inp.side === 'long' ? anchor - width / 2 : Math.max(inp.mark, anchor - width / 2);
     const high = inp.side === 'long' ? Math.min(inp.mark, anchor + width / 2) : anchor + width / 2;
-    if (high > 0 && low > 0 && high - low > 0) zone = [fmt(low, inp.mark), fmt(high, inp.mark)];
+    // 靠近现价的那一端必须严格在现价不利侧,取整也朝不利方向取:以前 >100 的价只留 1 位小数,SOL 现价 121.09 时
+    // 上沿被四舍五入成 121.1,模型按规则挂在上沿就立刻成交,被入场方式检查当成追单拒掉(09-27 评审站两次)
+    const unit = 10 ** -dp(inp.mark);
+    let lo = low, hi = high;
+    if (inp.side === 'long') { hi = Math.floor(hi / unit + 1e-9) * unit; if (hi >= inp.mark) hi -= unit; lo = Math.floor(lo / unit + 1e-9) * unit; }
+    else { lo = Math.ceil(lo / unit - 1e-9) * unit; if (lo <= inp.mark) lo += unit; hi = Math.ceil(hi / unit - 1e-9) * unit; }
+    if (hi > 0 && lo > 0 && hi - lo > unit / 2) zone = [fmt(lo, inp.mark), fmt(hi, inp.mark)];
   }
   const reason = retest
     ? far
@@ -121,11 +143,13 @@ export function entryStyleAdvice(inp: EntryStyleInputs): EntryStyleAdvice {
       : '回踩已确认且离突破位不远,市价可用'
     : dist === null
       ? '清单没给突破距离,按限价等回踩更稳'
-      : `回踩未确认(距突破位 ${dist.toFixed(2)} ATR),按策略规则应挂限价等回踩`;
+      : belowBreak
+        ? `还没越过突破位(在${inp.side === 'long' ? '下' : '上'}方 ${dist.toFixed(2)} ATR,不算追单),按策略规则应挂限价等回踩`
+        : `回踩未确认(距突破位 ${dist.toFixed(2)} ATR),按策略规则应挂限价等回踩`;
   const text = [
     `建议入场方式=${recommended === 'market' ? '市价' : '限价'}`,
-    `回踩确认=${retest ? '是' : '否'}`,
-    `距突破位 ${dist === null ? 'n/a' : `${dist.toFixed(2)} ATR`}(市价上限 ${MARKET_CHASE_ATR} ATR)`,
+    `${flagLabel('回踩确认')}${retest ? yesWord() : noWord()}`,
+    `距突破位 ${dist === null ? 'n/a' : `${dist.toFixed(2)} ATR`}${belowBreak ? `(还在突破位${inp.side === 'long' ? '下' : '上'}方,不算追单)` : ''}(市价上限 ${MARKET_CHASE_ATR} ATR)`,
     zone ? `参考挂单区 ${zone[0]}–${zone[1]}(${zoneAtr} ATR 宽,现价 ${fmt(inp.mark, inp.mark)})` : '参考挂单区不可得',
     marketBlocked ? (inp.style === 'limit_only' ? '本档是 limit_only:市价开仓一律被「入场方式」闸拒绝(这条策略没写 entry_mode=market_ok),请给 limit + limit_price' : '本次市价单会被「入场方式」闸拒绝(已追出上限),请给 limit + limit_price') : recommended === 'limit' ? '市价不会被拦,但按策略规则这里更该挂限价等回踩' : '市价与限价都允许',
     reason,
@@ -242,7 +266,9 @@ export function finalEntryCheck(inp: FinalEntryInputs): FinalEntryCheck {
   const level = inp.breakout_level;
   const atr = inp.atr;
   const dist = level !== null && Number.isFinite(level) && level > 0 && atr !== null && atr > 0 && px > 0 ? Math.round((Math.abs(px - level) / atr) * 100) / 100 : null;
-  const far = dist !== null && dist > maxChase;
+  // dist_atr 保持原来的绝对距离(日志/理由里读它);追单只认有利侧越过的距离,做多在突破位下方不是追。
+  const beyond = chaseBeyondAtr(px, level, atr, inp.side);
+  const far = dist !== null && beyond !== null && Math.round(beyond * 100) / 100 > maxChase;
   const pending = inp.entry_timing === 'pending';
   const reject = (code: FinalEntryCheck['code'], reason: string): FinalEntryCheck => ({ passed: false, kind, dist_atr: dist, code, reason });
   if (inp.entry_timing === 'failed') return reject('timing_failed', '入场时机判据已经不成立(不是「还没到」而是「过了/坏了」),不许开仓');
@@ -261,7 +287,8 @@ export function finalEntryCheck(inp: FinalEntryInputs): FinalEntryCheck {
     if (kind === 'market' || kind === 'marketable_limit') return reject('chase_too_far', `${kind === 'market' ? '市价' : '立刻成交的限价'}追单被拒:成交价 ${px} 距冻结突破位 ${level} 已 ${dist!.toFixed(2)} ATR,超过上限 ${maxChase} ATR`);
     if (kind === 'waiting_limit') return reject('waiting_limit_too_far', `等待型限价挂得太远:挂单价 ${inp.limit_price} 距冻结突破位 ${level} 有 ${dist!.toFixed(2)} ATR,超过上限 ${maxChase} ATR —— 换成限价不等于没在追`);
   }
-  return { passed: true, kind, dist_atr: dist, code: 'ok', reason: `${kind === 'market' ? '市价' : kind === 'waiting_limit' ? '等待型限价' : kind === 'marketable_limit' ? '立刻成交的限价' : '限价(身份未证明)'}:距冻结突破位 ${dist === null ? 'n/a' : `${dist.toFixed(2)} ATR`}(上限 ${maxChase})${pending ? ',时机待回踩' : ''}` };
+  const sideNote = beyond !== null && beyond < 0 ? `,还在突破位${inp.side === 'long' ? '下' : '上'}方,不算追单` : '';
+  return { passed: true, kind, dist_atr: dist, code: 'ok', reason: `${kind === 'market' ? '市价' : kind === 'waiting_limit' ? '等待型限价' : kind === 'marketable_limit' ? '立刻成交的限价' : '限价(身份未证明)'}:距冻结突破位 ${dist === null ? 'n/a' : `${dist.toFixed(2)} ATR`}${sideNote}(追单上限 ${maxChase})${pending ? ',时机待回踩' : ''}` };
 }
 
 /**
@@ -432,9 +459,9 @@ export function pendingEntryMetrics(inp: PendingEntryInputs): PendingEntryMetric
     `已等 ${bars} 根 ${tf}(${Math.round(waitedMs / 60_000)} 分钟,上限 ${inp.max_wait_bars} 根)`,
     `现价 ${inZone ? '在' : '不在'}入场区${zone ? ` ${zone[0]}–${zone[1]}` : t.entry.price ? ` ${t.entry.price}` : ''}`,
     `距入场区 ${distAtr === null ? 'n/a' : `${distAtr.toFixed(2)} ATR`}`,
-    `已跑掉=${ranAway ? '是' : '否'}`,
+    `${flagLabel('已跑掉')}${ranAway ? yesWord() : noWord()}`,
     `突破结构=${structureGone === null ? 'n/a' : structureGone ? '已失效' : '仍在'}`,
-    `量能枯竭=${volumeDry === null ? 'n/a' : volumeDry ? '是' : '否'}`,
+    `${flagLabel('量能枯竭')}${volumeDry === null ? 'n/a' : volumeDry ? yesWord() : noWord()}`,
     `代码意见=${cancel ? `撤单更合理(${reasons.join(';')})` : '继续挂着仍然合理'}`,
     '撤单不动钱、不改任何已批准的价格;继续等还是撤由你按上面这几项判断,不要凭单根噪声撤单。',
   ].join(';');

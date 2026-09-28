@@ -9,9 +9,9 @@
 export const schemas = {
   "account_snapshot": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://trading-swarm.dev/schema/account_snapshot.json",
+    "$id": "https://trade-gate.dev/schema/account_snapshot.json",
     "title": "AccountSnapshot",
-    "description": "账户真相(设计 §6.2 account.truth / external review #6):每个组件各自 observed_at、取数区间、completeness;经济组件哈希 = account_version;组件缺失或跨度过大 → inconsistent(gate 拒开仓);不可得 → unavailable。",
+    "description": "账户真相(设计 §6.2 account.truth / Codex review #6):每个组件各自 observed_at、取数区间、completeness;经济组件哈希 = account_version;组件缺失或跨度过大 → inconsistent(gate 拒开仓);不可得 → unavailable。",
     "type": "object",
     "additionalProperties": false,
     "required": [
@@ -601,7 +601,7 @@ export const schemas = {
   },
   "attempt": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://trading-swarm.dev/schema/attempt.json",
+    "$id": "https://trade-gate.dev/schema/attempt.json",
     "title": "ExecutionAttempt",
     "description": "一次对交易所的写调用(设计 §5.1)。clientOrderId 与完整订单指纹在调用前持久化(stage=before_submit);同 id 重发必须是交易所级幂等,否则不重发;结果 unknown 非终态,由 reconciler 按 clientOrderId 收敛。",
     "type": "object",
@@ -726,7 +726,7 @@ export const schemas = {
   },
   "authorization": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://trading-swarm.dev/schema/authorization.json",
+    "$id": "https://trade-gate.dev/schema/authorization.json",
     "title": "Authorization",
     "description": "对某个 plan_hash 的授权(设计 §5.1)。by=user 需要 confirm_echo(结构化确认:审批面逐字回填关键字段,execd 与 plan 派生的 confirm_fields 逐字比对);by=policy 只在 LiveCapped 且上限内出现(v1 feature-gate 关闭)。",
     "type": "object",
@@ -824,7 +824,7 @@ export const schemas = {
   },
   "common": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://trading-swarm.dev/schema/common.json",
+    "$id": "https://trade-gate.dev/schema/common.json",
     "title": "Common",
     "description": "所有契约共享的基础类型。金额/价格/数量一律十进制字符串,时间戳一律 unix 毫秒整数,枚举一律小写 snake_case。",
     "$defs": {
@@ -1201,7 +1201,7 @@ export const schemas = {
   },
   "demo_portfolio_capacity": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://trading-swarm.dev/schema/demo_portfolio_capacity.json",
+    "$id": "https://trade-gate.dev/schema/demo_portfolio_capacity.json",
     "title": "DemoPortfolioCapacity",
     "description": "Portfolio Manager 典型止损容量估算；不是执行授权。金额为十进制字符串，不能计算的字段显式 null。",
     "type": "object",
@@ -1584,7 +1584,7 @@ export const schemas = {
   },
   "events": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://trading-swarm.dev/schema/events.json",
+    "$id": "https://trade-gate.dev/schema/events.json",
     "title": "ExecEvent",
     "description": "execd 发出的事件(UDS 通知 exec.event,同时落 exec.sqlite events 表,seq 单调,支持 since_seq 回放)。gateway 把它桥接到自己的事件总线与 events 表——'事件即审计'口径(设计 §4)。",
     "type": "object",
@@ -1682,7 +1682,7 @@ export const schemas = {
   },
   "exchange_order": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://trading-swarm.dev/schema/exchange_order.json",
+    "$id": "https://trade-gate.dev/schema/exchange_order.json",
     "title": "ExchangeOrderObservation",
     "description": "交易所订单的观察值(设计 §5.1):不可变、按 observed_at 追加;订单状态从最新观察派生。同一 exchange_order_id 的观察序列必须满足 transitions/exchange_order_status.json 的单调性,否则标 ORDER_STATE_UNKNOWN。",
     "type": "object",
@@ -1801,7 +1801,7 @@ export const schemas = {
   },
   "fill": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://trading-swarm.dev/schema/fill.json",
+    "$id": "https://trade-gate.dev/schema/fill.json",
     "title": "Fill",
     "description": "成交观察值(设计 §5.1),不可变;(account, exchange_order_id, trade_id) 唯一。",
     "type": "object",
@@ -1895,7 +1895,7 @@ export const schemas = {
   },
   "intent": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://trading-swarm.dev/schema/intent.json",
+    "$id": "https://trade-gate.dev/schema/intent.json",
     "title": "Intent",
     "description": "动钱的唯一提议记录(设计 §5.1)。模型/UI/Exit DSL 只能提议;经济字段在 ExecutableOrderPlan 里物化并哈希;状态只按 transitions/intent_status.json 迁移。",
     "type": "object",
@@ -2392,7 +2392,7 @@ export const schemas = {
   },
   "plan": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://trading-swarm.dev/schema/plan.json",
+    "$id": "https://trade-gate.dev/schema/plan.json",
     "title": "ExecutableOrderPlan",
     "description": "审批前物化的可执行计划(设计 §5.1)。审批绑定的是 plan_hash = sha256(canonical_json(economic));basis 不进哈希。重闸只能拒绝,不能改 economic;经济字段实质变化 → 新 plan(version+1)+ 作废旧授权。",
     "type": "object",
@@ -2870,9 +2870,9 @@ export const schemas = {
   },
   "policy": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://trading-swarm.dev/schema/policy.json",
+    "$id": "https://trade-gate.dev/schema/policy.json",
     "title": "ExecPolicy",
-    "description": "execd 持有的 policy 子集(设计 §10):模式、authority、上限。gateway 的 gate v2 与 execd 的重闸读同一份;改动需 policy.set + confirm 回填。金丝雀期默认值取评审建议的保守值(§17.2),向导里显式输入。",
+    "description": "execd 持有的 policy 子集(设计 §10):模式、authority、上限。gateway 的 gate v2 与 execd 的重闸读同一份;改动需 policy.set + confirm 回填。金丝雀期默认值取 Codex 保守值(§17.2),向导里显式输入。",
     "type": "object",
     "additionalProperties": false,
     "required": [
@@ -3086,7 +3086,7 @@ export const schemas = {
   },
   "position_effect": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://trading-swarm.dev/schema/position_effect.json",
+    "$id": "https://trade-gate.dev/schema/position_effect.json",
     "title": "PositionEffect",
     "description": "intent 的经济完成定义(设计 §5.1):开仓=目标数量成交且剩余已撤且保护腿已确认在交易所;平仓=数量核实;保护=腿存在;撤单=订单终态;划转=交易所回执可查。由 reconciler 按读派生并落库,intent 只在 status=satisfied 时才 completed。",
     "type": "object",
@@ -3194,7 +3194,7 @@ export const schemas = {
   },
   "research-backtest": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://trading-swarm.local/schema/research-backtest.json",
+    "$id": "https://trade-gate.local/schema/research-backtest.json",
     "title": "ResearchBacktest",
     "anyOf": [
       {
@@ -4000,6 +4000,17 @@ export const schemas = {
                 "type": "null"
               }
             ]
+          },
+          "execution_gate": {
+            "anyOf": [
+              {
+                "$ref": "research.json#/$defs/ExecutionGateStats"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "该资产(篮子 = 两腿相加)在下单决策时刻被执行层阈值挡单的统计;null = 旧口径(不套执行层)"
           }
         },
         "required": [
@@ -4269,6 +4280,17 @@ export const schemas = {
               "maxLength": 4000
             },
             "maxItems": 64
+          },
+          "execution_gate": {
+            "anyOf": [
+              {
+                "$ref": "research.json#/$defs/ExecutionGateStats"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "报告级执行层统计 = 各单资产相加(不含篮子,避免重复计数),阈值快照冻结在 thresholds;null = 旧口径(旧报告/显式不套执行层)"
           }
         },
         "required": [
@@ -4742,7 +4764,7 @@ export const schemas = {
   },
   "research-batch": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://trading-swarm.local/schema/research-batch.json",
+    "$id": "https://trade-gate.local/schema/research-batch.json",
     "title": "ResearchBatchPortfolioPrimitive",
     "description": "批量策略研究(docs/research/batch-study-2026-09-23.md)用的组合级原语:横截面动量调仓(portfolio_xsmom)、永续资金费套利两腿(portfolio_carry)。它们作用在资产池上,不是单资产 StrategyIR 的一段,所以不进 research.json 的原语表;实现见 packages/gateway/src/demo/research/primitives/portfolio-*.ts。",
     "anyOf": [
@@ -4891,9 +4913,9 @@ export const schemas = {
   },
   "research-binding": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://trading-swarm.local/schema/research-binding.json",
+    "$id": "https://trade-gate.local/schema/research-binding.json",
     "title": "ResearchStrategyBinding",
-    "description": "§9.47 StrategyBinding:研究台策略版本(StrategyIR,唯一真源)编译出来的实盘绑定(只读编译产物)。字段对齐 docs/design/strategy-apply-spec-2026-09-23.md §3 与 复审修订;实盘侧(radar / 候选生成 / holding-policy / gates)按这些字段消费,字段名保持稳定。部署模式、仓位 cap 不在这里(属于部署,由实盘注册表管)。",
+    "description": "§9.47 StrategyBinding:研究台策略版本(StrategyIR,唯一真源)编译出来的实盘绑定(只读编译产物)。字段对齐 docs/design/strategy-apply-spec-2026-09-23.md §3 与 Codex 复审修订;实盘侧(radar / 候选生成 / holding-policy / gates)按这些字段消费,字段名保持稳定。部署模式、仓位 cap 不在这里(属于部署,由实盘注册表管)。",
     "anyOf": [
       {
         "$ref": "#/$defs/StrategyBindingResponse"
@@ -5495,7 +5517,7 @@ export const schemas = {
             ]
           },
           "model": {
-            "description": "模型在这条策略里的角色(复审:agent_mode 拆成 entry_filter / exit_discretion)。缺省 entry_filter=on、exit_discretion=off:模型只决定做/不做,不改任何价位,持仓期零模型调用;最终取值由 A/C 臂配对证据定,属于部署决定",
+            "description": "模型在这条策略里的角色(Codex 复审:agent_mode 拆成 entry_filter / exit_discretion)。缺省 entry_filter=on、exit_discretion=off:模型只决定做/不做,不改任何价位,持仓期零模型调用;最终取值由 A/C 臂配对证据定,属于部署决定",
             "type": "object",
             "additionalProperties": false,
             "properties": {
@@ -5735,7 +5757,7 @@ export const schemas = {
   },
   "research-improve": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://trading-swarm.local/schema/research-improve.json",
+    "$id": "https://trade-gate.local/schema/research-improve.json",
     "title": "ResearchImproveObject",
     "description": "策略自动改进与复验环(Improver)第一阶段:POST/GET /api/research/improve 的请求与响应,SSE 事件 research.improve。设计见 docs/research/improver-design-2026-09-23.md。",
     "anyOf": [
@@ -7364,7 +7386,7 @@ export const schemas = {
   },
   "research-loop": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://trading-swarm.local/schema/research-loop.json",
+    "$id": "https://trade-gate.local/schema/research-loop.json",
     "title": "ResearchLoop",
     "anyOf": [
       {
@@ -9413,7 +9435,7 @@ export const schemas = {
   },
   "research-orders": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://trading-swarm.local/schema/research-orders.json",
+    "$id": "https://trade-gate.local/schema/research-orders.json",
     "title": "ResearchOrders",
     "anyOf": [
       {
@@ -9902,7 +9924,7 @@ export const schemas = {
               "null"
             ],
             "maxLength": 4000,
-            "description": "status=blocked/cancelled 的原因代码(min_rr/no_target/no_stop/stop_side/stop_too_close/target_side/gap_invalidated/opposite_signal);stop_too_close=止损离入场不到 min_stop_atr×ATR(14)(结构口径)"
+            "description": "status=blocked/cancelled 的原因代码(min_rr/no_target/no_stop/stop_side/stop_too_close/target_side/gap_invalidated/opposite_signal/stop_distance/stop_atr/stop_too_wide/min_net_rr);stop_too_close=止损离入场不到 min_stop_atr×ATR(14)(结构口径);stop_distance/stop_atr/stop_too_wide/min_net_rr=执行层阈值挡单(2026-09-27,冻结了 order_gate.execution_thresholds 才有:止损距离低于下限/小于 ATR 下限/超过上限/扣往返成本的净盈亏比不足,命中多条时取第一条)"
           }
         },
         "required": [
@@ -10200,7 +10222,7 @@ export const schemas = {
   },
   "research-strategy": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://trading-swarm.local/schema/research-strategy.json",
+    "$id": "https://trade-gate.local/schema/research-strategy.json",
     "title": "ResearchStrategyObject",
     "anyOf": [
       {
@@ -10822,7 +10844,7 @@ export const schemas = {
   },
   "research": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://trading-swarm.local/schema/research.json",
+    "$id": "https://trade-gate.local/schema/research.json",
     "title": "ResearchContract",
     "oneOf": [
       {
@@ -11852,6 +11874,16 @@ export const schemas = {
           },
           "diagnostics": {
             "$ref": "#/$defs/ResearchDiagnostics"
+          },
+          "execution_gate": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ExecutionGateStats"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -13259,6 +13291,27 @@ export const schemas = {
             "type": "integer",
             "minimum": 2,
             "maximum": 100
+          }
+        },
+        "required": [
+          "count"
+        ]
+      },
+      "PrimitiveParamsCandleStreak": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 20
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "up",
+              "down"
+            ]
           }
         },
         "required": [
@@ -15694,6 +15747,17 @@ export const schemas = {
             "minimum": 0,
             "maximum": 10,
             "description": "结构口径(2026-09-23):止损离入场(市价=信号收盘价,限价=挂单价)不到 min_stop_atr×ATR(14,Wilder) 的单子直接不做(blocked stop_too_close),代码不会把止损挪远;缺省 0.5。字段存在(非 null)即启用结构口径:不再用盈亏比拦单(只认 IR 的 order.min_rr)、不放宽止损、不按 R 倍数补止盈"
+          },
+          "execution_thresholds": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ExecutionGateThresholds"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "执行层阈值快照(2026-09-27):存在(非 null)= 回测在下单决策时刻按与实盘同一套执行层阈值挡单(止损距离上下限 / ATR 下限 / 净盈亏比,只在策略自身闸通过后判),被挡的候选不下单;缺字段或 null = 旧口径,不套执行层(旧 manifest 重放逐字不变)"
           }
         },
         "required": [
@@ -18498,15 +18562,146 @@ export const schemas = {
           "cost_status",
           "reason_codes"
         ]
+      },
+      "ExecutionGateThresholds": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "§9.56 执行层阈值快照(与 gateway execution-policy.ts 的 ExecutionThresholds 同形):回测/研究 run 创建时从 workflow 读当前值冻结进来,重放按冻结值,不再读 workflow",
+        "properties": {
+          "min_stop_pct": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "max_stop_pct": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "min_stop_atr": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "min_net_rr": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "round_trip_cost_bps": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+          }
+        },
+        "required": [
+          "min_stop_pct",
+          "max_stop_pct",
+          "min_stop_atr",
+          "min_net_rr",
+          "round_trip_cost_bps"
+        ]
+      },
+      "ExecutionGateStats": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "回测在下单决策时刻套执行层阈值(stopGeometry + netRrCheck)的统计;null / 缺字段 = 旧口径(不套执行层)",
+        "properties": {
+          "version": {
+            "const": "exec-gate-v1"
+          },
+          "thresholds": {
+            "$ref": "#/$defs/ExecutionGateThresholds"
+          },
+          "checked": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "进入执行层判定的候选数(已通过策略自身闸,按决策 bar 去重)"
+          },
+          "rejected": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "被执行层挡掉的去重候选数"
+          },
+          "rejected_by_execution": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "按原因计数,一个候选可命中多条",
+            "properties": {
+              "stop_distance": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "stop_atr": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "stop_too_wide": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "min_net_rr": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "stop_distance",
+              "stop_atr",
+              "stop_too_wide",
+              "min_net_rr"
+            ]
+          },
+          "examples": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "symbol": {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                "at": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "reason": {
+                  "type": "string",
+                  "maxLength": 400
+                }
+              },
+              "required": [
+                "symbol",
+                "at",
+                "reason"
+              ]
+            }
+          }
+        },
+        "required": [
+          "version",
+          "thresholds",
+          "checked",
+          "rejected",
+          "rejected_by_execution"
+        ]
       }
     },
     "description": " IR v1 不加字段、不改哈希；v2 必须含 judge，只有订单执行核支持 judge。"
   },
   "rpc": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://trading-swarm.dev/schema/rpc.json",
+    "$id": "https://trade-gate.dev/schema/rpc.json",
     "title": "ExecutionServiceRpc",
-    "description": "gateway ↔ execd 的 UDS 契约:JSON-RPC 2.0,每帧一行(newline-delimited,UTF-8,单帧 ≤ 4 MiB)。execd 监听 ~/.trading-swarm/run/execd.sock(0600)。请求方法见 Method;execd → gateway 的通知只有 exec.event。错误码映射见 tables/error_codes.json。",
+    "description": "gateway ↔ execd 的 UDS 契约:JSON-RPC 2.0,每帧一行(newline-delimited,UTF-8,单帧 ≤ 4 MiB)。execd 监听 ~/.trade-gate/run/execd.sock(0600)。请求方法见 Method;execd → gateway 的通知只有 exec.event。错误码映射见 tables/error_codes.json。",
     "oneOf": [
       {
         "$ref": "#/$defs/RpcRequest"
@@ -19530,7 +19725,7 @@ export const schemas = {
             "description": "base64;明文是 UTF-8 JSON {api_key, api_secret}"
           }
         },
-        "description": "浏览器用 execd 的 P-256 公钥做 ECDH → HKDF-SHA256(salt 空, info 'trading-swarm/credentials/v1') → AES-256-GCM;gateway 只转发密文,TS 进程永远拿不到明文(AGENTS.md 规矩 1)"
+        "description": "浏览器用 execd 的 P-256 公钥做 ECDH → HKDF-SHA256(salt 空, info 'trade-gate/credentials/v1') → AES-256-GCM;gateway 只转发密文,TS 进程永远拿不到明文(AGENTS.md 规矩 1)"
       },
       "CredentialsPublicKeyParams": {
         "type": "object",

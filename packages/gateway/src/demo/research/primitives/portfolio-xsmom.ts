@@ -16,7 +16,7 @@
  *    liquidate_delisted = 资产最后一根 K 线之后(退市/下架)仍有持仓的,在下一个时间点按最后收盘向不利方向加滑点、扣费清算成现金,
  *    不让它以最后价格永久留在权益里。
  */
-import type { ResearchBar } from '@trading-swarm/contracts';
+import type { ResearchBar } from '@trade-gate/contracts';
 import type { FundingSeries } from '../orders/types.js';
 
 export interface PortfolioAsset { symbol: string; bars: ResearchBar[]; funding?: FundingSeries | null }

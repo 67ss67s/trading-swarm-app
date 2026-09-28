@@ -255,7 +255,9 @@ describe('预算上限', () => {
     const r = await runArm(s, m.id, { arm: 'B', client: stubClient('stub-rule', { name: 'pi:zai/glm-5.3' }), max_calls: 1000, max_cny: cap, concurrency: 1, timeout_ms: 1000 });
     expect(r.stopped).toMatch(/人民币上限/);
     expect(r.attempted).toBeGreaterThanOrEqual(2);
-    expect(r.attempted).toBeLessThanOrEqual(4);
+    // 预留按「输入 + 400 输出」估、结算按桩实际的短输出算,所以 3.5 倍单次预估能放进 4–5 次;
+    // 具体几次跟提示词长短有关(09-27 提示词多了止损底线那几句,从 4 次变成 5 次),这里只卡住不会一直跑下去
+    expect(r.attempted).toBeLessThanOrEqual(5);
     expect(s.spend('pi:zai/glm-5.3').cny).toBeLessThanOrEqual(cap + 1e-9);
     s.close();
   });

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://trading-swarm.local/schema/research-orders.json",
+  "$id": "https://trade-gate.local/schema/research-orders.json",
   "title": "ResearchOrders",
   "anyOf": [
     {
@@ -489,7 +489,7 @@
             "null"
           ],
           "maxLength": 4000,
-          "description": "status=blocked/cancelled 的原因代码(min_rr/no_target/no_stop/stop_side/stop_too_close/target_side/gap_invalidated/opposite_signal);stop_too_close=止损离入场不到 min_stop_atr×ATR(14)(结构口径)"
+          "description": "status=blocked/cancelled 的原因代码(min_rr/no_target/no_stop/stop_side/stop_too_close/target_side/gap_invalidated/opposite_signal/stop_distance/stop_atr/stop_too_wide/min_net_rr);stop_too_close=止损离入场不到 min_stop_atr×ATR(14)(结构口径);stop_distance/stop_atr/stop_too_wide/min_net_rr=执行层阈值挡单(2026-09-27,冻结了 order_gate.execution_thresholds 才有:止损距离低于下限/小于 ATR 下限/超过上限/扣往返成本的净盈亏比不足,命中多条时取第一条)"
         }
       },
       "required": [

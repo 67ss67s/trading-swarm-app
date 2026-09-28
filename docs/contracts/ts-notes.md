@@ -85,6 +85,6 @@ export interface CancelEconomics2 {
 `export type Symbol = string;` 会遮蔽 TS 内置的全局 `Symbol`(ES2015 `symbol` 原始类型的接口/构造器
 命名空间)。当前代码库里没有任何地方需要在同一作用域同时用到"契约里的 Symbol(交易对符号如
 BTCUSDT)"和"JS 内置 Symbol",所以目前完全无害;只是如果以后哪个文件 `import { Symbol } from
-'@trading-swarm/contracts'` 又想用 `Symbol.iterator` 之类的内置能力,会被这个重名类型挡住。是否值得为
+'@trade-gate/contracts'` 又想用 `Symbol.iterator` 之类的内置能力,会被这个重名类型挡住。是否值得为
 这个而重命名 `$defs.Symbol`(比如叫 `SymbolCode`)是个纯粹的命名品味决定,不构成阻塞项,列在这里
 仅供参考。

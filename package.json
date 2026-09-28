@@ -1,9 +1,9 @@
 {
-  "name": "trading-swarm",
+  "name": "trade-gate",
   "private": true,
   "version": "0.0.1",
   "type": "module",
-  "description": "Trading Swarm: chat-to-strategy research and role-based trading agents (TS gateway + React UI + Rust executor)",
+  "description": "agent-first trading gateway: TS gateway + Rust execd + React UI (see docs/design)",
   "workspaces": [
     "packages/*"
   ],
@@ -12,7 +12,7 @@
   },
   "scripts": {
     "dev": "bash scripts/dev.sh",
-    "lab": "node scripts/lab-cache.mjs",
+    "lab":"node scripts/lab-cache.mjs",
     "generate": "npm run generate --workspaces --if-present",
     "generate:check": "npm run generate:check --workspaces --if-present",
     "typecheck": "tsc -b",

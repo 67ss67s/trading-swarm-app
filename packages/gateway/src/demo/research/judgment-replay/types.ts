@@ -5,7 +5,7 @@
  * 这里只放共享类型与冻结常量。任何改变事件、管仓、提示词语义的改动都必须升对应的版本号,
  * 版本号会写进 run manifest,旧 manifest 的模型输出不会被新口径误读。
  */
-import type { ResearchBar } from '@trading-swarm/contracts';
+import type { ResearchBar } from '@trade-gate/contracts';
 import type { TriggerHit } from '../../types.js';
 
 export type Bar = ResearchBar;

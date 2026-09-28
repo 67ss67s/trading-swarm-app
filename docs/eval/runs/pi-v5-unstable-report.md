@@ -1,7 +1,7 @@
 # Eval report — pi-v5-unstable
 
 - brain: `pi` (model `pi:zai/glm-5.3`), prompt `demo-playbook-v5`
-- cases: `~/Desktop/trading-swarm/packages/eval-a/cases/v1` (set `v1`, 108 cases in set, 30 episodes in this run)
+- cases: `<repo>/packages/eval-a/cases/v1` (set `v1`, 108 cases in set, 30 episodes in this run)
 - 晋升结论: **PROMOTE_CANDIDATE** — 硬不变量全 PASS,schema/symmetry 达标
 
 ## 分项指标

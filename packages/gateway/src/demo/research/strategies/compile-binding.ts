@@ -12,7 +12,7 @@
  * IR 里实盘不支持的一律进 unmapped(block 不能下发,warn 能下发但语义有损),不近似、不静默丢。
  * 纯函数:不读库、不调模型、不碰交易所。
  */
-import type { BindingEvidenceIndicator, BindingRoleSlice, BindingRule, BindingTarget, BindingUnmapped, StrategyBinding, StrategyIR, StrategyPrimitive } from '@trading-swarm/contracts';
+import type { BindingEvidenceIndicator, BindingRoleSlice, BindingRule, BindingTarget, BindingUnmapped, StrategyBinding, StrategyIR, StrategyPrimitive } from '@trade-gate/contracts';
 import { registry } from '../primitives/index.js';
 import { hash } from '../primitives.js';
 import { DEFAULT_ORDER_GATE, orderGateFor } from '../order-gate.js';

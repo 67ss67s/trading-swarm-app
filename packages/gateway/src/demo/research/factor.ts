@@ -1,4 +1,4 @@
-import type { ResearchFactorMetrics, ResearchFactorResult } from '@trading-swarm/contracts';
+import type { ResearchFactorMetrics, ResearchFactorResult } from '@trade-gate/contracts';
 export interface FactorOptions {window_bars:number;periods_per_year:number;risk_free_per_bar?:number;factors?:number[][]}
 const mean=(x:number[])=>x.reduce((a,b)=>a+b,0)/x.length;
 const variance=(x:number[],m=mean(x))=>x.reduce((a,b)=>a+(b-m)**2,0)/x.length;

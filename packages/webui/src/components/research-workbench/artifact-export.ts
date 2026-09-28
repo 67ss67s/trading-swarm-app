@@ -1,4 +1,5 @@
 import type { ResearchArtifact } from "@/api/research-types";
+import { t } from "@/lib/i18n";
 
 export function artifactExport(
   a: ResearchArtifact,
@@ -8,7 +9,7 @@ export function artifactExport(
   if (format === "json") return JSON.stringify(a, null, 2);
   if (format === "md") {
     const text = typeof body === "string" ? body : String(body?.text ?? "");
-    return `${text}\n\n## 证据索引\n\n产物：${a.id}\n\n快照：${(a.snapshot_refs ?? []).join(", ") || "未关联快照"}\n\n${typeof body === "object" ? JSON.stringify({ artifact_refs: body.artifact_refs, run_ids: body.run_ids }, null, 2) : ""}\n`;
+    return `${text}\n\n## ${t("证据索引")}\n\n${t("产物：{id}", { id: a.id })}\n\n${t("快照：{refs}", { refs: (a.snapshot_refs ?? []).join(", ") || t("未关联快照") })}\n\n${typeof body === "object" ? JSON.stringify({ artifact_refs: body.artifact_refs, run_ids: body.run_ids }, null, 2) : ""}\n`;
   }
   if (
     !body ||
@@ -16,7 +17,7 @@ export function artifactExport(
     !Array.isArray(body.columns) ||
     !Array.isArray(body.rows)
   )
-    throw Error("这份产物没有可导出的表格");
+    throw Error(t("这份产物没有可导出的表格"));
   const cell = (v: unknown) => {
     let s =
       typeof v === "object" && v !== null ? JSON.stringify(v) : String(v ?? "");

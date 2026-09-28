@@ -3,7 +3,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import type { ResearchStrategy } from '@trading-swarm/contracts';
+import type { ResearchStrategy } from '@trade-gate/contracts';
 
 const myStrategies = vi.fn();
 vi.mock('@/api/client', () => ({ researchApi: { myStrategies: (...a: unknown[]) => myStrategies(...a) } }));

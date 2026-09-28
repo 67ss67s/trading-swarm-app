@@ -16,8 +16,10 @@
  *  - 结构目标离得太近(rr<min_rr)拦下。
  * 两套口径都默认不对 unit_notional 套单笔风险上限(risk_cap_sizing='risk_fraction_only')。
  */
-import type { OrderGateParams } from '@trading-swarm/contracts';
-export type { OrderGateParams } from '@trading-swarm/contracts';
+import type { OrderGateParams } from '@trade-gate/contracts';
+import type { ExecutionBlock } from '../execution-policy.js';
+import { executionCheck, type ExecutionCheck } from './execution-gate.js';
+export type { OrderGateParams } from '@trade-gate/contracts';
 export const LEGACY_ORDER_GATE:OrderGateParams={min_rr:1.5,min_stop_cost_multiple:8,max_risk_fraction:'0.02',require_target:true,stop_floor:'widen',target_fallback_r:2,risk_cap_sizing:'risk_fraction_only'};
 /** 结构口径下「止损太近不做」的缺省倍数(ATR14);几何实验室止血规则同一阈值 */
 export const MIN_STOP_ATR_DEFAULT=0.5;
@@ -27,12 +29,14 @@ export const DEFAULT_ORDER_GATE:OrderGateParams={min_rr:0,min_stop_cost_multiple
 export const isStructureGate=(p:OrderGateParams|null|undefined):p is OrderGateParams&{min_stop_atr:number}=>!!p&&typeof p.min_stop_atr==='number'&&Number.isFinite(p.min_stop_atr);
 /** 止损离参考价(市价=信号收盘,限价=挂单价)是否不到 k×ATR;atr 缺失/非正时不判(预热不足不当成太近)。 */
 export const stopTooClose=(ref:number,stop:number,atr:number|null|undefined,k:number)=>typeof atr==='number'&&Number.isFinite(atr)&&atr>0&&Math.abs(ref-stop)<k*atr-1e-12;
-export type GateBlock='min_rr'|'stop_too_tight'|'stop_too_close'|'no_target'|'risk_cap'|'stop_side';
+export type GateBlock='min_rr'|'stop_too_tight'|'stop_too_close'|'no_target'|'risk_cap'|'stop_side'|ExecutionBlock;
 const decimal=(s:string)=>{if(!/^(0|[1-9]\d*)(\.\d{1,8})?$/.test(s))throw Error('order_gate_invalid_decimal');const [a,b='']=s.split('.');return BigInt(a!)*100000000n+BigInt(b.padEnd(8,'0'));};
 const fmt=(n:bigint)=>{const s=(n<0n?-n:n).toString().padStart(9,'0');return `${n<0n?'-':''}${s.slice(0,-8)}.${s.slice(-8)}`;};
 export const roundTripCostPct=(costs:{fee_rate:string;slippage_bps:string})=>2*Number(decimal(costs.fee_rate))/1e8+2*Number(decimal(costs.slippage_bps))/1e12;
 export const stopFloorPct=(costs:{fee_rate:string;slippage_bps:string},p:OrderGateParams)=>p.min_stop_cost_multiple*roundTripCostPct(costs);
-/** atr:决策时刻的 ATR(14,Wilder);只有结构口径(params.min_stop_atr)且给了 atr 才判 stop_too_close——成交时刻(ledger)不再判。 */
+/** atr:决策时刻的 ATR(14,Wilder);只有结构口径(params.min_stop_atr)且给了 atr 才判 stop_too_close——成交时刻(ledger)不再判。
+ * 执行层(2026-09-27,params.execution_thresholds 非空):同样只在决策时刻(给了 atr 键)判,且只在前面的策略闸全过之后判
+ * (先策略闸后执行层,与实盘顺序一致);被挡原因并入 blocked_by,判定明细放 execution。没冻结阈值的旧 manifest 不走这段,输出逐字不变。 */
 export function evaluateOrderGate(input:{side:'long'|'short';entry:string;stop:string;target:string|null;costs:{fee_rate:string;slippage_bps:string};equity:string;qty:string|null;params:OrderGateParams;atr?:number|null}) {
  const {params:p}=input,e=decimal(input.entry),s=decimal(input.stop),t=input.target===null?null:decimal(input.target),fee=decimal(input.costs.fee_rate),slip=decimal(input.costs.slippage_bps),equity=decimal(input.equity),risk=decimal(p.max_risk_fraction);
  if(e<=0n||equity<=0n||risk>100000000n||!Number.isFinite(p.min_rr)||p.min_rr<0||!Number.isFinite(p.min_stop_cost_multiple)||p.min_stop_cost_multiple<0)throw Error('order_gate_invalid_input');
@@ -44,7 +48,9 @@ export function evaluateOrderGate(input:{side:'long'|'short';entry:string;stop:s
  if((p.stop_floor??'widen')!=='none'&&stop_pct<p.min_stop_cost_multiple*round_trip_cost_pct)block('stop_too_tight','止损距离不足成本倍数');
  if(isStructureGate(p)&&s>0n&&stopTooClose(Number(e),Number(s),input.atr===undefined||input.atr===null?null:input.atr*1e8,p.min_stop_atr))block('stop_too_close',`止损离入场不到 ${p.min_stop_atr}×ATR(14),不做(不替策略把止损挪远)`);
  if(input.qty!==null&&decimal(input.qty)*d>equity*risk)block('risk_cap','初始风险超过权益上限');
- return {ok:blocked_by.length===0,rr,stop_pct,target_pct,round_trip_cost_pct,stop_over_cost,reasons,blocked_by};
+ const th=p.execution_thresholds;let execution:ExecutionCheck|undefined;
+ if(th&&input.atr!==undefined&&blocked_by.length===0){execution=executionCheck(input.side,Number(e)/1e8,Number(s)/1e8,t===null?null:Number(t)/1e8,input.atr,th);if(execution.blocks.length){blocked_by.push(...execution.blocks);reasons.push(`执行层:${execution.reason}`);}}
+ return {ok:blocked_by.length===0,rr,stop_pct,target_pct,round_trip_cost_pct,stop_over_cost,reasons,blocked_by,...(execution?{execution}:{})};
 }
 export interface OrderFit {stop_source:'strategy'|'cost_floor';target_source:'strategy'|'fallback_r'|'none';strategy_stop:string;strategy_target:string|null;stop_pct:number;target_pct:number|null;rr:number|null;floor_pct:number}
 /** Place stop/target under the constraints before judging. target_r (fixed-R strategies) is re-anchored to the placed stop. */
@@ -71,11 +77,11 @@ export const riskCapApplies=(p:OrderGateParams,sizing_mode:string|undefined)=>(p
  * 才要求止盈、才套最小盈亏比、才允许按 R 兜底补止盈;用户在 order.min_rr 里硬约束的盈亏比优先;「死叉离场」这类只有信号离场的
  * 策略不再被塞一个 2R 目标。
  */
-export function orderGateFor(ir:import('@trading-swarm/contracts').StrategyIR|null|undefined,base:OrderGateParams=DEFAULT_ORDER_GATE):OrderGateParams{
+export function orderGateFor(ir:import('@trade-gate/contracts').StrategyIR|null|undefined,base:OrderGateParams=DEFAULT_ORDER_GATE):OrderGateParams{
  if(!ir)return base;
  const userRR=ir.order?.min_rr;
  if(isStructureGate(base))return userRR!==undefined&&userRR>0?{...base,min_rr:userRR,require_target:true}:{...base};
- const hasTarget=(ir.exit??[]).some(x=>x.primitive==='structure_target'||x.primitive==='fixed_r_target')||!!ir.order?.take_profits?.length;// 订单块没写 take_profits 时缺省止盈由 orders/ 执行核给,执行核接入全窗口回测前 v4 看不到它,不能当作「有止盈」(复审 09-23)
+ const hasTarget=(ir.exit??[]).some(x=>x.primitive==='structure_target'||x.primitive==='fixed_r_target')||!!ir.order?.take_profits?.length;// 订单块没写 take_profits 时缺省止盈由 orders/ 执行核给,执行核接入全窗口回测前 v4 看不到它,不能当作「有止盈」(Codex 复审 09-23)
  if(hasTarget)return userRR!==undefined?{...base,min_rr:userRR}:base;
  return {...base,require_target:false,min_rr:0,target_fallback_r:0};
 }

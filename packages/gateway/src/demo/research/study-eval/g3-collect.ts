@@ -1,14 +1,14 @@
-import type { FrozenModelProfile, JudgeCandidateSnapshot, JudgeStateV1, StrategyJudge, ResearchBar } from '@trading-swarm/contracts';
+import type { FrozenModelProfile, JudgeCandidateSnapshot, JudgeStateV1, StrategyJudge, ResearchBar } from '@trade-gate/contracts';
 import type { DatabaseSync } from 'node:sqlite';
 import { JevDecisionClient, DecisionError, type DecisionClient, type DecisionResult } from '../../decisions.js';
 import { AtomicCallBudget, JudgeDecisionStore, fromDecisionClient, judgeCandidate, validateJudge, validateState, actualUsd, usdUnits } from '../judge/index.js';
 import { hash } from '../primitives.js';
 export const G3_ARMS=['code','cheap_trend','jev','deepseek'] as const;
 export type G3Arm=typeof G3_ARMS[number];
-export interface G3Opportunity { candidate:JudgeCandidateSnapshot; state:JudgeStateV1; trend_1h:ResearchBar[]; trend_4h:ResearchBar[] }
+export interface G3Opportunity { candidate:JudgeCandidateSnapshot; state:JudgeStateV1|null; unavailable_reason?:string; trend_1h:ResearchBar[]; trend_4h:ResearchBar[] }
 export interface G3CollectionManifest {
  version:'g3_collection_v2'; frozen_at:number; training_end_ms:number;
- finalists:{id:string; judge:StrategyJudge; execution_spec_hash:string; opportunities:G3Opportunity[]}[];
+ finalists:{id:string; training_end_ms?:number; judge:StrategyJudge; execution_spec_hash:string; opportunities:G3Opportunity[]}[];
  profiles:Record<'jev'|'deepseek',FrozenModelProfile>;
  pricing:{deepseek_input_per_million:string;deepseek_output_per_million:string;deepseek_max_output_tokens:number;deepseek_max_request_bytes:number};
  account:{initial_usd:string;risk_fraction:number;max_open:number;gross_cap:number};
@@ -28,7 +28,7 @@ export function validateCollectionManifest(m:G3CollectionManifest):void {
  if(m.version!=='g3_collection_v2'||!Number.isSafeInteger(m.frozen_at)||!Number.isSafeInteger(m.training_end_ms)||m.training_end_ms>=m.frozen_at||!m.finalists.length||m.finalists.length>3||new Set(m.finalists.map(f=>f.id)).size!==m.finalists.length)throw Error('g3_freeze_invalid');
  if(m.profiles.jev.model!=='typesafe/jev-1.13-20260917'||m.profiles.deepseek.model!=='deepseek-chat'||Object.values(m.profiles).some(p=>p.retry_policy!=='none'||usdUnits(p.max_call_usd)<=0n))throw Error('g3_profile_invalid');
  for(const f of m.finalists){validateJudge(f.judge);if(!f.execution_spec_hash||!f.opportunities.length||new Set(f.opportunities.map(o=>o.candidate.id)).size!==f.opportunities.length)throw Error('g3_candidates_invalid');
-  for(const o of f.opportunities){validateState(o.state,f.judge);if(o.state.as_of!==o.candidate.as_of||o.state.timeframe_ms!==o.candidate.timeframe_ms||o.candidate.as_of<=m.training_end_ms)throw Error('g3_state_or_split_invalid');}
+  for(const o of f.opportunities){if(o.state)validateState(o.state,f.judge);else if(!o.unavailable_reason)throw Error('g3_missing_state_reason');if(o.state&&(o.state.as_of!==o.candidate.as_of||o.state.timeframe_ms!==o.candidate.timeframe_ms)||o.candidate.as_of<=(f.training_end_ms??m.training_end_ms))throw Error('g3_state_or_split_invalid');}
  }
  const a=m.account,p=m.pricing,g=m.analysis;
  if(usdUnits(a.initial_usd)<=0n||!(a.risk_fraction>0&&a.risk_fraction<=0.05)||!Number.isSafeInteger(a.max_open)||a.max_open<1||!(a.gross_cap>0&&a.gross_cap<=3))throw Error('g3_account_invalid');
@@ -62,10 +62,13 @@ export interface G3DecisionRow {finalist_id:string;candidate_id:string;as_of:num
 export interface G3Collection {version:'g3_collection_result_v2';manifest_hash:string;synthetic:boolean;complete:boolean;decisions:G3DecisionRow[];responses:unknown[];budget:ReturnType<AtomicCallBudget['view']>}
 export async function collectG3(m:G3CollectionManifest,db:DatabaseSync,options:{max_usd:string;max_calls:number;clients?:Record<'jev'|'deepseek',DecisionClient>;stub?:boolean; recover_interrupted?:boolean}):Promise<G3Collection> {
  validateCollectionManifest(m);usdUnits(options.max_usd);
- if (!!m.synthetic !== !!options.stub) throw Error('g3_synthetic_mode_mismatch');
+ if (m.synthetic && !options.stub) throw Error('g3_synthetic_mode_mismatch');
  if (!options.stub && Object.values(m.profiles).some(p=>p.routing==='offline_stub')) throw Error('g3_live_stub_profile');
  const manifest_hash=hash(m),id=`g3:${manifest_hash}`;
  // 一个账本只接收一个冻结 manifest，防止用换 manifest 绕过总预算。
+ db.exec('CREATE TABLE IF NOT EXISTS g3_mode_lock (id INTEGER PRIMARY KEY CHECK(id=1), synthetic INTEGER NOT NULL)');
+ db.prepare('INSERT OR IGNORE INTO g3_mode_lock VALUES(1,?)').run(options.stub?1:0);
+ if(db.prepare('SELECT synthetic FROM g3_mode_lock WHERE id=1').get()!.synthetic!==(options.stub?1:0))throw Error('g3_ledger_mode_changed');
  db.exec('CREATE TABLE IF NOT EXISTS g3_manifest_lock (id INTEGER PRIMARY KEY CHECK(id=1), manifest_hash TEXT NOT NULL)');
  db.prepare('INSERT OR IGNORE INTO g3_manifest_lock VALUES(1,?)').run(manifest_hash);
  if(db.prepare('SELECT manifest_hash FROM g3_manifest_lock').get()!.manifest_hash!==manifest_hash)throw Error('g3_manifest_changed');
@@ -76,6 +79,7 @@ export async function collectG3(m:G3CollectionManifest,db:DatabaseSync,options:{
   for(const arm of G3_ARMS){
    const base={finalist_id:f.id,candidate_id:o.candidate.id,as_of:o.candidate.as_of,arm};
    if(arm==='code'||arm==='cheap_trend'){const follow=arm==='code'||cheapTrend(o);decisions.push({...base,action:follow?'follow':'skip',reason:arm,request_hash:null,cost_usd:'0',reserved_usd:'0'});continue;}
+   if(!o.state){decisions.push({...base,action:'skip',reason:o.unavailable_reason!,request_hash:null,cost_usd:'0',reserved_usd:'0'});continue;}
    const profile=m.profiles[arm];
    const client=options.stub?stubClient(profile):options.clients?.[arm];if(!client)throw Error('g3_client_missing');
    const spec={...f.judge,engine:arm==='jev'?'jev' as const:'llm' as const,model_profile_ref:profile.ref};

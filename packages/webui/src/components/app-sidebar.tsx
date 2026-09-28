@@ -15,7 +15,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { NAV, NAV_COLLAPSIBLE_GROUPS, NAV_GROUP_LABEL, NAV_GROUP_ORDER, type NavGroup, type NavItem, type Page } from '@/lib/nav';
+import { NAV, NAV_COLLAPSIBLE_GROUPS, NAV_GROUP_LABEL, NAV_GROUP_ORDER, NAV_HEADLESS_GROUPS, type NavGroup, type NavItem, type Page } from '@/lib/nav';
 import { useStartCore } from '@/components/start/use-start';
 import { t } from '@/lib/i18n';
 
@@ -108,6 +108,14 @@ export function AppSidebar({ page, onNavigate }: AppSidebarProps) {
         </div>
       </SidebarHeader>
       <SidebarContent className="gap-0">
+        {NAV_GROUP_ORDER.filter((g) => NAV_HEADLESS_GROUPS.includes(g)).map((g) => (
+          // 不画组名的分组(OKX.AI)放在最上面,「开始」之前
+          <SidebarGroup key={g} className="py-1" data-testid={`nav-group-${g}`}>
+            <SidebarGroupContent>
+              <SidebarMenu className="gap-0.5">{NAV.filter((item) => item.group === g).map(renderItem)}</SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ))}
         {startPinned ? (
           <SidebarGroup className="py-1">
             <SidebarGroupContent>
@@ -115,7 +123,7 @@ export function AppSidebar({ page, onNavigate }: AppSidebarProps) {
             </SidebarGroupContent>
           </SidebarGroup>
         ) : null}
-        {NAV_GROUP_ORDER.map((g) => {
+        {NAV_GROUP_ORDER.filter((g) => !NAV_HEADLESS_GROUPS.includes(g)).map((g) => {
           const items = NAV.filter((item) => item.group === g);
           const collapsible = NAV_COLLAPSIBLE_GROUPS.includes(g);
           // 当前页在折叠组里时强制展开,免得「选中的项看不见」

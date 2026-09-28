@@ -270,6 +270,16 @@ describe('memory outcome writeback (§2.2)', () => {
     expect(mem.sweepOutcomes()).toEqual({ scanned: 2, recorded: 0 });
     expect(mem.stats(a.id)).toEqual({ cited_n: 2, mean_r_when_cited: 0.5, mean_regret_when_cited: 0.5 });
     expect(mem.stats(b.id)).toEqual({ cited_n: 1, mean_r_when_cited: 2, mean_regret_when_cited: 0.5 });
+    // runtime 增量回填每轮有界；重启后进度在库中，新结算与证据修订仍可被拾取。
+    expect(mem.sweepOutcomes(undefined, { incremental: true, limit: 1 })).toEqual({ scanned: 1, recorded: 0 });
+    expect(mem.sweepOutcomes(undefined, { incremental: true, limit: 1 })).toEqual({ scanned: 1, recorded: 0 });
+    expect(mem.sweepOutcomes(undefined, { incremental: true, limit: 1 })).toEqual({ scanned: 0, recorded: 0 });
+    // replay 账本没有 demo_episodes，必须在 LIMIT 前排除，不能挡住之后的新结算。
+    for (let i = 0; i < 3; i++) db.prepare('INSERT INTO demo_judgment_ledger(episode_id,at,as_of,symbol,mode,horizon_end_at,settled_at,json) VALUES (?,?,?,?,?,?,?,?)').run(`replay:${i}`, NOW, NOW, 'BTCUSDT', 'scan', NOW, 1, '{}');
+    db.prepare('UPDATE demo_judgment_ledger SET settled_at=? WHERE episode_id=?').run(NOW + 30, 'ep-3');
+    expect(mem.sweepOutcomes(undefined, { incremental: true, limit: 1 })).toEqual({ scanned: 1, recorded: 2 });
+    db.prepare('UPDATE demo_episodes SET json=json WHERE id=?').run('ep-1');
+    expect(mem.sweepOutcomes(undefined, { incremental: true, limit: 1 })).toEqual({ scanned: 1, recorded: 0 });
   });
 });
 

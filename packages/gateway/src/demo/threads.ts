@@ -101,7 +101,34 @@ export interface ThreadFacts {
 export interface ReconcileResult {
   next: StrategyThread;
   changed: boolean;
-  events: { kind: 'entry_filled' | 'closed' | 'attention' | 'attention_cleared' | 'canceled'; message: string }[];
+  events: { kind: 'entry_filled' | 'closed' | 'attention' | 'attention_cleared' | 'canceled' | 'lookup_miss'; message: string }[];
+  /**
+   * 09-26 stuck-entry:入场单已连续 ENTRY_UNKNOWN_MAX_MISSES 次按 CID 查不到、且距提交超过 ENTRY_UNKNOWN_MIN_AGE_MS。
+   * **这不是终态判定**:runtime 必须再做一次新鲜查单 + 新鲜账户复核(无同 CID 订单、无该币持仓)才能写 canceled。
+   */
+  verify_absent?: boolean;
+}
+
+/** 连续查不到几次(每次间隔 ≥ ENTRY_MISS_SPACING_MS)才进入终态复核。 */
+export const ENTRY_UNKNOWN_MAX_MISSES = 3;
+/** 距提交(调用返回或提交相位开始)至少这么久才可能判「未到交易所」。 */
+export const ENTRY_UNKNOWN_MIN_AGE_MS = 10 * 60_000;
+/** 两次计数的 miss 至少隔这么久:巡检 15 秒一轮、查单 30 秒缓存,同一份缓存的 null 不能连记三次。 */
+export const ENTRY_MISS_SPACING_MS = 60_000;
+/** 入场单「提交」的时刻:调用返回时刻优先,调用没返回(崩溃/抛错遗留的提交相位)退回相位开始时刻。 */
+export function entrySubmitRef(t: StrategyThread): number | null {
+  return typeof t.entry_submitted_at === 'number' ? t.entry_submitted_at : typeof t.entry_submitting_since === 'number' ? t.entry_submitting_since : null;
+}
+/**
+ * 连续 `misses` 次查不到之后,是否满足「请求终态复核」的条件。
+ * 提交时刻未知(旧版撤单链接管时把提交相位清空、又没记调用时刻)时不拿 created_at 顶替
+ * (待批线程的 created_at 可以比真实发送早几个小时),改为要求连续查不到的次数本身跨过 T:
+ * misses × ENTRY_MISS_SPACING_MS ≥ ENTRY_UNKNOWN_MIN_AGE_MS。
+ */
+export function entryUnknownVerifyDue(t: StrategyThread, misses: number, now: number): boolean {
+  if (misses < ENTRY_UNKNOWN_MAX_MISSES) return false;
+  const ref = entrySubmitRef(t);
+  return ref !== null ? now - ref >= ENTRY_UNKNOWN_MIN_AGE_MS : misses >= Math.ceil(ENTRY_UNKNOWN_MIN_AGE_MS / ENTRY_MISS_SPACING_MS);
 }
 
 /**
@@ -185,24 +212,28 @@ export function reconcileThread(t: StrategyThread, f: ThreadFacts): ReconcileRes
       if (st === 'GONE') {
         // Just submitted: the exchange may not show the CID yet. Not a miss, not an alarm.
         if (withinSubmitGrace(t, f.now)) return { next, changed: false, events };
-        // null is not a negative fact (propagation delay, query blind spot): never auto-cancel on it.
-        // Count misses, raise ORDER_UNKNOWN, and leave the decision to a human or a later lookup.
+        // 同一份缓存的 null 不重复计数(查单有 30 秒缓存,巡检 15 秒一轮)。
+        if (typeof t.entry_lookup_miss_at === 'number' && f.now - t.entry_lookup_miss_at < ENTRY_MISS_SPACING_MS) return { next, changed: false, events };
+        // 单次 null 不是否定事实(传播延迟、查询盲区):计数 + ORDER_UNKNOWN,不重发、不自动撤。
+        // 连续 N 次且距提交超过 T 才**请求** runtime 复核;终态只能由复核(新鲜查单 + 新鲜账户)写。
         const misses = (t.entry_lookup_misses ?? 0) + 1;
         next.entry_lookup_misses = misses;
+        next.entry_lookup_miss_at = f.now;
+        const verify = entryUnknownVerifyDue(t, misses, f.now);
+        bump();
         if (t.attention !== 'ORDER_UNKNOWN') {
           next.attention = 'ORDER_UNKNOWN';
-          bump();
           events.push({ kind: 'attention', message: '入场单在交易所查不到,持续核对(不重发,不自动撤)' });
-          return { next, changed: true, events };
         }
-        bump();
-        return { next, changed: true, events };
+        events.push({ kind: 'lookup_miss', message: `入场单按 clientOrderId 第 ${misses} 次查不到${verify ? ',已满足终态复核条件' : `(满 ${ENTRY_UNKNOWN_MAX_MISSES} 次且提交超过 ${ENTRY_UNKNOWN_MIN_AGE_MS / 60_000} 分钟才复核)`}` });
+        return { next, changed: true, events, ...(verify ? { verify_absent: true } : {}) };
       }
-      if (t.attention === 'ORDER_UNKNOWN' && order) {
-        next.attention = null;
+      if (order && (t.attention === 'ORDER_UNKNOWN' || (t.entry_lookup_misses ?? 0) > 0)) {
+        if (t.attention === 'ORDER_UNKNOWN') next.attention = null;
         next.entry_lookup_misses = 0;
+        next.entry_lookup_miss_at = null;
         bump();
-        events.push({ kind: 'attention_cleared', message: '入场单已查到' });
+        if (t.attention === 'ORDER_UNKNOWN') events.push({ kind: 'attention_cleared', message: '入场单已查到' });
         return { next, changed: true, events };
       }
     }

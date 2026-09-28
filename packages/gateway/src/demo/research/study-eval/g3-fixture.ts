@@ -1,4 +1,4 @@
-import type { ResearchBar, FrozenModelProfile } from '@trading-swarm/contracts';
+import type { ResearchBar, FrozenModelProfile } from '@trade-gate/contracts';
 import { templateJudge } from '../judge/templates.js';
 import { buildJudgeState } from '../judge/pure.js';
 import { hash } from '../primitives.js';

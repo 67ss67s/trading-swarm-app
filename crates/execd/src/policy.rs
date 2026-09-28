@@ -1,4 +1,4 @@
-//! policy 的默认值、set 校验与紧急停收紧(设计 §10;金丝雀期默认取评审建议的保守值 §17.2)。
+//! policy 的默认值、set 校验与紧急停收紧(设计 §10;金丝雀期默认取 Codex 保守值 §17.2)。
 
 use contracts_rs::records::{CanaryPolicy, Caps, ExecPolicy, MainAccountPolicy};
 use contracts_rs::rpc::{EmergencyMode, PolicyConfirm, RpcError};

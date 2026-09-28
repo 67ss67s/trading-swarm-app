@@ -1,6 +1,7 @@
-# trading-swarm WebUI 设计稿(A3 最小 UI)
+# trade-gate WebUI 设计稿(A3 最小 UI)
 
-- 日期:2026-09-02 · 依据:`docs/design/trading-swarm-design-v1-2026-09-02.md` §1 / §3.5 / §4 / §5.1 / §6.2 / §10 / §14 / §15.1(A3 行)+ `docs/contracts/README.md` §4 + `packages/contracts/fixtures/**`
+- **Artifact(Claude Design 画布,15 个画板)**:https://claude.ai/code/artifact/64ca1855-93aa-4f80-a6e4-d658705bdf4b
+- 日期:2026-09-02 · 依据:`docs/design/trade-gate-design-v1-2026-09-02.md` §1 / §3.5 / §4 / §5.1 / §6.2 / §10 / §14 / §15.1(A3 行)+ `docs/contracts/README.md` §4 + `packages/contracts/fixtures/**`
 - 范围:只画 A3 最小 UI(向导、Exchange 健康、Portfolio、Trade、Funding、Intents 审批卡、Activity trace、Policy 紧急停、最小 K 线、Dashboard)。侧栏保留 §14 的三组全量导航,B 阶段页面灰显。**跟单不出现**。
 - 画板源文件:`canvas/*.dc.html` + `canvas/canvas.json`,全部由 `canvas/build.mjs` 生成(改稿改生成器,不手改产物)。示例数据逐字取自 contracts fixtures(`awaiting_approval`、`plan_hash 4748…433c`、`usdm_perp`、金额十进制字符串、`tg-0f8fad5bd9cb-e0-1` 等);fixture 没覆盖到的状态(authorized / dispatching / expired / recorded 等)按同一字段形状补了示例行,不引入 schema 之外的字段。
 
@@ -28,7 +29,7 @@
 
 ## 待 Jacky 拍板的视觉决策(≤5)
 
-1. **气质与令牌**:借 8794 shadcn 变体「Graphite & Ice」——三层暗色地面(侧栏 `#05080b` → 背景 `#090d11` → 面板 `#10151a`,由其 oklch 令牌换算)、冰青 `#6fcadf` 只给界面 chrome、绿红只表达多空、数字全部等宽。是继续沿用这套(将来直接复用 8794 的 `index.css` 令牌),还是给 trading-swarm 换一个强调色(例如冷紫)以区分两个产品?
+1. **气质与令牌**:借 8794 shadcn 变体「Graphite & Ice」——三层暗色地面(侧栏 `#05080b` → 背景 `#090d11` → 面板 `#10151a`,由其 oklch 令牌换算)、冰青 `#6fcadf` 只给界面 chrome、绿红只表达多空、数字全部等宽。是继续沿用这套(将来直接复用 8794 的 `index.css` 令牌),还是给 trade-gate 换一个强调色(例如冷紫)以区分两个产品?
 2. **两账户的视觉约定**:main · REST = 石板灰 chip,sub · MCP = 冰青 chip(agent 的账户用产品强调色),全站一致。可选方案是用图标(用户 / 机器人)而不是颜色。
 3. **暗色单主题**:设计稿只画了暗色;8794 有亮色变体。v1 是否需要亮色?若需要,令牌层已能直接翻译,但 K 线 role 调色要用 palette.ts 的 light 组。
 4. **Trade 页的提交后状态流放在右栏**(与下单表单同屏),而不是弹窗 / 跳转 Intents 页。execution_unknown 的红色说明与「禁新增敞口 → 只允许 reduce_only」联动到表单顶部横幅。是否接受这种同屏布局?
@@ -44,6 +45,7 @@
 
 ```bash
 cd docs/design/webui/canvas && node build.mjs      # 产出 *.dc.html + canvas.json
+# 然后用 Claude Code 的 design 技能重新拼装并更新同一 Artifact(URL 见顶部)
 ```
 
 生成器不依赖任何 npm 包;画板是静态 Design Components(无 tweak、无脚本),可在画布里直接选中改字改样式。

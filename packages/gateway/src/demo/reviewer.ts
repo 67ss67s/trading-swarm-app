@@ -5,7 +5,7 @@
  *      → memory.propose(status=proposed,等人批)+ handoff reviewer → gate_captain(kind=review)。
  *   ③ 提案反方审查(countercase)这版**不做**(见设计文档 §5 延后项)。
  *
- * 教训的硬闸(评审稿 §5.3):每条必须有 observation / mechanism / falsifier(可证伪条件)/ source_refs(非空且属于本批);
+ * 教训的硬闸(Codex 稿 §5.3):每条必须有 observation / mechanism / falsifier(可证伪条件)/ source_refs(非空且属于本批);
  * 正文不许出现具体价位(≥ 3 位的数字或带小数的价格);symbol 只能是本批出现过的或 null;regime 只能是枚举。
  * 教训被批准也只是「记忆」——它不能改任何策略参数(参数 diff 归 Strategy Lab)。
  */
@@ -157,7 +157,7 @@ export function batchKey(cards: readonly TradeCard[]): string {
 
 export function reflectPromptV2(cards: readonly TradeCard[], existingLessons: readonly string[], smallSample: boolean): { system: string; user: string } {
   const system = [
-    '你是 trading-swarm 的复盘模块(Reviewer)。你读一批已结束交易的**代码算好的复盘卡**,提炼最多 2 条可证伪的"教训"。',
+    '你是 trade-gate 的复盘模块(Reviewer)。你读一批已结束交易的**代码算好的复盘卡**,提炼最多 2 条可证伪的"教训"。',
     '每条必须有四段:observation(从这批卡里直接看得出的规律,一句话)、mechanism(为什么会这样,一句话)、falsifier(什么样的后续证据会推翻它,一句话)、source_refs(引用下面卡片的线程 id,至少 1 个,只能引用本批)。',
     '硬规则:不写任何具体价位或盈亏金额(只许引用卡上给的 R 倍数、持有时长、次数);不写通用常识;不重复已有教训;不给任何参数数字建议(参数改动归 Strategy Lab);symbol 只能是本批出现过的或 null;regime 只能是 bull/bear/range/volatile 或 null。',
     smallSample ? '**本批样本少于 5 笔:只许输出「待检假设」级别的教训(confidence ≤ 0.4),或者输出空数组。**' : 'confidence 0.3–0.8;没有值得记的规律就输出空数组。',

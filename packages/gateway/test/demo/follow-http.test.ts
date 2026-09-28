@@ -97,12 +97,13 @@ async function setup(followFetch?: FollowFetch): Promise<void> {
   rt = new DemoRuntime({ store, backend: new PaperBackend(100_000), brains: { stub: longBrain }, marketPollMs: 600_000, accountPollMs: 600_000 });
   fixtureFeed = followFetch ?? null;
   rt.okxAspReadQueue = async () => [];
-  rt.okxAspRunCli = async () => ({ code: 0, stdout: JSON.stringify({ ok: true, data: { list: [{ jobId: 'job-trader-a', providerAgentName: '交易员A' }] } }), stderr: '' });
+  rt.okxAspRunCli = async () => ({ code: 0, stdout: JSON.stringify({ ok: true, data: { list: [{ jobId: 'job-trader_b', providerAgentName: 'TraderB' }] } }), stderr: '' });
   await rt.start();
   // 不能 paused:`preflightOpen` 里「已暂停」会挡掉一切开仓(那是对的行为)。start() 不带 runOnStart,
   // 所以这里没有任何自动模型调用;只有 gated 那条用例会真跑一次 stub 判断。
   // 票池留空:gated 那次判断就不需要 `strategy_id` 命中某条策略(schema 会校验它在票池里)。
-  rt.setWorkflow({ brain: 'stub', cheap_brain: 'stub', watchlist: ['BTCUSDT'], timeframe: '15m', active_strategies: [] });
+  // 这组测的是跟单链路,不是止损底线:信号止损 0.65%,底线放到 0.5%(09-27 起默认 1%)
+  rt.setWorkflow({ brain: 'stub', cheap_brain: 'stub', watchlist: ['BTCUSDT'], timeframe: '15m', active_strategies: [], min_stop_pct: 0.5 });
   const server = createServer(rt, store);
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
   baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -130,7 +131,7 @@ async function api(method: string, path: string, body?: unknown): Promise<{ stat
     const page = JSON.parse(await response.text());
     for (const item of page.items ?? []) {
       const normalized = normalizeBridgeSignal(item.envelope?.payload, { now: Date.now(), record_id: item.record_id, backfill: page.test_backfill === true });
-      if (normalized.signal) store.traderSignals.capture({ ...normalized.signal, subscription_job_id: 'job-trader-a', session: (rt as unknown as { followSession: string }).followSession });
+      if (normalized.signal) store.traderSignals.capture({ ...normalized.signal, subscription_job_id: 'job-trader_b', session: (rt as unknown as { followSession: string }).followSession });
     }
   }
   const res = await fetch(`${baseUrl}${path}`, { method, headers: body !== undefined ? { 'content-type': 'application/json' } : {}, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -168,7 +169,7 @@ function bridgeItem(recordId: number, over: Record<string, unknown> = {}, meta: 
         stop_loss: { price: Number(STOP) },
         take_profit: [{ price: Number(TP) }],
         created_at: new Date(now).toISOString(),
-        metadata: { trader: '交易员A', action_type: 'open', rationale: '突破回踩', ...meta },
+        metadata: { trader: 'TraderB', action_type: 'open', rationale: '突破回踩', ...meta },
         ...over,
       },
     },
@@ -189,16 +190,16 @@ describe('GET/POST /api/follow', () => {
 
   it('改设置:名册整块替换(删得掉人),越界 fail-closed', async () => {
     await setup();
-    const r1 = await api('POST', '/api/follow', { enabled: true, freshness_s: 300, subscriptions: { 'job-trader-a': { mode: 'book', weight: 0.8, enabled: true }, 'job-trader_b': { mode: 'gated', weight: 0.5, enabled: true } } });
+    const r1 = await api('POST', '/api/follow', { enabled: true, freshness_s: 300, subscriptions: { 'job-trader_b': { mode: 'book', weight: 0.8, enabled: true }, 'job-trader_a': { mode: 'gated', weight: 0.5, enabled: true } } });
     expect(r1.status).toBe(200);
-    expect(Object.keys(r1.json.subscriptions).sort()).toEqual(['job-trader-a', 'job-trader_b']);
+    expect(Object.keys(r1.json.subscriptions).sort()).toEqual(['job-trader_a', 'job-trader_b']);
     expect(r1.json.freshness_s).toBe(300);
     // 只发一个人 → 另一个被删掉(整块替换,不做半合并)
-    const r2 = await api('POST', '/api/follow', { subscriptions: { 'job-trader-a': { mode: 'book', weight: 0.8, enabled: true } } });
-    expect(Object.keys(r2.json.subscriptions)).toEqual(['job-trader-a']);
+    const r2 = await api('POST', '/api/follow', { subscriptions: { 'job-trader_b': { mode: 'book', weight: 0.8, enabled: true } } });
+    expect(Object.keys(r2.json.subscriptions)).toEqual(['job-trader_b']);
     // 手改坏的 mode → evidence;越界权重钳住
-    const r3 = await api('POST', '/api/follow', { subscriptions: { 'job-trader-a': { mode: 'nope', weight: 5, enabled: true } } });
-    expect(r3.json.subscriptions['job-trader-a']).toEqual({ mode: 'evidence', weight: 0, enabled: true, approval: 'manual' });
+    const r3 = await api('POST', '/api/follow', { subscriptions: { 'job-trader_b': { mode: 'nope', weight: 5, enabled: true } } });
+    expect(r3.json.subscriptions['job-trader_b']).toEqual({ mode: 'evidence', weight: 0, enabled: true, approval: 'manual' });
   });
 
 
@@ -210,7 +211,7 @@ describe('GET/POST /api/follow', () => {
 
 describe('POST /api/follow/pull 端到端', () => {
   async function enable(mode: 'book' | 'gated' | 'evidence'): Promise<void> {
-    await api('POST', '/api/follow', { enabled: true, subscriptions: { 'job-trader-a': { mode, weight: 1, enabled: true } } });
+    await api('POST', '/api/follow', { enabled: true, subscriptions: { 'job-trader_b': { mode, weight: 1, enabled: true } } });
   }
 
   it('关着的时候一个请求都不发', async () => {
@@ -258,7 +259,7 @@ describe('POST /api/follow/pull 端到端', () => {
     expect(applied.status).toBe(200);
     const threads = rt.openThreads();
     expect(threads).toHaveLength(1);
-    expect(threads[0]).toMatchObject({ symbol: 'BTCUSDT', side: 'long', source: 'manual', origin: 'trader:job-trader-a', trader_signal_id: 'sig_2', stop_price: '76500' });
+    expect(threads[0]).toMatchObject({ symbol: 'BTCUSDT', side: 'long', source: 'manual', origin: 'trader:job-trader_b', trader_signal_id: 'sig_2', stop_price: '76500' });
     expect(threads[0]!.entry.type).toBe('limit');
     expect(applied.json.signal).toMatchObject({ status: 'applied', thread_id: threads[0]!.id });
   });
@@ -309,7 +310,7 @@ describe('POST /api/follow/pull 端到端', () => {
     expect(sig.decision.plan.stop).toBe('76500');
     expect(sig.decision.episode_id).toBeTruthy();
     const ep = store.episode(sig.decision.episode_id)!;
-    expect(ep.origin).toBe('trader:job-trader-a');
+    expect(ep.origin).toBe('trader:job-trader_b');
     expect(ep.trigger.kind).toBe('trader_signal');
     expect(ep.thread_id).toBeNull();
     expect(ep.intent).toBeNull();
@@ -388,7 +389,7 @@ describe('POST /api/follow/signals/:id/(apply|skip)', () => {
     (((stale['envelope'] as Record<string, unknown>)['payload'] as Record<string, unknown>)['metadata'] as Record<string, unknown>)['source_timestamp'] = Math.floor((Date.now() - 600_000) / 1000);
     const f = fakeFetch({ bridgePages: [{ scanned_to_id: 1, items: [] }, { scanned_to_id: 20, items: [stale] }] });
     await setup(f.fetch);
-    await api('POST', '/api/follow', { enabled: true, subscriptions: { 'job-trader-a': { mode: 'gated', weight: 1, enabled: true } } });
+    await api('POST', '/api/follow', { enabled: true, subscriptions: { 'job-trader_b': { mode: 'gated', weight: 1, enabled: true } } });
     await drainBackfill();
     await api('POST', '/api/follow/pull');
     const before = (await api('GET', '/api/follow/signals')).json.signals[0];
@@ -401,7 +402,7 @@ describe('POST /api/follow/signals/:id/(apply|skip)', () => {
   it('apply:review_only 的行可以跟,并且发的是行上那份几何(不重算)', async () => {
     const f = fakeFetch({ bridgePages: [{ scanned_to_id: 1, items: [] }, { scanned_to_id: 22, items: [bridgeItem(22)] }] });
     await setup(f.fetch);
-    await api('POST', '/api/follow', { enabled: true, subscriptions: { 'job-trader-a': { mode: 'gated', weight: 1, enabled: true } } });
+    await api('POST', '/api/follow', { enabled: true, subscriptions: { 'job-trader_b': { mode: 'gated', weight: 1, enabled: true } } });
     await drainBackfill();
     await api('POST', '/api/follow/pull');
     const row = (await api('GET', '/api/follow/signals')).json.signals[0];
@@ -422,7 +423,7 @@ describe('POST /api/follow/signals/:id/(apply|skip)', () => {
   it('skip:只改状态不动仓;未知 id → 404', async () => {
     const f = fakeFetch({ bridgePages: [{ scanned_to_id: 1, items: [] }, { scanned_to_id: 21, items: [bridgeItem(21, { stop_loss: null })] }] });
     await setup(f.fetch);
-    await api('POST', '/api/follow', { enabled: true, subscriptions: { 'job-trader-a': { mode: 'gated', weight: 1, enabled: true } } });
+    await api('POST', '/api/follow', { enabled: true, subscriptions: { 'job-trader_b': { mode: 'gated', weight: 1, enabled: true } } });
     await drainBackfill();
     await api('POST', '/api/follow/pull');
     // 无止损那条落 evidence → 连 skip 都不许(只有 review_only 能 skip)
@@ -438,9 +439,9 @@ describe('POST /api/follow/signals/:id/(apply|skip)', () => {
 describe('GET /api/follow/stats', () => {
   it('按 jobId 返回纯本地统计且权重仅来自订阅设置', async () => {
     await setup();
-    await api('POST', '/api/follow', { enabled: true, subscriptions: { 'job-trader-a': { mode: 'evidence', weight: 0.8, enabled: true } } });
+    await api('POST', '/api/follow', { enabled: true, subscriptions: { 'job-trader_b': { mode: 'evidence', weight: 0.8, enabled: true } } });
     const result = await api('GET', '/api/follow/stats');
     expect(result.status).toBe(200);
-    expect(result.json.subscriptions).toContainEqual({ job_id: 'job-trader-a', received: 0, order: 0, analysis: 0, followed: 0, realized_r: null, agent_agree_rate: null, last_signal_at: null });
+    expect(result.json.subscriptions).toContainEqual({ job_id: 'job-trader_b', received: 0, order: 0, analysis: 0, followed: 0, realized_r: null, agent_agree_rate: null, last_signal_at: null });
   });
 });

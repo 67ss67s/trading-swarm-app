@@ -26,7 +26,7 @@
  *   label:≥80 excellent,≥65 good,≥50 fair,≥35 needs_work,其余 poor。
  *   confidence 只看平仓笔数:<10 low、<30 medium、≥30 high;confidence_reason 形如「Low confidence, 1 trade」。
  */
-import type { BacktestMetrics, BacktestPeriodReturn, BacktestScore, BacktestTradeStats, BacktestSideStats, BacktestCapitalUsage, BacktestCapacity, BacktestDailyPnl, BacktestExitReasonPnl } from '@trading-swarm/contracts';
+import type { BacktestMetrics, BacktestPeriodReturn, BacktestScore, BacktestTradeStats, BacktestSideStats, BacktestCapitalUsage, BacktestCapacity, BacktestDailyPnl, BacktestExitReasonPnl } from '@trade-gate/contracts';
 export const ANALYZER_VERSION = 'backtest-analyzer/v1';
 const DAY = 86400000, YEAR = 365 * DAY;
 export interface EquitySample { at: number; equity: number; exposure: number; benchmark: number | null; /** 同时持仓数(篮子按腿数);缺省按 exposure>0 记 1 */ positions?: number }

@@ -5,7 +5,7 @@
  * 横轴按时间线性映射(报告净值点已近似等距抽稀,和上面按根数排布的图基本对齐)。
  */
 import { useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
-import type { BacktestAsset } from '@trading-swarm/contracts';
+import type { BacktestAsset } from '@trade-gate/contracts';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { BENCHMARK_COLOR, STRATEGY_COLOR, hexAlpha, ymd } from './format';

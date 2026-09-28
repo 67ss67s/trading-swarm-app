@@ -17,7 +17,7 @@ export function publicText(url: string, timeoutMs = 15000, maxBytes = 200 * 1024
   if (!['http:', 'https:'].includes(u.protocol) || u.username || u.password) return Promise.reject(new Error('invalid public URL'));
   return new Promise((resolve, reject) => {
     const noProxy = [process.env['NO_PROXY'], process.env['no_proxy'], 'localhost,127.0.0.1,::1'].filter(Boolean).join(',');
-    const child = spawn('curl', ['--silent', '--show-error', '--fail', '--max-time', String(timeoutMs / 1000), '--max-filesize', String(maxBytes), '--proto', '=http,https', '--user-agent', 'trading-swarm-research/1.0', url], { env: { ...process.env, NO_PROXY: noProxy, no_proxy: noProxy, https_proxy: process.env['HTTPS_PROXY'] ?? process.env['https_proxy'], http_proxy: process.env['HTTP_PROXY'] ?? process.env['http_proxy'] }, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn('curl', ['--silent', '--show-error', '--fail', '--max-time', String(timeoutMs / 1000), '--max-filesize', String(maxBytes), '--proto', '=http,https', '--user-agent', 'trade-gate-research/1.0', url], { env: { ...process.env, NO_PROXY: noProxy, no_proxy: noProxy, https_proxy: process.env['HTTPS_PROXY'] ?? process.env['https_proxy'], http_proxy: process.env['HTTP_PROXY'] ?? process.env['http_proxy'] }, stdio: ['ignore', 'pipe', 'pipe'] });
     const chunks: Buffer[] = []; let bytes = 0; let err = '';
     const timer = setTimeout(() => { child.kill(); reject(new Error('fetch timeout')); }, timeoutMs + 1000);
     child.stdout.on('data', (b: Buffer) => { bytes += b.length; if (bytes > maxBytes) { child.kill(); reject(new Error('body exceeds 200KB limit')); } else chunks.push(b); });

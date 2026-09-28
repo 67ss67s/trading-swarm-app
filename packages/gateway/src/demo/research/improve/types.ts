@@ -2,7 +2,7 @@
  * 策略自动改进与复验环(Improver)的公共类型。设计见 docs/research/improver-design-2026-09-23.md。
  * 改进环主体(runner/evaluate/worker/routes)与各候选生成器(diagnosis/neighborhood/swap/oracle/model)都只依赖这里,互不 import。
  */
-import type { ResearchBar, StrategyIR } from "@trading-swarm/contracts";
+import type { ResearchBar, StrategyIR } from "@trade-gate/contracts";
 
 /** 一次改进任务冻结的数据:资产池 × 周期 × 时间段,切成训练(内含滚动折)/验证/留出三段。 */
 export interface FrozenAsset { symbol: string; dataset_id: string; bars: ResearchBar[];

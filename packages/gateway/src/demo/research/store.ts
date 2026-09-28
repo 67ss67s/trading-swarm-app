@@ -1,19 +1,21 @@
+import { insertResearchDataset } from '../cache-capacity.js';
 import { STRATEGY_SPEC_VERSION } from './strategy-spec.js';
 import { DEFAULT_ORDER_GATE } from './order-gate.js';
 import { requestHorizon } from './strategy.js';
 import { randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
-import type { ResearchDataset, ResearchRequest, ResearchStudy, ResearchEvent, ResearchPolicy, ResearchUniverse } from '@trading-swarm/contracts';
+import type { ResearchDataset, ResearchRequest, ResearchStudy, ResearchEvent, ResearchPolicy, ResearchUniverse } from '@trade-gate/contracts';
 import type { StrategySpec } from '../strategies.js';
 import type { BrainKind } from '../types.js';
 import { assertContract, dataset, hash, clone, request, ENGINE_VERSION } from './primitives.js';
 import { ADAPTER_VERSION, type ModelTrace } from './agent.js';
 import type { RunResult } from './engine.js';
+import type { ExecutionThresholds } from '../execution-policy.js';
 export interface Manifest {engine_version:string;adapter_version:string;request:ResearchRequest;dataset_hash:string;policy_hash:string;source_strategy:StrategySpec|null;brain:{kind:BrainKind;model:string|null;name:string;configuration_hash:string};playbook:string;trial_number:number;created_at:number;hash:string;}
 export interface RunRow {id:string;status:string;created_at:number;updated_at:number;manifest:Manifest;result:RunResult|null;}
 export class ResearchStore {
   constructor(readonly db:DatabaseSync){}
-  putDataset(raw:unknown,allowGaps=false):{id:string;bars:number} {const d=dataset(raw,allowGaps),id=hash(d);this.db.prepare('INSERT OR IGNORE INTO research_datasets VALUES (?,?,?)').run(id,Date.now(),JSON.stringify(d));return {id,bars:d.bars.length};}
+  putDataset(raw:unknown,allowGaps=false):{id:string;bars:number} {const d=dataset(raw,allowGaps),id=hash(d);insertResearchDataset(this.db,id,JSON.stringify(d));return {id,bars:d.bars.length};}
   putMarketDataset(raw:ResearchDataset,allowGaps=false) {
     const d=dataset(raw,allowGaps),{retrieved_at:_,...content}=d,key=hash(content);
     const prior=this.db.prepare('SELECT dataset_id FROM research_market_snapshots WHERE content_hash=?').get(key) as {dataset_id:string}|undefined;
@@ -70,7 +72,9 @@ export class ResearchStore {
   list():RunRow[]{return (this.db.prepare('SELECT id FROM research_runs ORDER BY created_at DESC LIMIT 100').all() as {id:string}[]).map(x=>this.get(x.id)!);}
   get(id:string):RunRow|null {const x=this.db.prepare('SELECT * FROM research_runs WHERE id=?').get(id) as {id:string;status:string;created_at:number;updated_at:number;manifest_json:string;result_json:string|null}|undefined;return x?{id:x.id,status:x.status,created_at:x.created_at,updated_at:x.updated_at,manifest:JSON.parse(x.manifest_json) as Manifest,result:x.result_json?JSON.parse(x.result_json) as RunResult:null}:null;}
   byKey(key:string,raw:ResearchRequest):RunRow|null {const x=this.db.prepare('SELECT id,request_hash FROM research_runs WHERE idempotency_key=?').get(key) as {id:string;request_hash:string}|undefined;if(!x)return null;if(x.request_hash!==hash(raw))throw new Error('idempotency_conflict');return this.get(x.id);}
-  create(raw:unknown,source:StrategySpec|null,brain:Manifest['brain'],playbook:string):RunRow {
+  /** executionThresholds:创建时的执行层阈值快照(ResearchService 传入)。请求的 order_gate 里没有 execution_thresholds 键才补上并冻结进
+   * manifest(显式 null = 不套执行层);不改 request_hash / 幂等键(按原始请求算)。不传 = 不补(直接调 store 的旧路径与测试)。 */
+  create(raw:unknown,source:StrategySpec|null,brain:Manifest['brain'],playbook:string,executionThresholds?:ExecutionThresholds):RunRow {
     if(!raw||typeof raw!=='object')throw new Error('expected_request');const r=this.validateRequest({spec_version:STRATEGY_SPEC_VERSION,...(raw as ResearchRequest)});
     const cached=this.byKey(r.idempotency_key,raw as ResearchRequest);if(cached)return cached;
     const study=this.study(r.study_id);if(!study||study.dataset_id!==(r.universe_id??r.dataset_id))throw new Error('study_missing_or_wrong_dataset');
@@ -83,6 +87,7 @@ export class ResearchStore {
     if(all.length>0&&!r.acknowledge_adaptive_search)throw new Error('adaptive_search_ack_required');
     if(r.parent_run_id){const parent=this.get(r.parent_run_id);if(!parent||parent.manifest.request.study_id!==r.study_id||parent.status!=='completed'||parent.manifest.request.purpose==='holdout')throw new Error('invalid_parent');}
     r.execution={...r.execution,sizing_mode:r.execution.sizing_mode??'unit_notional'};r.order_gate??={...DEFAULT_ORDER_GATE};
+    if(executionThresholds&&!('execution_thresholds' in r.order_gate))r.order_gate={...r.order_gate,execution_thresholds:{...executionThresholds}};
     const created=Date.now();const base={engine_version:r.universe_id?'research-spot-portfolio-v3':r.strategy_ir?'research-spot-ir-v3':'research-spot-next-open-v3',adapter_version:ADAPTER_VERSION,request:r,dataset_hash:(r.universe_id??r.dataset_id)!,policy_hash:hash(r.strategy_ir??r.policy),source_strategy:source?clone(source):null,brain:clone(brain),playbook,trial_number:all.length+1,created_at:created};
     const manifest:Manifest={...base,hash:hash(base)},id=randomUUID();
     this.db.prepare('INSERT INTO research_runs(id,idempotency_key,request_hash,study_id,status,created_at,updated_at,manifest_json,result_json) VALUES (?,?,?,?,?,?,?,?,NULL)').run(id,r.idempotency_key,hash(raw),r.study_id,'queued',created,created,JSON.stringify(manifest));

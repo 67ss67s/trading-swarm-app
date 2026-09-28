@@ -1,7 +1,7 @@
 # Radar 筛选器:在团队里的位置、节奏、成本与边界(2026-09-05)
 
 > 回答 Jacky 的问题:「每 12 小时做一次资产 screen 找最好做的策略(12h 的是短线),再加一个更长周期的 screen 做中长线,这放在哪个环节?要不要单独一个 agent?」
-> 答:单独一个角色,就是团队指南(`trading-swarm-bot-team-guide-2026-09-04.ipynb` §3/§4/§11.1)里的 **Radar / 信息与发现**。它是 Phase 2 落地的第一个真正的团队成员,也是 bot 注册表 / bot_runs / bot_handoffs 三张表的第一个真实写者。
+> 答:单独一个角色,就是团队指南(`trade-gate-bot-team-guide-2026-09-04.ipynb` §3/§4/§11.1)里的 **Radar / 信息与发现**。它是 Phase 2 落地的第一个真正的团队成员,也是 bot 注册表 / bot_runs / bot_handoffs 三张表的第一个真实写者。
 
 ## 1. 放在哪个环节
 

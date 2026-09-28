@@ -14,7 +14,7 @@ export const TRIM_FRACTION = 0.1;
 /** 复盘页的「观察」门槛:样本 < 30 只看方向,不下结论(设计文档 二-4)。 */
 export const OBSERVE_MIN = 30;
 /** 网关把没指明策略的行归到这个值(不能当 strategy_id 查参数)。 */
-export const UNNAMED_STRATEGY = '(未指明策略)';
+export const UNNAMED_STRATEGY = '(未指明策略)'; // i18n-ignore(网关归类值,只做比较)
 
 export interface CenterStats {
   n: number;

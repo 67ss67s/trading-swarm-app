@@ -10,8 +10,8 @@
  * 没有引擎 / 脚本不在目录 / 没准入 / 输出名不存在 / 声明的 warmup 小于实测预热 —— 一律抛错,
  * 绝不返回 pass:false 假装「这根没信号」。
  */
-import type { ResearchBar } from '@trading-swarm/contracts';
-import { schemas } from '@trading-swarm/contracts';
+import type { ResearchBar } from '@trade-gate/contracts';
+import { schemas } from '@trade-gate/contracts';
 import { registry, type Primitive, type PrimitiveContext, type PrimitiveValue } from './registry.js';
 import type { PineScript } from '../pine/catalog.js';
 import { pineCatalog } from '../pine/catalog.js';
@@ -225,7 +225,7 @@ export function defaultPineRuntime(datasets?: () => { id: string; timeframe_ms: 
  * 回测前用异步请求把整段 Pine 序列算好放进客户端缓存(键与 runPineSync 相同),逐根取值时只命中缓存。
  * 否则第一次取值走同步 HTTP,在 4h 六年上一次就是十几二十秒,期间网关事件循环整个停住(2026-09-23 实测 29 秒)。
  */
-export async function prewarmPineSeries(ir: import('@trading-swarm/contracts').StrategyIR, bars: ResearchBar[], timeframe_ms: number): Promise<void> {
+export async function prewarmPineSeries(ir: import('@trade-gate/contracts').StrategyIR, bars: ResearchBar[], timeframe_ms: number): Promise<void> {
   if (!runtime) return;
   const nodes = [...ir.signal, ir.entry, ir.risk.stop, ...ir.exit, ...(ir.regime ? [ir.regime] : []), ...(ir.order?.short_signal ?? [])];
   const seen = new Set<string>();

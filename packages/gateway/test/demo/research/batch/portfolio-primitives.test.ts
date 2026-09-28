@@ -1,7 +1,7 @@
 // 组合级原语(横截面动量、资金费套利)的因果性与口径测试;合成数据,只做工程验证
 import { describe, expect, it } from 'vitest';
-import type { ResearchBar } from '@trading-swarm/contracts';
-import { validate } from '@trading-swarm/contracts';
+import type { ResearchBar } from '@trade-gate/contracts';
+import { validate } from '@trade-gate/contracts';
 import { runXsmom, xsmomTargets, isRebalanceClose, DAY_MS } from '../../../../src/demo/research/primitives/portfolio-xsmom.js';
 import { runCarry, carrySignals, normalizedRates } from '../../../../src/demo/research/primitives/portfolio-carry.js';
 import { synthBars } from '../backtest-report-fixtures.js';

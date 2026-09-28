@@ -21,7 +21,7 @@ await import(new URL(process.argv[2],root).href);
 export interface ExecutionTrace {path:string;exit_code:number|null;stdout_tail:string;stderr_tail:string;duration_ms:number}
 export class ResearchSandbox {
  readonly dir:string;executions=0;
- constructor(readonly chat_id:string,root=join(homedir(),'.trading-swarm-okx','research-sandbox')){
+ constructor(readonly chat_id:string,root=join(homedir(),'.trade-gate-okx','research-sandbox')){
   if(!/^[a-zA-Z0-9_-]+$/.test(chat_id))throw Error('invalid_chat_id');
   this.dir=resolve(root,chat_id);mkdirSync(this.dir,{recursive:true,mode:0o700});this.dir=realpathSync(this.dir);
  }

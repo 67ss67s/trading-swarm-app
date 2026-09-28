@@ -60,11 +60,63 @@ describe('subscription controls', () => {
     expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['market'] });
   });
 
-  it('labels a canceled trial as conversion canceled without offering renewal', () => {
-    mocks.data = adaptSubscriptions({ subscriptions: [{ job_id: 'job', remote: { statusName: 'closed', trialType: 1, autoRenew: false } }] });
+  it('shows a cancelled-but-running trial with its end date and no renewal / reject / cancel actions', () => {
+    const future = Math.floor((Date.now() + 2 * 86_400_000) / 1000);
+    mocks.data = adaptSubscriptions({ subscriptions: [{ job_id: 'job', remote: { statusName: 'ACTIVE', trialType: 1, autoRenew: 0, trialEndTime: future } }] });
     const html = render();
-    expect(html).toContain('已取消转付费');
+    expect(html).toContain('已取消续费 · 试用至');
+    expect(html).toContain('试用免费,到期不扣费');
     expect(html).not.toContain('开自动续费');
     expect(html).not.toContain('拒收本期');
+    expect(html).not.toContain('取消转付费');
+  });
+
+  it('orders groups active → trial → cancelled trial and folds ended subscriptions', () => {
+    const future = Math.floor((Date.now() + 2 * 86_400_000) / 1000);
+    mocks.data = adaptSubscriptions({ subscriptions: [
+      { job_id: 'ended', remote: { statusName: 'closed', trialType: 1, autoRenew: false, title: 'tg · 旧服务' } },
+      { job_id: 'cancelled', remote: { statusName: 'ACTIVE', trialType: 1, autoRenew: 0, trialEndTime: future, title: 'tg · 取消的试用' } },
+      { job_id: 'trial', remote: { statusName: 'ACTIVE', trialType: 1, autoRenew: 1, trialEndTime: future, title: 'tg · 试用服务' } },
+      { job_id: 'paid', remote: { statusName: 'ACTIVE', trialType: 0, autoRenew: 1, title: 'tg · 付费服务' } },
+    ] });
+    const html = render();
+    const at = (s: string) => html.indexOf(s);
+    expect(at('付费服务')).toBeGreaterThan(-1);
+    expect(at('付费服务')).toBeLessThan(at('试用服务'));
+    expect(at('试用服务')).toBeLessThan(at('取消的试用'));
+    expect(html).toContain('试用中 · 还剩');
+    expect(html).toContain('已结束');
+    expect(html).not.toContain('旧服务');
+    expect(html).not.toContain('tg · ');
+  });
+
+  it('shows 到期不续费 and no convert-cancel button when the trial auto-renew is already off (gateway display)', () => {
+    const future = Math.floor((Date.now() + 2 * 86_400_000) / 1000);
+    mocks.data = adaptSubscriptions({ subscriptions: [{ job_id: 'job', remote: { statusName: 'ACTIVE', trialType: 1, autoRenew: 0, trialEndTime: future, serviceTokenAmount: '5.9' }, display: { group: 'trial', label: '试用中 · 剩 2 天 19 小时 · 到期不续费', until: future } }] });
+    const html = render();
+    expect(html).toContain('试用中 · 剩 2 天 19 小时 · 到期不续费');
+    expect(html).toContain('试用免费,到期不扣费');
+    expect(html).not.toContain('取消转付费');
+  });
+
+  it('shows 到期转付费 and keeps the convert-cancel button while auto-renew is on', () => {
+    const future = Math.floor((Date.now() + 2 * 86_400_000) / 1000);
+    mocks.data = adaptSubscriptions({ subscriptions: [{ job_id: 'job', remote: { statusName: 'ACTIVE', trialType: 1, autoRenew: 1, trialEndTime: future, serviceTokenAmount: '5.9' }, display: { group: 'trial', label: '试用中 · 剩 2 天 19 小时 · 到期转付费', until: future } }] });
+    let html = render();
+    expect(html).toContain('到期转付费');
+    expect(html).toContain('取消转付费');
+    expect(html).toContain('试用免费,之后 5.9 USDT/月');
+    // 老网关的 label 没带续费标注:按 remote.autoRenew 本地拼
+    mocks.data = adaptSubscriptions({ subscriptions: [{ job_id: 'job', remote: { statusName: 'ACTIVE', trialType: 1, autoRenew: 0, trialEndTime: future }, display: { group: 'trial', label: '试用中', until: future } }] });
+    html = render();
+    expect(html).toMatch(/试用中 · 还剩 [^<]+ · 到期不续费/);
+    expect(html).not.toContain('取消转付费');
+  });
+
+  it('explains what to do when there are no subscriptions', () => {
+    mocks.data = adaptSubscriptions({ subscriptions: [] });
+    const html = renderToStaticMarkup(createElement(SubscriptionsTab, { onShowSignals: vi.fn(), onGoMarket: vi.fn() }));
+    expect(html).toContain('你还没有订阅任何服务');
+    expect(html).toContain('去市场看看');
   });
 });

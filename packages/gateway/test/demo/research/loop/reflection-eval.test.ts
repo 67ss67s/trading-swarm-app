@@ -2,7 +2,7 @@
 // 跑诊断 v2,确认 skill 里的检查项都能触发、数值与从报告独立算出的一致。零模型调用。
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import type { BacktestReport } from "@trading-swarm/contracts";
+import type { BacktestReport } from "@trade-gate/contracts";
 import { diagnoseReport, type Diagnosis } from "../../../../src/demo/research/loop/diagnose.js";
 
 interface Case { short: string; question: string | null; variants: number | null; report: BacktestReport }

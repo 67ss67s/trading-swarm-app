@@ -78,3 +78,12 @@ export class MarketIdentity {
     const result = data(await this.cli.call(command, args)); this.store.kvSet('market.asp_identity', ''); this.details.delete(id); return result;
   }
 }
+
+/** 只读现有身份快照,不调用 mine()(mine 可能写 kv 缓存)。 */
+export function cachedAspIdentity(kvGet: (key: string) => string | null): { at: number; asp: Record<string, unknown> | null } | null {
+  const raw = kvGet('market.asp_identity');
+  if (!raw) return null;
+  const cached = object(JSON.parse(raw));
+  const asp = object(object(cached['value'])['asp']);
+  return { at: Number(cached['at']), asp: Object.keys(asp).length ? asp : null };
+}

@@ -1,9 +1,11 @@
 import {candidateGate as evaluateCandidate,fitCandidate,fixedTargetR} from './candidate-gate.js';
 import {htfStructure} from './primitives/structure.js';
 import { evaluateOrderGate } from './order-gate.js';
+import { ExecutionTally } from './execution-gate.js';
+import { atrSeries } from './primitives/indicators.js';
 import { diagnostics } from './diagnostics.js';
 import { resolveRequest,irCandidate,irExit } from './strategy.js';
-import type { ResearchEntry, ResearchBar, ResearchDataset, ResearchRequest, ResearchUniverse, ResearchArmResult, ResearchDecision } from '@trading-swarm/contracts';
+import type { ResearchEntry, ResearchBar, ResearchDataset, ResearchRequest, ResearchUniverse, ResearchArmResult, ResearchDecision } from '@trade-gate/contracts';
 import { SpotLedger } from './ledger.js';
 import { candidateAt, compareArms, metrics, safeDecision, StopRun, type Decider, type DecisionView, type RecordedDecision, type RunResult } from './engine.js';
 import { clone, decimal, hash, min, mul, q } from './primitives.js';
@@ -17,10 +19,15 @@ export async function runPortfolio(input:PortfolioInput,raw:ResearchRequest,deci
   const screens=new Map<number,ReturnType<typeof screenUniverse>>(),recordings:RecordedDecision[]=[],arms:ResearchArmResult[]=[],cache=opts.replay?new Map(opts.replay.map(v=>[v.input_hash,v])):null;
   const shortlistRows=r.shortlist?screenUniverse(u,datasets,{as_of:r.from_ms}).rows.filter(row=>row.rank).sort((a,b)=>a.rank![r.shortlist!.by]-b.rank![r.shortlist!.by]||a.symbol.localeCompare(b.symbol)).slice(0,r.shortlist.top_n):null,shortlist=shortlistRows?new Set(shortlistRows.map(row=>row.symbol)):null;
   let bytes=0,status:RunResult['status']='completed',error:string|null=null;
+  // 执行层(冻结了 execution_thresholds 才有):决策时刻 ATR(14,Wilder)按数据集整段一次算好、按 close_time 取(只依赖 ≤ 当根的 bar)。
+  // 只在有阈值时给 atr:旧 manifest(含结构口径)这里从来没传过 atr,传了会让 stop_too_close 开始生效、重放哈希变。
+  const execTh=r.order_gate?.execution_thresholds??null,atrBy=execTh?new Map(datasets.map(d=>{const s=atrSeries(d.bars,14);return [d.symbol,new Map(d.bars.map((b,i)=>[b.close_time,s[i]]))] as const;})):null;
+  const atrOf=(s:string,at:number):[number|null]|[]=>{if(!atrBy)return [];const x=atrBy.get(s)?.get(at);return [x!==undefined&&Number.isFinite(x)?x:null];};
   for(const arm of r.arms.flatMap(a=>Array.from({length:a==='a_rules'?1:r.repeats},(_,i)=>`${a}:${i}`))){
     const gateStats={evaluated:0,passed:0,adjusted:{stop_widened:0,target_fallback:0},blocked_by:{} as Record<string,number>};const trackGate=(gate:ReturnType<typeof evaluateOrderGate>)=>{gateStats.evaluated++;if(gate.ok)gateStats.passed++;for(const key of gate.blocked_by)gateStats.blocked_by[key]=(gateStats.blocked_by[key]??0)+1;return gate;};const trackFit=(e:ResearchEntry)=>{if(e.fit?.stop_source==='cost_floor')gateStats.adjusted.stop_widened++;if(e.fit?.target_source==='fallback_r')gateStats.adjusted.target_fallback++;return e;};
     const fitEnabled=!!r.order_gate&&r.order_gate.stop_floor!==undefined,fixedR=fixedTargetR(ir,r.policy);const ledgers=new Map(symbols.map(s=>[s,new SpotLedger(r.execution,{symbol:s,diagnostics:opts.diagnostics,order_gate:r.order_gate,fit:fitEnabled,onGate:trackGate})])),account=new SpotLedger(r.execution),decisions:ResearchDecision[]=[],summaries=new Map<string,string>(),ranks=new Map<string,number>(),days=new Map<number,number>();
-    let failures=0;
+    let failures=0;const tally=execTh?new ExecutionTally(execTh):null;
+    const trackExec=(gate:ReturnType<typeof evaluateOrderGate>,s:string,at:number)=>{if(tally&&gate.execution)tally.add(s,at,gate.execution);return gate;};
     const count=()=>[...ledgers.values()].filter(l=>l.position).length;
     const holdings=(at:number,field:'open'|'close')=>Object.fromEntries(symbols.map(s=>{const p=ledgers.get(s)!.position,b=maps.get(s)!.get(at);if(p&&!b)throw new Error(`missing_position_mark:${s}:${at}`);return [s,p?mul(p.qty,q(b![field])):0n];}));
     const mark=(at:number,initial=false)=>{const by=initial?Object.fromEntries(symbols.map(s=>[s,0n])):holdings(at,'close'),held=Object.values(by).reduce((a,b)=>a+b,0n),value=account.cash+held;account.peak=account.peak>value?account.peak:value;account.equity.push({at,cash:decimal(account.cash),holdings:decimal(held),equity:decimal(value),exposure:value>0n?Number(held)/Number(value):0,drawdown:1-Number(value)/Number(account.peak),by_symbol:Object.fromEntries(Object.entries(by).map(([s,v])=>[s,decimal(v)]))});};
@@ -61,7 +68,7 @@ export async function runPortfolio(input:PortfolioInput,raw:ResearchRequest,deci
         const exit=ir&&p&&!ir.compatibility?irExit(ir,{...ictx,position:{entry_at:p.entry_at,entry_price:Number(decimal(p.entry_price)),initial_distance:Number(decimal(p.initial_risk))/Number(decimal(p.qty)),bars_held:p.bars_held,high_water:Number(decimal(p.high_water??p.entry_price))},fee_rate:Number(r.execution.fee_rate)},p,opts.legacy):null;
         if(exit?.stop){p!.stop=exit.stop;p!.stop_reason=exit.stop_reason;if(v.position)v.position.stop=decimal(exit.stop);}
         let action={action:'no_trade',reason:signal?.reason??'no_candidate',gate_errors:notices.get(s)!,evidence_refs:[]} as Awaited<ReturnType<Decider>>;
-        const candidateGate=candidate&&r.order_gate&&!p?trackGate(evaluateCandidate(candidate,b.close,v.account.cash,v.account.equity,r.execution,r.order_gate,true)):null;
+        const candidateGate=candidate&&r.order_gate&&!p?trackGate(trackExec(evaluateCandidate(candidate,b.close,v.account.cash,v.account.equity,r.execution,r.order_gate,true,...atrOf(s,at)),s,at)):null;
         if(at===r.to_ms)action.reason='terminal_mark_no_new_decision';
         else if(!p&&u.eligibility&&!u.eligibility[s]?.eligible_close_times.includes(at))action={...action,action:'blocked',reason:'not_listed_at_bar',gate_errors:['not_listed_at_bar']};
         else if(!p&&!arm.startsWith('a_rules')&&shortlist&&!shortlist.has(s))action={...action,reason:'outside_shortlist'};
@@ -79,10 +86,10 @@ export async function runPortfolio(input:PortfolioInput,raw:ResearchRequest,deci
         if(!arm.startsWith('a_rules')&&(arm.startsWith('b_agent')||candidate)&&at!==r.to_ms&&!(p&&p.bars_held>=r.policy.holding_bars))failures=action.action==='model_error'?failures+1:0;
         if(action.action==='enter'||action.action==='follow'){
           const entry=arm.startsWith('c_filter')?candidate:action.entry&&fitEnabled&&!action.entry.fit?trackFit(fitCandidate(action.entry,b.close,r.execution,r.order_gate!)):action.entry;
-          const gate=entry&&r.order_gate?trackGate(evaluateCandidate(entry,b.close,v.account.cash,v.account.equity,r.execution,r.order_gate,true)):null;
+          const gate=entry&&r.order_gate?trackGate(trackExec(evaluateCandidate(entry,b.close,v.account.cash,v.account.equity,r.execution,r.order_gate,true,...atrOf(s,at)),s,at)):null;
           if(gate&&!gate.ok)action={...action,action:'blocked',reason:'order_gate',gate_errors:gate.blocked_by};
           else entries.push({symbol:s,entry:entry??null,action:clone(action),index:decisions.length});
-        }else if(p&&(action.action==='exit'||action.action==='reduce'))l.pending={action:action.action,reason:exit?.reason?exit.reason as import('@trading-swarm/contracts').ResearchTrade['reason']:action.reason==='holding_horizon'?(r.execution.sizing_mode?'time':'horizon'):action.action==='reduce'?'agent_reduce':'agent_exit'};
+        }else if(p&&(action.action==='exit'||action.action==='reduce'))l.pending={action:action.action,reason:exit?.reason?exit.reason as import('@trade-gate/contracts').ResearchTrade['reason']:action.reason==='holding_horizon'?(r.execution.sizing_mode?'time':'horizon'):action.action==='reduce'?'agent_reduce':'agent_exit'};
         decisions.push({id:`${arm}_${s}_${at}`,at,arm,symbol:s,screen_rank:screenRow.rank?.composite??null,candidate_id:candidate?.candidate_id??null,action:action.action,reason:action.reason,input_hash:hash(v),decision_hash:hash({...action,entry:action.entry??null}),gate_errors:action.gate_errors,evidence_refs:action.evidence_refs,...((action.entry??candidate)?.fit?{fit:(action.entry??candidate)!.fit}:{})});
         if(failures>=5)throw new Error('consecutive_model_errors:5');
       }
@@ -99,7 +106,7 @@ export async function runPortfolio(input:PortfolioInput,raw:ResearchRequest,deci
     const openIds=new Set([...ledgers.values()].flatMap(l=>l.position?[l.position.id]:[]));account.position=[...ledgers.values()].find(l=>l.position)?.position??null;
     const resultMetrics=metrics(account,openIds),last=account.equity.at(-1)!;
     const by_symbol=symbols.map(s=>{const l=ledgers.get(s)!,realized=l.trades.reduce((a,t)=>a+q(t.net_pnl),0n),p=l.position,unrealized=p?q(last.by_symbol![s]!)-p.entry_notional-p.entry_fee:0n,net=realized+unrealized,m=metrics(l);return {symbol:s,closed_trades:m.closed_trades,net_pnl:decimal(net),win_rate:m.win_rate,avg_net_r:m.avg_net_r,contribution:q(resultMetrics.net_pnl)!==0n?Number(net)/Number(q(resultMetrics.net_pnl)):null};});
-    const armResult={arm,metrics:resultMetrics,decisions,trades:account.trades,equity:account.equity,pending_at_end:[...ledgers.values()].some(l=>!!l.pending),by_symbol};
+    const armResult={arm,metrics:resultMetrics,decisions,trades:account.trades,equity:account.equity,pending_at_end:[...ledgers.values()].some(l=>!!l.pending),by_symbol,...(tally?{execution_gate:tally.stats()}:{})};
     arms.push(opts.diagnostics?{...armResult,diagnostics:diagnostics(armResult,datasets,u,account.slippage,r.order_gate?gateStats:undefined)}:armResult);if(status!=='completed')break;
   }
   return {engine_version:r.execution.sizing_mode||r.order_gate?'research-spot-portfolio-v3':PORTFOLIO_ENGINE_VERSION,status,error,arms,recordings,comparison:status==='completed'?compareArms(arms):[]};

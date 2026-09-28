@@ -298,7 +298,7 @@ describe('execution backend switching (§9.6)', () => {
       expect((await get('/oauth/binance/client-metadata.json')).status).toBe(404);
     });
 
-    it('切回 binance 后 okx 不在可选/可恢复清单里(review #13)', async () => {
+    it('切回 binance 后 okx 不在可选/可恢复清单里(codex-review #13)', async () => {
       // main.ts 的 resumable 与工厂注册都是 `backendsFor(ex)` 裁出来的:binance 模式下
       // 上次存的 execution=okx 既不能被恢复,也没有工厂能造出来(显式指定会落回 paper)。
       process.env['TG_EXCHANGE'] = 'binance';

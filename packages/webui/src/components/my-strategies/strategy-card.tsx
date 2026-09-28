@@ -11,7 +11,7 @@ import type { StrategyRun } from '@/api/types';
 import { RunPill } from './run-panel';
 import { motion, useReducedMotion } from 'motion/react';
 import { ArrowRight, ArrowUpRight, Bell, BellOff, Eye, EyeOff, MoreHorizontal, Pencil, RefreshCw, Share, Archive } from 'lucide-react';
-import type { ResearchStrategy } from '@trading-swarm/contracts';
+import type { ResearchStrategy } from '@trade-gate/contracts';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { TableCell, TableRow } from '@/components/ui/table';
 import { relativeTime } from '@/lib/format';

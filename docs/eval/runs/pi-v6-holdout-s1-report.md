@@ -1,7 +1,7 @@
 # Eval report — pi-v6-holdout-s1
 
 - brain: `pi` (model `pi:zai/glm-5.3`), prompt `demo-playbook-v6`
-- cases: `~/Desktop/trading-swarm/packages/eval-a/cases/v3-holdout` (set `holdout`, 142 cases in set, 142 episodes in this run)
+- cases: `<repo>/packages/eval-a/cases/v3-holdout` (set `holdout`, 142 cases in set, 142 episodes in this run)
 - 晋升结论: **HOLD** — 硬不变量 FAIL: stale_trade
 
 ## 分项指标

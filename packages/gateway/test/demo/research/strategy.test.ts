@@ -1,6 +1,6 @@
 import { SpotLedger } from '../../../src/demo/research/ledger.js';
 import { describe,it,expect,vi } from 'vitest';
-import { validate,type StrategyIR } from '@trading-swarm/contracts';
+import { validate,type StrategyIR } from '@trade-gate/contracts';
 import { fixture,params,STEP } from './fixtures.js';
 import { defaultIR,checkIR,compileStrategy,policyToIR,irToPolicy,node,irCandidate } from '../../../src/demo/research/strategy.js';
 import { registry,listPrimitives } from '../../../src/demo/research/primitives/index.js';
@@ -23,7 +23,7 @@ describe('strategy construction and execution',()=>{
   expect(mapped.arms[0]!.equity).toEqual(old.arms[0]!.equity);expect(mapped.arms[0]!.trades).toEqual(old.arms[0]!.trades);
  });
  it('accepts default trailing strategy and exposes all primitive schemas',()=>{
-  const result=checkIR(defaultIR(),'1h');expect(result.ok,JSON.stringify(result.checks)).toBe(true);expect(result.hash).toBe(hash(defaultIR()));expect(result.checks.map(x=>x.name)).toEqual(['units','timeframe_consistency','lookahead','state_machine','order_gate_ready','risk_bounds','warmup']);expect(listPrimitives().items).toHaveLength(62);expect(validate('research',result).ok).toBe(true);
+  const result=checkIR(defaultIR(),'1h');expect(result.ok,JSON.stringify(result.checks)).toBe(true);expect(result.hash).toBe(hash(defaultIR()));expect(result.checks.map(x=>x.name)).toEqual(['units','timeframe_consistency','lookahead','state_machine','order_gate_ready','risk_bounds','warmup']);expect(listPrimitives().items).toHaveLength(63);expect(validate('research',result).ok).toBe(true);
  });
  it('rejects excessive risk, unsupported primitives, incompatible periods and exit dead ends',()=>{
   const cases: [StrategyIR,string][]=[];let ir=defaultIR();ir.risk.sizing.params.fraction='0.2';cases.push([ir,'risk_bounds']);ir=defaultIR();ir.signal[0]!.primitive='eval_code';cases.push([ir,'lookahead']);ir=defaultIR();ir.regime!.params.htf='15m';cases.push([ir,'timeframe_consistency']);ir=defaultIR();ir.exit=[node('time_stop',{bars:24},true)];cases.push([ir,'state_machine']);ir=defaultIR();ir.signal[0]!.params.lookback='20h';cases.push([ir,'units']);

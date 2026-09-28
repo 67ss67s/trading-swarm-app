@@ -5,11 +5,11 @@ import { specText,checkIRSpec } from './strategy-spec.js';
 import { DEFAULT_ORDER_GATE } from './order-gate.js';
 import { timeframe } from './agent.js';
 import { listPrimitives } from './primitives/index.js';
-import { schemas } from '@trading-swarm/contracts';
+import { schemas } from '@trade-gate/contracts';
 import { randomUUID } from 'node:crypto';
 import type { Brain } from '../brain.js';
 import { extractJson } from '../schema.js';
-import type { ResearchChatRequest, ResearchPolicy, ResearchToolCall, ResearchRequest } from '@trading-swarm/contracts';
+import type { ResearchChatRequest, ResearchPolicy, ResearchToolCall, ResearchRequest } from '@trade-gate/contracts';
 import { assertContract, clone, hash, request } from './primitives.js';
 import { runSummary, type ResearchService } from './service.js';
 export const RESEARCH_TOOLS=[
@@ -38,9 +38,9 @@ export async function researchTool(call:ResearchToolCall,svc:ResearchService,lau
   assertContract<ResearchToolCall>(call);if(!('tool' in call))throw new Error('expected_tool');
   if(call.tool.startsWith('research.'))throw Error('sandbox_tool_requires_chat');
   const args=call.args;
-  if(call.tool==='strategies.precheck')return precheck(args as unknown as import('@trading-swarm/contracts').ResearchPrecheckRequest,svc.store);
+  if(call.tool==='strategies.precheck')return precheck(args as unknown as import('@trade-gate/contracts').ResearchPrecheckRequest,svc.store);
   if(call.tool==='primitives.list')return listPrimitives();
-  if(call.tool==='strategies.compile'){assertContract<import('@trading-swarm/contracts').StrategyCompileRequest>(args);const c=args as Parameters<typeof compileStrategy>[0];return compileStrategy(c,brain,c.dataset_id?svc.store.dataset(c.dataset_id):null);}
+  if(call.tool==='strategies.compile'){assertContract<import('@trade-gate/contracts').StrategyCompileRequest>(args);const c=args as Parameters<typeof compileStrategy>[0];return compileStrategy(c,brain,c.dataset_id?svc.store.dataset(c.dataset_id):null);}
   if(call.tool==='datasets.list')return svc.store.datasets();
   if(call.tool==='studies.get')return svc.store.study(str(args['study_id']));
   if(call.tool==='policies.create')return svc.store.draft(args['policy']);

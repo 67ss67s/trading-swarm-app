@@ -27,11 +27,13 @@ import { useIndicatorOverlays } from '@/components/indicator-overlays';
 import { CHART_COLORS } from '@/lib/chart-colors';
 import { cn } from '@/lib/utils';
 import { t } from '@/lib/i18n';
+import { IS_JUDGE } from '@/lib/edition';
 
 const INTERVALS = ['1m', '5m', '15m', '30m', '1h', '4h'] as const;
 type Interval = (typeof INTERVALS)[number];
 
-const REFRESH_MS = 5_000;
+// 评审版是公网访客多标签页,5s 轮询会把 OKX 公共行情限频打满(网关 K 线已有 4s 缓存兜底);评审版放宽到 30s
+const REFRESH_MS = IS_JUDGE ? 30_000 : 5_000;
 
 export interface TradeChartLines {
   entryPrice?: string | null;

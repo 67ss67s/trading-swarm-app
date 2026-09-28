@@ -51,6 +51,7 @@ import type {
 } from '@/api/types';
 import { isProtectionVerified, NetCheckRow, SimpleModeWarning } from '@/components/connect/blocks';
 import { useExecutionQuery } from '@/components/connect/use-execution';
+import { JudgeLock } from '@/components/judge-lock';
 import { ProtectionBlock } from '@/components/protection-status';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -61,10 +62,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { friendlyError, JUDGE_CHANNEL_LABEL, lockReason } from '@/lib/edition';
 import { acctLvLabel, backendLabel, fmtDateTime, marketLabel, relativeTime, useNow } from '@/lib/format';
 import type { Market } from '@/api/types';
 import { cn } from '@/lib/utils';
-import { t, tmap } from '@/lib/i18n';
+import { t, tmap, listSep } from '@/lib/i18n';
 
 /** ['execution'] 的标准订阅方式已搬到 connect/use-execution.ts;这里保留导出,老调用点不用改。 */
 export { useExecutionQuery };
@@ -87,6 +89,18 @@ function connectionClass(status: ExecutionConnectionStatus | undefined): string 
 export function ExecutionBadge({ className }: { className?: string }) {
   const execQ = useExecutionQuery();
   const view = execQ.data;
+  // 评审版:访客读不到 /api/execution(仅 owner),通道固定 paper —— 顶栏直接写明「Paper · Judge demo」,不跳 #connect
+  const judgeChannel = lockReason('execution_channel');
+  if (judgeChannel) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span tabIndex={0} className={cn('rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground', className)} data-testid="judge-channel">{JUDGE_CHANNEL_LABEL}</span>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">{judgeChannel}</TooltipContent>
+      </Tooltip>
+    );
+  }
   if (!view?.backend) return null;
   const conn = view.connection?.status;
   const isAgent = view.backend === 'agent_mcp';
@@ -159,7 +173,7 @@ function BinanceDirectBlock({ oauth }: { oauth: BinanceOauthStatus }) {
     // 确认之后 mcp 选项才会变成可选,所以顺手让执行卡片重取。
     void queryClient.invalidateQueries({ queryKey: ['execution'] });
   };
-  const onError = (err: unknown) => toast.error(t('操作失败'), { description: err instanceof Error ? err.message : String(err) });
+  const onError = (err: unknown) => toast.error(t('操作失败'), { description: friendlyError(err instanceof Error ? err.message : String(err)) });
 
   const propose = useMutation({
     mutationFn: api.binanceMapPropose,
@@ -195,7 +209,7 @@ function BinanceDirectBlock({ oauth }: { oauth: BinanceOauthStatus }) {
       setTests(null);
       toast.success(t('映射存好了(回到待确认,要再确认一次)'));
     },
-    onError: (err) => toast.error(t('保存失败'), { description: err instanceof Error ? err.message : String(err) }),
+    onError: (err) => toast.error(t('保存失败'), { description: friendlyError(err instanceof Error ? err.message : String(err)) }),
   });
 
   const busy = propose.isPending || confirm.isPending || test.isPending || save.isPending;
@@ -254,7 +268,7 @@ function BinanceDirectBlock({ oauth }: { oauth: BinanceOauthStatus }) {
 
           {unmapped.length ? (
             <div className="mx-3 mb-1.5 rounded-md border border-warn/30 bg-warn/10 px-2 py-1.5 text-[10.5px] text-warn">
-              {t('还有必需的操作没映射')}:{unmapped.map((op) => MCP_OP_LABEL[op] ?? op).join('、')}{t(';补齐了才能确认。')}
+              {t('还有必需的操作没映射')}:{unmapped.map((op) => MCP_OP_LABEL[op] ?? op).join(listSep())}{t(';补齐了才能确认。')}
             </div>
           ) : null}
 
@@ -273,7 +287,7 @@ function BinanceDirectBlock({ oauth }: { oauth: BinanceOauthStatus }) {
                         </td>
                         <td className="w-24 px-2 py-1 text-right">
                           {m?.missing?.length ? (
-                            <span className="text-warn" title={t('缺参数:{list}', { list: m.missing.join('、') })}>
+                            <span className="text-warn" title={t('缺参数:{list}', { list: m.missing.join(listSep()) })}>
                               {t('缺 {n} 个参数', { n: m.missing.length })}
                             </span>
                           ) : m?.confidence !== undefined ? (
@@ -392,7 +406,7 @@ export function ExecutionChannelPanel() {
       if ((res.errors ?? []).length > 0) toast.warning(t('{n} 项没保存', { n: res.errors.length }), { description: res.errors.join('; ') });
       else toast.success(t('已保存'));
     },
-    onError: (err) => toast.error(t('保存失败'), { description: err instanceof Error ? err.message : String(err) }),
+    onError: (err) => toast.error(t('保存失败'), { description: friendlyError(err instanceof Error ? err.message : String(err)) }),
   });
 
   const check = useMutation({
@@ -401,9 +415,9 @@ export function ExecutionChannelPanel() {
       queryClient.setQueryData(['execution'], res);
       const status = res.connection?.status;
       if (status === 'connected') toast.success(res.exchange === 'okx' ? t('OKX 通道连上了') : t('币安 MCP 连上了'));
-      else toast.warning(t('连接状态:{status}', { status: CONNECTION_LABEL[status ?? 'unknown'] }), { description: res.connection?.detail || undefined });
+      else toast.warning(t('连接状态:{status}', { status: CONNECTION_LABEL[status ?? 'unknown'] }), { description: friendlyError(res.connection?.detail) || undefined });
     },
-    onError: (err) => toast.error(t('检查失败'), { description: err instanceof Error ? err.message : String(err) }),
+    onError: (err) => toast.error(t('检查失败'), { description: friendlyError(err instanceof Error ? err.message : String(err)) }),
   });
 
   const connect = useMutation({
@@ -422,17 +436,19 @@ export function ExecutionChannelPanel() {
       }
       setInstructions(res?.instructions || t('网关没返回操作说明。'));
     },
-    onError: (err) => toast.error(t('连接失败'), { description: err instanceof Error ? err.message : String(err) }),
+    onError: (err) => toast.error(t('连接失败'), { description: friendlyError(err instanceof Error ? err.message : String(err)) }),
   });
 
   const options = useMemo(() => view?.options ?? [], [view]);
   const canSwitch = view?.can_switch !== false;
+  // 评审版:下单通道固定 paper,不给切主网/测试网(原因放进每颗按钮的 tooltip)
+  const switchLock = lockReason('execution_channel');
   const backend = view?.backend;
   const conn = view?.connection;
   const modelDirty = (serverModel ?? '') !== model.trim();
 
   const pickBackend = (kind: ExecutionBackend) => {
-    if (!canSwitch || kind === backend || save.isPending) return;
+    if (switchLock || !canSwitch || kind === backend || save.isPending) return;
     save.mutate({ execution: kind });
   };
   const commitModel = () => {
@@ -475,7 +491,7 @@ export function ExecutionChannelPanel() {
             <Badge variant="outline" className="h-4 border-primary/50 px-1 text-[9.5px] text-primary">{t('推荐')}</Badge>
             {t('{name} 还没接好', { name: o.label })}
           </div>
-          <pre className="num whitespace-pre-wrap font-sans text-[11px] text-muted-foreground">{o.setup}</pre>
+          <pre className="num whitespace-pre-wrap font-sans text-[11px] text-muted-foreground">{friendlyError(o.setup)}</pre>
         </div>
       ))}
       <div className="flex flex-wrap items-center gap-1.5 px-3 py-2">
@@ -484,7 +500,7 @@ export function ExecutionChannelPanel() {
         ) : (
           [...options].sort((a, b) => Number(Boolean(b.recommended)) - Number(Boolean(a.recommended))).map((opt) => {
             const active = opt.kind === backend;
-            const disabled = !opt.available || !canSwitch || save.isPending;
+            const disabled = !opt.available || !canSwitch || save.isPending || !!switchLock;
             return (
               <Tooltip key={opt.kind}>
                 <TooltipTrigger asChild>
@@ -502,7 +518,7 @@ export function ExecutionChannelPanel() {
                   </span>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="max-w-64 text-[11.5px] leading-relaxed">
-                  {!opt.available ? t('不可用:{why}', { why: opt.note || t('少凭证或者少 CLI') }) : !canSwitch ? view.switch_blocker || t('现在不能切') : opt.note || backendLabel(opt.kind)}
+                  {switchLock && !active ? switchLock : !opt.available ? t('不可用:{why}', { why: friendlyError(opt.note) || t('少凭证或者少 CLI') }) : !canSwitch ? view.switch_blocker || t('现在不能切') : friendlyError(opt.note) || backendLabel(opt.kind)}
                 </TooltipContent>
               </Tooltip>
             );
@@ -525,7 +541,7 @@ export function ExecutionChannelPanel() {
           {view.transport ? (
             <div
               className={cn('num mt-1.5 text-[11px]', view.transport.transport_errors > 0 ? 'text-warn' : 'text-muted-foreground')}
-              title={view.transport.last_error ? t('最近一次:{detail}', { detail: view.transport.last_error }) : t('最近 30 分钟没出现连接被掐或超时')}
+              title={view.transport.last_error ? t('最近一次:{detail}', { detail: friendlyError(view.transport.last_error) }) : t('最近 30 分钟没出现连接被掐或超时')}
             >
               {t('网络:最近 {min} 分钟 {runs} 次调用,{bad} 次连接被掐或超时', { min: Math.round(view.transport.window_ms / 60_000), runs: view.transport.runs, bad: view.transport.transport_errors })}
               {view.transport.transport_errors > 0 ? ` · ${t('回执丢了会自动查、自动重发,不会误平仓;老是这样就看看代理是不是掐长连接')}` : ''}
@@ -537,7 +553,7 @@ export function ExecutionChannelPanel() {
             <Select
               value={view.agent?.cli ?? 'claude'}
               onValueChange={(v) => save.mutate({ exec_agent_cli: v as 'claude' | 'codex' })}
-              disabled={save.isPending}
+              disabled={save.isPending || !!switchLock}
             >
               <SelectTrigger size="sm" className="h-7 w-28 text-[12px]">
                 <SelectValue />
@@ -597,8 +613,8 @@ export function ExecutionChannelPanel() {
             </Badge>
             {conn?.checked_at ? <span className="text-[10.5px] text-muted-foreground">{t('{ago}检查的', { ago: relativeTime(conn.checked_at, now) })}</span> : null}
             {conn?.detail ? (
-              <span className="min-w-0 flex-1 truncate text-[10.5px] text-muted-foreground" title={conn.detail}>
-                {conn.detail}
+              <span className="min-w-0 flex-1 truncate text-[10.5px] text-muted-foreground" title={friendlyError(conn.detail)}>
+                {friendlyError(conn.detail)}
               </span>
             ) : null}
           </div>
@@ -608,10 +624,12 @@ export function ExecutionChannelPanel() {
               {check.isPending ? <Loader2 className="size-3 animate-spin" /> : null}
               {t('检查连接')}
             </Button>
-            <Button size="xs" variant="outline" disabled={connect.isPending} onClick={() => connect.mutate()}>
-              {connect.isPending ? <Loader2 className="size-3 animate-spin" /> : null}
-              {t('用 Claude 登录币安')}
-            </Button>
+            <JudgeLock feature="exchange_credentials">
+              <Button size="xs" variant="outline" disabled={connect.isPending} onClick={() => connect.mutate()}>
+                {connect.isPending ? <Loader2 className="size-3 animate-spin" /> : null}
+                {t('用 Claude 登录币安')}
+              </Button>
+            </JudgeLock>
             {view.agent?.server_name ? (
               <span className="num truncate text-[10.5px] text-muted-foreground" title={view.agent?.url ?? ''}>
                 {view.agent.server_name}

@@ -10,7 +10,7 @@
 //   npx jiti …/judgment-replay.ts list
 //
 // 真模型(glm / deepseek)必须同时给 --allow-real 与 JR_ALLOW_REAL_MODEL=1;DeepSeek 的 key 从
-// ~/.trading-swarm-okx/secrets/deepseek.env 读,只在内存里传给 pi 的 --api-key,不打印、不落库。
+// ~/.trade-gate-okx/secrets/deepseek.env 读,只在内存里传给 pi 的 --api-key,不打印、不落库。
 import { writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -40,7 +40,7 @@ function client(kind: string): ModelClient {
   if (!flag('allow-real') || process.env['JR_ALLOW_REAL_MODEL'] !== '1') throw new Error('真模型需要 --allow-real 且 JR_ALLOW_REAL_MODEL=1');
   if (kind === 'glm') return glmClient();
   if (kind === 'deepseek') {
-    const key = readEnvFileVar(opt('key-file', join(homedir(), '.trading-swarm-okx/secrets/deepseek.env'))!, 'DEEPSEEK_API_KEY');
+    const key = readEnvFileVar(opt('key-file', join(homedir(), '.trade-gate-okx/secrets/deepseek.env'))!, 'DEEPSEEK_API_KEY');
     if (!key) throw new Error('读不到 DEEPSEEK_API_KEY');
     return deepseekClient(key);
   }
@@ -49,9 +49,9 @@ function client(kind: string): ModelClient {
 
 async function main(): Promise<void> {
   if (cmd === 'import') {
-    const spot = readSpot(opt('state-db', join(homedir(), '.trading-swarm-okx/demo/state.sqlite'))!, SYMBOLS);
+    const spot = readSpot(opt('state-db', join(homedir(), '.trade-gate-okx/demo/state.sqlite'))!, SYMBOLS);
     for (const s of spot) store.putSeries(s);
-    const perp = readPerp(opt('market-db', join(homedir(), '.trading-swarm/research/market-cache.sqlite'))!, SYMBOLS);
+    const perp = readPerp(opt('market-db', join(homedir(), '.trade-gate/research/market-cache.sqlite'))!, SYMBOLS);
     for (const s of perp.series) store.putSeries(s);
     for (const [sym, f] of perp.funding) store.putFunding(sym, f);
     for (const s of [...spot, ...perp.series]) log(`${s.venue} ${s.symbol} ${s.bars.length} 根 gaps=${s.gaps} ${new Date(s.bars[0]!.open_time).toISOString()} → ${new Date(s.bars.at(-1)!.close_time + 1).toISOString()} sha ${s.sha256.slice(0, 10)}`);

@@ -1,6 +1,6 @@
 // oracle(事后反推)生成器:标签、特征因果性、置换检验(纯噪声不显著 / 植入规律能找回)、规则 → IR 过 checkIR。
 import { describe, it, expect } from 'vitest';
-import type { ResearchBar, StrategyIR } from '@trading-swarm/contracts';
+import type { ResearchBar, StrategyIR } from '@trade-gate/contracts';
 import { labelSeries, DEFAULT_MECHANICS, type Mechanics } from '../../../../../src/demo/research/improve/oracle/labels.js';
 import { computeFeatures, trendSeries, structureSeries } from '../../../../../src/demo/research/improve/oracle/features.js';
 import { buildConditions, buildPairs, mine, nullDistribution, permutationP, bitsOf, rng, benjaminiHochberg, rotateLabels, permuteLabels, DEFAULT_MINE, type MiningTable } from '../../../../../src/demo/research/improve/oracle/mine.js';

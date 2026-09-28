@@ -250,7 +250,7 @@ export const INFO_PROMPT_VERSION = 'info-officer-v1';
 
 export function buildInfoPrompt(snap: InfoSnapshot, workflow: Workflow, previous: MarketState | null): { system: string; user: string; infoRefs: Map<string, InformationEvent> } {
   const system = [
-    '你是 trading-swarm 的信息员。你不交易,不给建议数量;你的工作是把外部信息压缩成一份交易员一眼能读的市场状态。',
+    '你是 trade-gate 的信息员。你不交易,不给建议数量;你的工作是把外部信息压缩成一份交易员一眼能读的市场状态。',
     '硬规则:1) 只用下面登记的信息(数值段 + 新闻 I<n>),不得编造;2) key_points 每条末尾标 [I<n>] 或 [数据];3) candidates 只能来自观察列表,给方向和一句理由,没有就空数组;4) 只输出一个 JSON 对象,简体中文,面向交易员。',
     '输出契约:{"regime":"trend_up|trend_down|range|volatile|unclear","bias":"long|short|neutral","summary":"≤300字","key_points":["… [I2]","… [数据]"],"news":[{"ref":"I3","relevance":"high|medium|low","digest":"一句话为什么重要"}],"candidates":[{"symbol":"BTCUSDT","direction":"long|short","why":"一句话"}],"risk_events":["未来 24h 内的风险事件,没有就空"]}',
   ].join('\n');

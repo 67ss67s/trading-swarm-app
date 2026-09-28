@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { LoopRevisionCommand, ResearchRequest, StrategyIR } from '@trading-swarm/contracts';
+import type { LoopRevisionCommand, ResearchRequest, StrategyIR } from '@trade-gate/contracts';
 import { openStateDb } from '../../../../src/state-db.js';
 import { LoopStore, DEFAULT_BUDGET } from '../../../../src/demo/research/loop/store.js';
 import { ResearchStore } from '../../../../src/demo/research/store.js';

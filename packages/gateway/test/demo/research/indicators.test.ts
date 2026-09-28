@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import type { ResearchBar } from '@trading-swarm/contracts';
-import { schemas } from '@trading-swarm/contracts';
+import type { ResearchBar } from '@trade-gate/contracts';
+import { schemas } from '@trade-gate/contracts';
 import {
   INDICATORS, INDICATOR_NAMES, INDICATOR_ALIASES, resolveIndicatorName, resolveArgs,
   indicatorSeries, indicatorLine, indicatorWarmup,

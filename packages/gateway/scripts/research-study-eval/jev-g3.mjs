@@ -10,7 +10,7 @@ const network=opt('network','deny'),mode=opt('mode','rehearse');
 if(!['deny','allow'].includes(network))throw Error('g3_network_invalid');
 if(network==='deny')await import('./network-deny.mjs');
 else if(mode!=='collect'||opt('approved-by','')!=='Jacky'||!opt('max-usd','')||!opt('max-calls','')||args.includes('--stub'))throw Error('g3_paid_collection_requires_explicit_budget_and_Jacky');
-const forbidden=resolve(homedir(),'.trading-swarm-okx/demo'),repo=fileURLToPath(new URL('../../../../',import.meta.url));
+const forbidden=resolve(homedir(),'.trade-gate-okx/demo'),repo=fileURLToPath(new URL('../../../../',import.meta.url));
 function pathOf(s,db=false){if(!s)throw Error('g3_path_required');const p=resolve(s);let ancestor=p;while(!existsSync(ancestor))ancestor=dirname(ancestor);const resolved=join(realpathSync(ancestor),p.slice(ancestor.length));if(resolved===forbidden||resolved.startsWith(forbidden+'/'))throw Error('forbidden_runtime_directory');if(db&&(resolved===repo.slice(0,-1)||resolved.startsWith(repo)))throw Error('database_must_be_outside_repository');return p;}
 const read=p=>JSON.parse(readFileSync(pathOf(p),'utf8'));
 const write=(p,value)=>{p=pathOf(p);mkdirSync(dirname(p),{recursive:true});writeFileSync(p,JSON.stringify(value,null,2)+'\n',{mode:0o600});};

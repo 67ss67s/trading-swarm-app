@@ -1,9 +1,10 @@
+import { claimSlot } from '../public-demo.js';
 import { attributeRuns } from './attribution.js';
 import { resolveRequest, compileConstraints, policyToIR } from './strategy.js';
 import { specText } from './strategy-spec.js';
 import { DEFAULT_ORDER_GATE } from './order-gate.js';
 import type { Brain } from '../brain.js';
-import type { ResearchRequest } from '@trading-swarm/contracts';
+import type { ResearchRequest } from '@trade-gate/contracts';
 import { ADAPTER_VERSION, budgetBrain, makeDecider, timeframe } from './agent.js';
 import { runReplay, StopRun, type RecordedDecision } from './engine.js';
 import { hash, request } from './primitives.js';
@@ -11,9 +12,12 @@ import { ResearchStore, type RunRow, type Manifest } from './store.js';
 import { runPortfolio } from './portfolio.js';
 import { selectionEvaluation } from './evaluation.js';
 import type { StrategySpec } from '../strategies.js';
+import { DEFAULT_EXECUTION_THRESHOLDS, researchThresholds, type ExecutionThresholds } from '../execution-policy.js';
 export class ResearchService {
   private active:string|null=null;private cancelled=new Set<string>();
-  constructor(readonly store:ResearchStore,private emit:(data:unknown)=>void=()=>{}){store.recover();}
+  /** 执行层阈值的读取入口(网关里 = executionThresholds(workflow),见 routes-research.ts);研究 run 创建与回测报告时读一次并冻结,重放不再读 */
+  readonly executionThresholds?:()=>ExecutionThresholds;
+  constructor(readonly store:ResearchStore,private emit:(data:unknown)=>void=()=>{},opts:{executionThresholds?:()=>ExecutionThresholds}={}){store.recover();if(opts.executionThresholds)this.executionThresholds=opts.executionThresholds;}
   get active_run_id(){return this.active;}
   async estimate(raw:ResearchRequest) {
     const d=this.store.dataFor(raw);this.store.validateRequest(raw);timeframe(d.timeframe_ms);
@@ -24,8 +28,10 @@ export class ResearchService {
   start(raw:ResearchRequest,brain:Brain,identity:Manifest['brain'],source:StrategySpec|null,playbook:string):RunRow {
     const prior=this.store.byKey(raw.idempotency_key,raw);if(prior)return prior;
     if(this.active)throw new Error(`research_busy:${this.active}`);
-    timeframe(this.store.dataFor(raw).timeframe_ms);
-    const row=this.store.create(raw,source,identity,playbook);this.active=row.id;
+    const tfMs=this.store.dataFor(raw).timeframe_ms;timeframe(tfMs);
+    // 执行层阈值:没接设置时(比如测试)用默认阈值,不会悄悄变成不挡;请求里自己带了阈值或 null 就以请求为准。
+    // 冻结成契约里的 5 个数:止损底线的模式按数值表达,ATR 模式的倍数折算到这份数据的周期(researchThresholds)
+    const row=this.store.create(raw,source,identity,playbook,researchThresholds(this.executionThresholds?.()??DEFAULT_EXECUTION_THRESHOLDS,tfMs));this.active=row.id;
     // Claim synchronously before yielding, so two HTTP calls cannot start duplicate jobs.
     void this.execute(row,brain).catch(e=>{this.store.status(row.id,'failed');this.publish(row.id,'failed',{error:String(e)});}).finally(()=>{this.active=null;this.cancelled.delete(row.id);});
     return this.store.get(row.id)!;
@@ -33,6 +39,14 @@ export class ResearchService {
   cancel(id:string):RunRow {const row=this.store.get(id);if(!row)throw new Error('run_not_found');if(this.active===id){this.cancelled.add(id);this.store.status(id,'cancelling');this.publish(id,'cancelling',{note:'当前模型调用返回/超时后停止；不启动下一个调用'});}return this.store.get(id)!;}
   private publish(id:string,event:string,data:Record<string,unknown>){this.emit(this.store.event(id,event,data));}
   private async execute(row:RunRow,brain:Brain):Promise<void> {
+    const release = claimSlot('heavy'); // 1 vCPU 保护:重计算并发上限(TG_HEAVY_CONCURRENCY)
+    try {
+      await this.executeInner(row, brain);
+    } finally {
+      release();
+    }
+  }
+  private async executeInner(row:RunRow,brain:Brain):Promise<void> {
     const r=row.manifest.request,d=this.store.dataFor(r),deadline=Date.now()+r.timeout_ms;
     this.store.status(row.id,'running');this.publish(row.id,'running',{engine:row.manifest.engine_version});
     const wrapped=budgetBrain(brain,{max_calls:r.max_model_calls,deadline,model_call_timeout_ms:r.model_call_timeout_ms,cancelled:()=>this.cancelled.has(row.id),save:t=>this.store.trace(row.id,t)});

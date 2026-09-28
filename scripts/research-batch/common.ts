@@ -4,7 +4,7 @@ import { homedir } from 'node:os';
 import path from 'node:path';
 import { timeframeMillis } from '../../packages/gateway/src/demo/research/strategy.ts';
 
-export const BATCH_DIR = path.join(homedir(), '.trading-swarm-okx', 'research-batch');
+export const BATCH_DIR = path.join(homedir(), '.trade-gate-okx', 'research-batch');
 export const DATA_DIR = path.join(BATCH_DIR, 'data');
 /** 固定截止:2026-09-23 00:00 UTC 之前最后一毫秒,重跑逐位一致 */
 export const TO_MS = Date.UTC(2026, 8, 23) - 1;
@@ -21,7 +21,7 @@ export function readUniverse(): string[] { return (JSON.parse(readFileSync(path.
 
 // ---------- 冻结数据 → 改进环/批量评估的输入 ----------
 import { existsSync } from 'node:fs';
-import type { ResearchBar } from '@trading-swarm/contracts';
+import type { ResearchBar } from '@trade-gate/contracts';
 import type { FundingSeries } from '../../packages/gateway/src/demo/research/orders/types.ts';
 import type { FrozenAsset, FrozenData, Segments } from '../../packages/gateway/src/demo/research/improve/types.ts';
 import { makeSegments } from '../../packages/gateway/src/demo/research/improve/data.ts';

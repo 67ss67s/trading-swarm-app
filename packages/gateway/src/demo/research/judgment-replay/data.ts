@@ -1,7 +1,7 @@
 /**
  * 冻结数据的来源读取(只读)。
- *  - spot:OKX 现货 1h,取自 `~/.trading-swarm-okx/demo/state.sqlite` 的 research_datasets(与几何实验室同源,取覆盖最长的一份)。
- *  - perp:OKX USDT 永续 1h 成交价 K 线 + OKX 资金费,取自研究行情缓存 `~/.trading-swarm/research/market-cache.sqlite`。
+ *  - spot:OKX 现货 1h,取自 `~/.trade-gate-okx/demo/state.sqlite` 的 research_datasets(与几何实验室同源,取覆盖最长的一份)。
+ *  - perp:OKX USDT 永续 1h 成交价 K 线 + OKX 资金费,取自研究行情缓存 `~/.trade-gate/research/market-cache.sqlite`。
  * 两个源库都只以只读方式打开;打不开(WAL 需要写 -shm)时复制到临时目录再读,绝不写源库。
  */
 import { createHash } from 'node:crypto';

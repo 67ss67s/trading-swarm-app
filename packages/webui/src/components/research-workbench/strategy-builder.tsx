@@ -1,8 +1,8 @@
 /**
- * 策略构建 loop(research round 2 §3.3):自然语言 → 策略 IR → 单位/周期/前视/状态机/风险/预热检查 → 才能进回测。
+ * 策略构建 loop(round2-spec §3.3):自然语言 → 策略 IR → 单位/周期/前视/状态机/风险/预热检查 → 才能进回测。
  * 模型只能把话映射到原语库,映射不了的意思在 unmapped 里如实列出;右侧原语目录是它的全部词汇。
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Beaker, Check, ChevronRight, List, RefreshCw, Sparkles, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -10,11 +10,12 @@ import { researchApi } from '@/api/client';
 import type { OrderGateParams, ResearchCompileConstraints, ResearchCompileResponse, ResearchExecution, ResearchPrimitive, StrategyIR } from '@/api/research-types';
 import { RulesCard, SpecReport, hasSpecBlock, rulesFromIr, type RulesSource } from '@/components/research-workbench/rules-card';
 import { tfLabel } from '@/components/research-workbench/screen-panel';
+import { matchSeedDataset, type SeedAsset } from '@/components/research-workbench/seed-dataset';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
-import { t, tmap } from '@/lib/i18n';
+import { t, tmap, listSep } from '@/lib/i18n';
 
 const CATEGORY_LABEL: Record<ResearchPrimitive['category'], string> = tmap({ screen: '筛选', regime: '趋势/环境', signal: '信号', entry: '入场', stop: '止损', sizing: '仓位', exit: '出场' });
 const CATEGORY_ORDER: ResearchPrimitive['category'][] = ['screen', 'regime', 'signal', 'entry', 'stop', 'sizing', 'exit'];
@@ -27,13 +28,17 @@ const EXAMPLE = '只在 4h 趋势向上、ADX 大于 20 时做多;1h 收盘突�
 
 export function StrategyBuilder({
   initialIr,
+  initialTimeframe,
   seedText,
   onUseIr,
   execution,
   orderGate,
   seedDatasetId,
+  seedAsset = null,
 }: {
   initialIr: StrategyIR | null;
+  /** 带过来的周期(批量验证「在研究台继续打磨」);不在选项里就用 1h */
+  initialTimeframe?: string | undefined;
   /** 首屏「验证一个想法」带过来的原话,直接填进描述框 */
   seedText?: string;
   onUseIr: (ir: StrategyIR, timeframe: string, warmupBars: number) => void;
@@ -41,23 +46,36 @@ export function StrategyBuilder({
   execution: ResearchExecution;
   orderGate: OrderGateParams;
   seedDatasetId: string | null;
+  /** 从海选带进来的那一组:下拉框选同一个币的数据集;本地没有就明说,不拿别的币顶上 */
+  seedAsset?: SeedAsset | null;
 }) {
   const primsQ = useQuery({ queryKey: ['research', 'primitives'], queryFn: researchApi.primitives, retry: false, staleTime: 5 * 60_000 });
   const dsQ = useQuery({ queryKey: ['research', 'datasets'], queryFn: researchApi.datasets, retry: false, staleTime: 60_000 });
   const datasets = dsQ.data?.items ?? [];
   const [datasetId, setDatasetId] = useState<string | null>(seedDatasetId);
-  // 约束基准:优先当前实验的数据集,没有就用列表第一条(拿它的成本与 ATR 中位算止损下限)
+  // 带入的组合在本地没有对应数据集(只在带入时判一次;之后用户自己选什么都行)
+  const [seedMissing, setSeedMissing] = useState(false);
+  const seedResolved = useRef(false);
+  // 约束基准:带入了组合就选同一个币的数据集;否则优先当前实验的数据集,没有就用列表第一条(拿它的成本与 ATR 中位算止损下限)
   useEffect(() => {
+    if (seedAsset) {
+      if (seedResolved.current || !dsQ.isSuccess) return;
+      seedResolved.current = true;
+      const hit = matchSeedDataset(datasets, seedAsset);
+      setDatasetId(hit?.id ?? null);
+      setSeedMissing(!hit);
+      return;
+    }
     if (datasetId && datasets.some((d) => d.id === datasetId)) return;
     const pick = (seedDatasetId && datasets.find((d) => d.id === seedDatasetId)) || datasets[0];
     if (pick) setDatasetId(pick.id);
-  }, [datasets, datasetId, seedDatasetId]);
+  }, [datasets, datasetId, seedDatasetId, seedAsset, dsQ.isSuccess]);
   const [text, setText] = useState('');
   useEffect(() => {
     if (seedText) setText(seedText);
   }, [seedText]);
   const [showPrimitives, setShowPrimitives] = useState(false);
-  const [timeframe, setTimeframe] = useState('1h');
+  const [timeframe, setTimeframe] = useState(() => (initialTimeframe && (TF_OPTIONS as readonly string[]).includes(initialTimeframe) ? initialTimeframe : '1h'));
   const [irText, setIrText] = useState(initialIr ? JSON.stringify(initialIr, null, 2) : '');
   const [result, setResult] = useState<ResearchCompileResponse | null>(null);
   const [irError, setIrError] = useState<string | null>(null);
@@ -122,7 +140,7 @@ export function StrategyBuilder({
                     </option>
                   ))}
                 </select>
-                <select className="h-6 max-w-[180px] rounded-md border bg-background px-1.5 text-[11px]" value={datasetId ?? ''} onChange={(e) => setDatasetId(e.target.value || null)} title={t('算设计约束用的数据:往返成本、ATR 中位、止损下限都按它算')}>
+                <select className="h-6 max-w-[180px] rounded-md border bg-background px-1.5 text-[11px]" value={datasetId ?? ''} onChange={(e) => { setDatasetId(e.target.value || null); setSeedMissing(false); }} title={t('算设计约束用的数据:往返成本、ATR 中位、止损下限都按它算')} data-testid="builder-dataset">
                   <option value="">{t('不按数据算约束')}</option>
                   {datasets.map((d) => (
                     <option key={d.id} value={d.id}>
@@ -130,11 +148,16 @@ export function StrategyBuilder({
                     </option>
                   ))}
                 </select>
-                <button type="button" className="text-[11px] text-muted-foreground underline-offset-2 hover:underline" onClick={() => setText(EXAMPLE)}>
+                <button type="button" className="text-[11px] text-muted-foreground underline-offset-2 hover:underline" onClick={() => setText(t(EXAMPLE))}>
                   {t('填一个例子')}
                 </button>
               </div>
-              <Textarea value={text} onChange={(e) => setText(e.target.value)} placeholder={EXAMPLE} className="min-h-[96px] text-[12.5px]" />
+              {seedMissing && seedAsset ? (
+                <p className="rounded-md border border-warn/40 bg-warn/10 px-2 py-1 text-[11.5px] text-warn" data-testid="builder-dataset-missing">
+                  {t('本地还没有 {asset} 的数据集,约束先不按数据算。可以在上面手动选一份,或者先用这条策略新建一个 {asset} 实验,拉好数据再回来。', { asset: `${seedAsset.symbol.replace(/USDT$/, '')} ${seedAsset.timeframe}` })}
+                </p>
+              ) : null}
+              <Textarea value={text} onChange={(e) => setText(e.target.value)} placeholder={t(EXAMPLE)} className="min-h-[96px] text-[12.5px]" />
               <div className="flex items-center gap-2">
                 <Button size="sm" onClick={() => compileM.mutate({ text })} disabled={!text.trim() || compileM.isPending}>
                   {compileM.isPending ? <RefreshCw className="animate-spin" /> : <Sparkles />} {t('映射成策略 IR')}
@@ -205,7 +228,7 @@ export function StrategyBuilder({
                     !result?.ok
                       ? t('检查未全过')
                       : specBlocked
-                        ? t('策略规范有不允许项:{s}', { s: (result?.spec?.violations ?? []).filter((v) => v.severity === 'block').map((v) => v.code).join('、') })
+                        ? t('策略规范有不允许项:{s}', { s: (result?.spec?.violations ?? []).filter((v) => v.severity === 'block').map((v) => v.code).join(listSep()) })
                         : JSON.stringify(result?.ir) !== JSON.stringify(safeParse(irText))
                           ? t('IR 改过了,先重新检查')
                           : ''
@@ -227,7 +250,7 @@ export function StrategyBuilder({
         </div>
         <ScrollArea className="min-h-0 flex-1">
           <div className="p-2 text-[11px]">
-            {backendMissing ? <div className="text-muted-foreground">{t('后端还没有原语目录(后端交付中)')}</div> : null}
+            {backendMissing ? <div className="text-muted-foreground">{t('后端还没有原语目录(第二轮 astra 交付中)')}</div> : null}
             {primsQ.isLoading ? <div className="text-muted-foreground">{t('读取中…')}</div> : null}
             {groups.map(([cat, items]) => (
               <div key={cat} className="mb-2">

@@ -1,7 +1,7 @@
 import { Readable } from 'node:stream';
 import type http from 'node:http';
 import { describe, expect, it } from 'vitest';
-import { validate } from '@trading-swarm/contracts';
+import { validate } from '@trade-gate/contracts';
 import { openStateDb } from '../../../../src/state-db.js';
 import type { RouteContext, RouteHandler } from '../../../../src/demo/http-extra.js';
 import { registerImproveRoutes } from '../../../../src/demo/research/improve/routes.js';

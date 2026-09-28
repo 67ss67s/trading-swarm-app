@@ -1,6 +1,6 @@
 /** 2026-09-23 晚:研究 loop 把「创建多空策略…日线 trigger 15 分钟进出场…可以高频率交易…只要2026年」判成形态频率统计的回归。 */
 import { afterEach, describe, expect, it } from "vitest";
-import type { StrategyIR } from "@trading-swarm/contracts";
+import type { StrategyIR } from "@trade-gate/contracts";
 import { openStateDb } from "../../../../src/state-db.js";
 import { LoopStore, DEFAULT_BUDGET } from "../../../../src/demo/research/loop/store.js";
 import { Budget } from "../../../../src/demo/research/loop/budget.js";

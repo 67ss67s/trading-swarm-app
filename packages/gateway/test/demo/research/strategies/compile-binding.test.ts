@@ -1,6 +1,6 @@
 // §9.47 StrategyBinding 编译:六个角色切片、几何规则与订单门现行口径一致、模型只做入场过滤、unmapped 不静默丢。
 import { describe, expect, it } from 'vitest';
-import { validate, type StrategyBinding, type StrategyIR } from '@trading-swarm/contracts';
+import { validate, type StrategyBinding, type StrategyIR } from '@trade-gate/contracts';
 import { compileBinding } from '../../../../src/demo/research/strategies/compile-binding.js';
 import { BUILTIN_IMPORTS, builtinImportSpec } from '../../../../src/demo/research/strategies/import-builtin.js';
 import { DEFAULT_ORDER_GATE } from '../../../../src/demo/research/order-gate.js';

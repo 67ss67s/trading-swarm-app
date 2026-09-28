@@ -127,7 +127,7 @@
       "x": 0,
       "y": -420,
       "w": 900,
-      "text": "trading-swarm WebUI · A3 最小 UI 设计稿 v1 · 2026-09-02\n每个画板 = 一页(桌面 1440 宽),小画板 = 组件 1:1 / 移动端。示例数据全部取自 packages/contracts/fixtures(intent / plan / authorization / account_snapshot / policy / events / attempt / exchange_order / position_effect / fill),状态枚举保留英文小写。\n气质借 8794 shadcn 变体「Graphite & Ice」:三层暗色地面、冰青只给界面 chrome、绿红只表达多空、数字全部等宽;两账户用固定视觉约定区分:main · REST = 石板灰 chip,sub · MCP = 冰青 chip。\n行 1 交易台 · 行 2 向导 · 行 3 系统 · 行 4 主账户动钱 · 行 5 agent 动钱与回放"
+      "text": "trade-gate WebUI · A3 最小 UI 设计稿 v1 · 2026-09-02\n每个画板 = 一页(桌面 1440 宽),小画板 = 组件 1:1 / 移动端。示例数据全部取自 packages/contracts/fixtures(intent / plan / authorization / account_snapshot / policy / events / attempt / exchange_order / position_effect / fill),状态枚举保留英文小写。\n气质借 8794 shadcn 变体「Graphite & Ice」:三层暗色地面、冰青只给界面 chrome、绿红只表达多空、数字全部等宽;两账户用固定视觉约定区分:main · REST = 石板灰 chip,sub · MCP = 冰青 chip。\n行 1 交易台 · 行 2 向导 · 行 3 系统 · 行 4 主账户动钱 · 行 5 agent 动钱与回放"
     },
     {
       "id": "n-dashboard",

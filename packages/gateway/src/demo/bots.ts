@@ -1,5 +1,5 @@
 /**
- * Bot 团队注册表(docs/design/trading-swarm-bot-team-guide-2026-09-04.ipynb §3/§4/§6/§13 的
+ * Bot 团队注册表(docs/design/trade-gate-bot-team-guide-2026-09-04.ipynb §3/§4/§6/§13 的
  * Phase-2-lite 落地;范围与取舍见 docs/design/screener-radar-2026-09-05.md)。
  *
  * 三张持久对象:
@@ -183,6 +183,9 @@ const SEEDS: Seed[] = [
     sort_order: 8,
   },
 ];
+
+/** AGENT.md 缺失时按 profile 的代码默认描述兜底,不初始化数据库。 */
+export function botDescription(role: BotRole): string { return SEEDS.find((s) => s.role === role)!.description; }
 
 /** 只有这一个角色可以写交易所。改这一行 = 改安全边界,不是改配置。 */
 export const EXCHANGE_WRITER: BotRole = 'executor';
@@ -426,6 +429,14 @@ export class BotRegistry {
     return rows.map((r) => this.toRun(r));
   }
 
+  /** 名册读状态不截断到最近 N 条:长任务和大量交接也要准确。 */
+  loopState(role: BotRole): { running: boolean; failed: boolean; pending: number } {
+    const running = !!this.db.prepare("SELECT 1 FROM demo_bot_run WHERE role=? AND finished_at IS NULL AND status='running' LIMIT 1").get(role);
+    const last = this.db.prepare("SELECT status FROM demo_bot_run WHERE role=? AND status IN ('done','failed') ORDER BY finished_at DESC,started_at DESC,rowid DESC LIMIT 1").get(role);
+    const pending = this.db.prepare("SELECT COUNT(*) AS n FROM demo_bot_handoff WHERE to_role=? AND status='pending'").get(role)!;
+    return { running, failed: last?.['status'] === 'failed', pending: Number(pending['n']) };
+  }
+
   // ---- handoffs
 
   /**
@@ -495,7 +506,7 @@ export class BotRegistry {
     return row ? this.toHandoff(row) : null;
   }
   /** 新的在前。 */
-  handoffs(opts: { status?: HandoffStatus; to_role?: string; limit?: number } = {}): BotHandoff[] {
+  handoffs(opts: { status?: HandoffStatus; to_role?: string; from_role?: string; limit?: number } = {}): BotHandoff[] {
     const where: string[] = [];
     const args: (string | number)[] = [];
     if (opts.status) {
@@ -506,8 +517,18 @@ export class BotRegistry {
       where.push('to_role = ?');
       args.push(opts.to_role);
     }
+    if (opts.from_role) { where.push('from_role = ?'); args.push(opts.from_role); }
     const rows = this.db.prepare(`SELECT * FROM demo_bot_handoff${where.length ? ` WHERE ${where.join(' AND ')}` : ''} ORDER BY created_at DESC LIMIT ?`).all(...args, opts.limit ?? 50) as Record<string, unknown>[];
     return rows.map((r) => this.toHandoff(r));
+  }
+
+  /**
+   * 待阅计数:等价于 `handoffs({ status: 'pending', to_role, limit: cap }).length`,但只走索引计数,
+   * 不读取/解析整行(payload_json 可能很大)。`cap` 保留原来「最多数到 limit 条」的口径。
+   */
+  pendingCount(to_role: string, cap = 50): number {
+    const row = this.db.prepare("SELECT COUNT(*) AS n FROM (SELECT 1 FROM demo_bot_handoff WHERE to_role = ? AND status = 'pending' LIMIT ?)").get(to_role, cap) as { n: number };
+    return Number(row.n);
   }
 
   /** 人(或 Gate Captain UI)确认收到。ack 不产生任何交易所效果。 */

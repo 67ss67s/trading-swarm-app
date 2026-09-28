@@ -11,7 +11,7 @@
 //! 3. **matcher 选中代理后一律不回退直连** —— 回退既泄漏直连流量,又让诊断假绿。
 //!
 //! 改写点:去掉 `parse_network_settings` 对 8794 settings.json 形状的依赖
-//! (trading-swarm 的配置在别处),保留纯函数 `plan_env` / `validate_proxy_url`;
+//! (trade-gate 的配置在别处),保留纯函数 `plan_env` / `validate_proxy_url`;
 //! `route_for` 从 `axum::http::Uri` 换成 `http::Uri`(本 crate 不依赖 axum)。
 
 use serde_json::{Value, json};
@@ -250,7 +250,7 @@ pub fn build_http_client() -> reqwest::Client {
         .pool_idle_timeout(std::time::Duration::from_secs(280))
         .pool_max_idle_per_host(4)
         .tcp_keepalive(std::time::Duration::from_secs(45))
-        .user_agent(concat!("trading-swarm-execd/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!("trade-gate-execd/", env!("CARGO_PKG_VERSION")))
         .build()
         .expect("reqwest client")
 }

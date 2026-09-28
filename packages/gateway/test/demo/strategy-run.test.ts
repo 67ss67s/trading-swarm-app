@@ -10,6 +10,7 @@ import { generateRunCandidate, runScreenRows } from '../../src/demo/strategy-run
 import { toResearchBars, type GenerateInput } from '../../src/demo/strategy-candidate.js';
 import { policyToIR } from '../../src/demo/research/strategy.js';
 import { SYNTH_POLICY } from '../../src/demo/strategy-candidate.js';
+import { SIZING_SYSTEM } from '../../src/demo/sizing-agent.js';
 import { StrategyRunner, nextRunScan, parseRunFilter, runOrigin, type RunEnvironment, type StrategyRunDeps } from '../../src/demo/strategy-run.js';
 import { newThread } from '../../src/demo/threads.js';
 import type { Kline, StrategyThread } from '../../src/demo/types.js';
@@ -25,6 +26,13 @@ function bars(): Kline[] {
   out.push({ open_time: T0 + 100 * H, close_time: T0 + 101 * H - 1, open: '100.2', high: '103.2', low: '100.1', close: '103', volume: '30' }); return out;
 }
 const cleanups: (() => Promise<void>)[] = [];
+/** 模拟「每笔确认」下线前就建好的运行:现在新建和修改都不接受 confirm,但老运行照常跑,这些用例测的是老运行的行为。 */
+function allowLegacyConfirm(runner: StrategyRunner): void {
+  const r = runner as unknown as { validate: (raw: unknown, create: boolean) => Record<string, unknown> };
+  const orig = r.validate.bind(runner);
+  r.validate = (raw, create) => { const b = raw as Record<string, unknown>; return b?.['mode'] === 'confirm' ? { ...orig({ ...b, mode: 'auto' }, create), mode: 'confirm' } : orig(raw, create); };
+}
+
 afterEach(async () => { while (cleanups.length) await cleanups.pop()!(); vi.restoreAllMocks(); vi.useRealTimers(); });
 function fixture(ir = policyToIR(SYNTH_POLICY), timeframe = '1h') {
   const state = openStateDb(':memory:'), store = new DemoStore(state); let now = T0 + 101 * H + 5000;
@@ -44,7 +52,7 @@ function fixture(ir = policyToIR(SYNTH_POLICY), timeframe = '1h') {
     close: vi.fn(async t => { t.status = 'closed'; t.closed_at = now; }), filter: vi.fn(async () => ({ decision: 'skip', reason: '风险偏高,不做' })),
     publish: vi.fn(async e => { published.push(e); return { event_id: e.event_id }; }), emit: vi.fn(),
     pendingApproval: t => t.status === 'pending_entry', realizedR: t => t.status === 'closed' ? 1.5 : null };
-  const runner = new StrategyRunner(deps); cleanups.push(async () => { await runner.stop(); state.close(); });
+  const runner = new StrategyRunner(deps); allowLegacyConfirm(runner); cleanups.push(async () => { await runner.stop(); state.close(); });
   const create = (patch = {}) => runner.create({ strategy_id: s.id, mode: 'auto', market: 'spot', symbols: ['BTCUSDT'], risk_pct: 0.3, max_open: 3, publish_asp: false, ...patch });
   return { state, store, service, s, deps, runner, environment, threads, published, create, time: (n: number) => { now = n; } };
 }
@@ -195,10 +203,13 @@ describe('runtime 机械开仓接线', () => {
     rt.workflow = { ...rt.workflow, brain: 'stub', cheap_brain: 'stub', timeframe: '1h', watchlist: ['BTCUSDT'], markets: ['spot', 'perp'], auto_approve: false, risk_pct: '0.1', sizing_agent: 'apply', strategy_council: 'off', entry_style: 'free' };
     rt.markets.set('BTCUSDT', await market.fetchMarketView('BTCUSDT', '1h', 'perp'));
     rt.markets.set('spot:BTCUSDT', await market.fetchMarketView('BTCUSDT', '1h', 'spot'));
-    const runner = rt.strategyRuns();
+    const runner = rt.strategyRuns(); allowLegacyConfirm(runner);
     cleanups.push(async () => { await rt.stop(); });
     const result = await runner.create({ strategy_id: f.s.id, mode, market: tradeMarket, symbols: ['BTCUSDT'], risk_pct: 0.3, max_open: 3, publish_asp: false });
-    return { ...f, rt, backend, runner, result, calls };
+    // 组合经理倍率现在也作用于固定风险的策略运行:sizing_agent=apply 时开仓前会问一次仓位意见。
+    // 这里「没有模型调用」指的是没有判断类调用,仓位意见单独数。
+    const modelCalls = () => calls.mock.calls.filter((args) => (args as unknown[])[0] !== SIZING_SYSTEM);
+    return { ...f, rt, backend, runner, result, calls, modelCalls };
   }
   it('IR 限价保持挂单价,过期在暂停时撤单并记 skip', async () => {
     const f = await runtimeFixture('auto', 'spot', ir => { ir.order = { direction: 'long', market: 'spot', entry: { type: 'limit', price: { primitive: 'pct_offset_level', params: { pct: 0.02 } }, expiry_bars: 2 } }; });
@@ -210,7 +221,7 @@ describe('runtime 机械开仓接线', () => {
     expect(f.store.thread(t.id)?.status).toBe('canceled');
     expect(f.backend.snapshot().orders.some(o => !o.reduce_only)).toBe(false);
     expect(f.runner.store.events(f.result.run.id).rows.some(e => e.kind === 'skip' && e.data?.['code'] === 'entry_expired')).toBe(true);
-    expect(f.calls).not.toHaveBeenCalled();
+    expect(f.modelCalls()).toHaveLength(0);
   });
   it('限价待审批过期后不能发送', async () => {
     const f = await runtimeFixture('confirm', 'spot', ir => { ir.order = { direction: 'long', market: 'spot', entry: { type: 'limit', price: { primitive: 'pct_offset_level', params: { pct: 0.02 } }, expiry_bars: 1 } }; });
@@ -225,7 +236,7 @@ describe('runtime 机械开仓接线', () => {
     expect(f.result.run.direction).toBe('short'); expect(t).toMatchObject({ status: 'in_position', side: 'short', leverage: 2 });
     expect(Number(t.stop_price)).toBeGreaterThan(103); expect(Number(t.take_profits[0])).toBeLessThan(103);
     expect(f.runner.preflight(f.s.id, undefined, 'spot').blockers.find(x => x.code === 'direction_not_long')?.message).toContain('请把市场选永续');
-    expect(f.calls).not.toHaveBeenCalled();
+    expect(f.modelCalls()).toHaveLength(0);
   });
   it.each(['spot', 'perp'] as const)('%s 首档按 30%% 减仓,余仓止损仍在且不重复 TP', async market => {
     const f = await runtimeFixture('auto', market, ir => { ir.order = { direction: 'long', market, take_profits: [{ source: { primitive: 'fixed_r_target', params: { r: 1 } }, size_pct: 0.3 }, { source: { primitive: 'fixed_r_target', params: { r: 3 } }, size_pct: 0.7 }] }; });
@@ -247,7 +258,8 @@ describe('runtime 机械开仓接线', () => {
   });
   it('TP 回执未知与重启不另造 CID,保持止损并报告 error', async () => {
     let submit = vi.fn();
-    const f = await runtimeFixture('auto', 'perp', ir => { ir.order = { direction: 'short', market: 'perp', take_profits: [{ source: { primitive: 'fixed_r_target', params: { r: 1 } }, size_pct: 0.5 }, { source: { primitive: 'fixed_r_target', params: { r: 2 } }, size_pct: 0.5 }] }; }, backend => { submit = vi.spyOn(backend, 'placePartialTakeProfit').mockResolvedValue({ outcome: 'unknown', error: 'timeout', receipt: null, avg_price: null }); });
+    // 两档原来是 1R/2R 各一半,加权 1.5R,扣手续费后净盈亏比不到 1.5,现在会被执行层拒单;这条用例测的是回执未知,所以改成 1.5R/3R
+    const f = await runtimeFixture('auto', 'perp', ir => { ir.order = { direction: 'short', market: 'perp', take_profits: [{ source: { primitive: 'fixed_r_target', params: { r: 1.5 } }, size_pct: 0.5 }, { source: { primitive: 'fixed_r_target', params: { r: 3 } }, size_pct: 0.5 }] }; }, backend => { submit = vi.spyOn(backend, 'placePartialTakeProfit').mockResolvedValue({ outcome: 'unknown', error: 'timeout', receipt: null, avg_price: null }); });
     const t = f.store.threads()[0]!; expect(t.run_take_profit?.state).toBe('unknown'); expect(submit).toHaveBeenCalledOnce();
     const cid = t.run_take_profit!.client_order_id; expect(cid).toBeTruthy();
     const reload = f.store.thread(t.id)!;
@@ -294,12 +306,12 @@ describe('runtime 机械开仓接线', () => {
     expect(t).toMatchObject({ origin: `strategy_run:${f.result.run.id}`, strategy_id: `${f.s.id}@1`, strategy_version: 1, timeframe: '1h', market: 'spot', status: 'in_position', leverage: 1 });
     const intent = f.store.intentsForThread(t!.id).find(i => i.kind === 'open')!;
     expect(Number(intent.sizing.risk_pct)).toBe(0.3); expect(Number(intent.quantity) * Number(intent.sizing.stop_distance)).toBeLessThanOrEqual(30.1);
-    expect(f.calls).not.toHaveBeenCalled(); expect(f.rt.reviewThread(t!.id, { kind: 'manual', detail: '不得调用模型复查' })).toBe(false);
+    expect(f.modelCalls()).toHaveLength(0); expect(f.rt.reviewThread(t!.id, { kind: 'manual', detail: '不得调用模型复查' })).toBe(false);
     expect(t!.entry_client_order_id).toBeTruthy(); expect(t!.filled_avg_price).toBe('103');
   });
   it('confirm 待批意图、agent 一次短调用和额度记账', async () => {
-    const f = await runtimeFixture('confirm'); expect(f.store.threads()[0]?.status).toBe('pending_entry'); expect(f.store.intents(10)[0]?.status).toBe('pending_approval'); expect(f.calls).not.toHaveBeenCalled();
-    const g = await runtimeFixture('agent'); expect(g.calls).toHaveBeenCalledTimes(1); expect(g.rt.modelJudgmentsToday()).toBe(1); expect(g.store.threads()[0]?.status).toBe('in_position');
+    const f = await runtimeFixture('confirm'); expect(f.store.threads()[0]?.status).toBe('pending_entry'); expect(f.store.intents(10)[0]?.status).toBe('pending_approval'); expect(f.modelCalls()).toHaveLength(0);
+    const g = await runtimeFixture('agent'); expect(g.modelCalls()).toHaveLength(1); expect(g.rt.modelJudgmentsToday()).toBe(1); expect(g.store.threads()[0]?.status).toBe('in_position');
   });
   it('perp 杠杆取 IR 与工作流较小值;发送前暂停在最终闸拒绝', async () => {
     const f = await runtimeFixture('confirm', 'perp');
@@ -345,7 +357,7 @@ describe('runtime 机械开仓接线', () => {
       return bars().map((k, i, a) => ({ ...k, ...(i === a.length - 1 ? { close: '90', low: '89' } : {}), open_time: end - (a.length - i) * ms, close_time: end - (a.length - i - 1) * ms - 1 }));
     });
     await f.runner.patch(f.result.run.id, { status: 'paused' }); const result = await f.runner.scan(f.result.run.id);
-    expect(result.scan.some(e => e.kind === 'exit' && e.data?.['reason'] === 'trend_break')).toBe(true); expect(f.store.thread(t.id)?.status).toBe('closed'); expect(f.calls).not.toHaveBeenCalled();
+    expect(result.scan.some(e => e.kind === 'exit' && e.data?.['reason'] === 'trend_break')).toBe(true); expect(f.store.thread(t.id)?.status).toBe('closed'); expect(f.modelCalls()).toHaveLength(0);
   });
 
 });

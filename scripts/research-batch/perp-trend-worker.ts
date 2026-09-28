@@ -7,7 +7,7 @@
 import { parentPort } from 'node:worker_threads';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import type { StrategyIR } from '@trading-swarm/contracts';
+import type { StrategyIR } from '@trade-gate/contracts';
 import { EvalEnv, runPool, scoreSegment, windowIndex, type PoolRun, type Window } from '../../packages/gateway/src/demo/research/improve/evaluate.ts';
 import { RandomOrderMemo } from '../../packages/gateway/src/demo/research/improve/random-entry.ts';
 import { seededRandom } from '../../packages/gateway/src/demo/research/improve/stats.ts';

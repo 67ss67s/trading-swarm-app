@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it } from 'vitest';
 import { openStateDb } from '../../../src/state-db.js';
-import { validate, type ResearchUniverseRequest } from '@trading-swarm/contracts';
+import { validate, type ResearchUniverseRequest } from '@trade-gate/contracts';
 import { ResearchStore } from '../../../src/demo/research/store.js';
 import { buildUniverse, factorDefinition } from '../../../src/demo/research/universe.js';
 import { factorDecompose } from '../../../src/demo/research/factor.js';

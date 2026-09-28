@@ -1,13 +1,16 @@
+import { reserveCliModel } from './public-demo.js';
+import { assertRealModelsAllowed } from './model-guard.js';
+import { ReadCache } from './read-cache.js';
 // Brain adapters (design §9 CliBrain): the model is a subprocess, never an SDK in-process — the
 // gateway holds no model API keys. `pi` uses its own stored provider auth (zai/GLM by default),
 // `claude` uses the Claude Code subscription, `codex` uses the Codex CLI's ChatGPT login.
 // The kind + model pair is chosen in the workflow (UI) and can change at runtime; see brainFor().
 
-import { spawn, spawnSync } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cliLaunchStatus, cliSpawnArgs, defaultCliCommand, stripShellNoise, type CliName } from './cli-launch.js';
+import { cliLaunchStatusView, cliSpawnArgs, defaultCliCommand, stripShellNoise, type CliName } from './cli-launch.js';
 import type { BrainKind, BrainOption, BrainTestResult, CliCommandsView, CliResolvedView } from './types.js';
 
 export interface BrainResult {
@@ -28,6 +31,9 @@ export interface Brain {
  * cliSpawnArgs decides whether that is a direct spawn or a trip through the login+interactive shell.
  */
 function run(command: string, args: string[], stdin: string, timeoutMs: number, env?: NodeJS.ProcessEnv): Promise<{ stdout: string; stderr: string; code: number | null }> {
+  assertRealModelsAllowed(`cli ${command}`);
+  // 公网演示:访客触发的 CLI 模型调用只允许无工具模式(pi --no-tools / claude --tools ''),并计入演示额度;后台与 owner 不受影响。
+  reserveCliModel(args.includes('--no-tools') || (args.includes('--tools') && args[args.indexOf('--tools') + 1] === ''));
   return new Promise((resolve, reject) => {
     const launch = cliSpawnArgs(command, args);
     const cmd = command;
@@ -168,7 +174,7 @@ export function codexBrain(opts: { model?: string | null; command?: string | nul
     name,
     async complete(system, user, o) {
       const started = Date.now();
-      const dir = mkdtempSync(join(tmpdir(), 'tswarm-codex-'));
+      const dir = mkdtempSync(join(tmpdir(), 'tgate-codex-'));
       const outFile = join(dir, 'last.txt');
       try {
         const args = ['exec', '--skip-git-repo-check', '--ephemeral', '-s', 'read-only', '-C', dir, '-o', outFile, '--color', 'never'];
@@ -290,20 +296,22 @@ export function brainFromEnv(): Brain {
 }
 
 /** `pi --list-models` → `provider/model` ids (best effort; empty when pi is missing or slow). */
+const piModelsCache = new Map<string, ReadCache<string[]>>();
 export function piModelIds(timeoutMs = 4000, command = defaultCliCommand('pi')): string[] {
-  try {
+  let cache = piModelsCache.get(command);
+  if (!cache) { if (piModelsCache.size >= 32) piModelsCache.delete(piModelsCache.keys().next().value!); cache = new ReadCache(60_000); piModelsCache.set(command, cache); }
+  return cache.read(() => new Promise<string[]>((resolve, reject) => {
     const launch = cliSpawnArgs(command, ['--list-models']);
-    const r = spawnSync(launch.file, launch.args, { stdio: ['ignore', 'pipe', 'ignore'], timeout: timeoutMs, encoding: 'utf8' });
-    if (r.status !== 0) return [];
-    const out: string[] = [];
-    for (const line of String(r.stdout).split('\n').slice(1)) {
-      const cols = line.trim().split(/\s+/);
-      if (cols.length >= 2 && cols[0] && cols[1] && /^[a-z0-9-]+$/.test(cols[0])) out.push(`${cols[0]}/${cols[1]}`);
-    }
-    return out;
-  } catch {
-    return [];
-  }
+    execFile(launch.file, launch.args, { timeout: timeoutMs, maxBuffer: 1024 * 1024, env: { ...process.env, ...launch.env } }, (error, stdout) => {
+      if (error) { reject(error); return; }
+      const out: string[] = [];
+      for (const line of String(stdout).split('\n').slice(1)) {
+        const cols = line.trim().split(/\s+/);
+        if (cols.length >= 2 && cols[0] && cols[1] && /^[a-z0-9-]+$/.test(cols[0])) out.push(`${cols[0]}/${cols[1]}`);
+      }
+      resolve(out);
+    });
+  }), []).value;
 }
 
 /** The launch command for one brain kind; `stub` never spawns anything. */
@@ -320,14 +328,12 @@ const STUB_RESOLVED: CliResolvedView = { via: 'direct', ok: true, detail: '内�
  * command must be on PATH, a shell one (alias / env prefix) must be a word the login shell knows.
  * Cached per command set (a shell probe starts a real interactive shell); `refresh` re-probes.
  */
-let catalogCache: { key: string; options: BrainOption[] } | null = null;
+
 export function brainCatalog(refresh = false, commands?: Partial<CliCommandsView> | null): BrainOption[] {
   const cmd = (k: BrainKind): string | null => commandForKind(k, commands);
-  const key = JSON.stringify([cmd('pi'), cmd('claude'), cmd('codex')]);
-  if (catalogCache && catalogCache.key === key && !refresh) return catalogCache.options;
   const resolved = (k: BrainKind): CliResolvedView => {
     const c = cmd(k);
-    return c === null ? STUB_RESOLVED : cliLaunchStatus(c, { refresh });
+    return c === null ? STUB_RESOLVED : cliLaunchStatusView(c, { refresh });
   };
   const piCmd = cmd('pi')!;
   const piResolved = resolved('pi');
@@ -340,7 +346,6 @@ export function brainCatalog(refresh = false, commands?: Partial<CliCommandsView
     { kind: 'codex', label: 'Codex CLI(ChatGPT 登录)', available: codexResolved.ok, models: ['gpt-5.4', 'gpt-5.4-mini'], default_model: DEFAULT_MODELS.codex, note: '走 ChatGPT 订阅;留空用 Codex 自己的默认模型', command: cmd('codex')!, resolved: codexResolved },
     { kind: 'stub', label: '桩(离线,固定 NO_TRADE)', available: true, models: [], default_model: null, note: '测试用,不调任何模型', command: null, resolved: STUB_RESOLVED },
   ];
-  catalogCache = { key, options };
   return options;
 }
 

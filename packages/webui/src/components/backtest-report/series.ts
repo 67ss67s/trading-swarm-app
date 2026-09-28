@@ -4,7 +4,7 @@
  *   全部叠加    每个完成的资产一条策略线(资产色),基准开着时每个资产一条同色淡虚线
  * 状态不是 completed 的资产不画线(不画假线),放进 missing 让视图说明原因。
  */
-import type { BacktestAsset, BacktestReport } from '@trading-swarm/contracts';
+import type { BacktestAsset, BacktestReport } from '@trade-gate/contracts';
 import { BENCHMARK_COLOR, STRATEGY_COLOR, assetColor, hexAlpha } from './format';
 
 export const ALL_ASSETS = '__all__';

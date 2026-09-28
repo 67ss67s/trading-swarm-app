@@ -27,10 +27,9 @@ export function presenceFor(role: BotRole, rt: DemoRuntime, enabled: boolean, no
   if (!enabled) return { state: 'off', action: role === 'executor' && rt.executorControl.active ? '暂停中：等待当前操作完成' : '已暂停', since: null, next_at: null };
   // gate_captain 的 dispatcher 还没做(enabled=false),但「收件箱」这一半今天就在:有待阅交接时它就是 waiting,
   // 不能一边灰着一边收件箱亮着。
-  if (role === 'gate_captain') {
-    const pending = rt.store.bots.handoffs({ status: 'pending', to_role: 'gate_captain', limit: 50 }).length;
-    if (pending) return { state: 'waiting', action: `${pending} 条交接待阅`, since: null, next_at: null };
-  }
+  // 只数不读行(pendingCount 与原 handoffs(limit 50).length 同口径);下面 switch 分支复用这一个值。
+  const captainPending = role === 'gate_captain' ? rt.store.bots.pendingCount('gate_captain', 50) : 0;
+  if (captainPending) return { state: 'waiting', action: `${captainPending} 条交接待阅`, since: null, next_at: null };
   if (!enabled) return { state: 'off', action: null, since: null, next_at: null };
   const halted = rt.isHalted;
   switch (role) {
@@ -85,8 +84,7 @@ export function presenceFor(role: BotRole, rt: DemoRuntime, enabled: boolean, no
     case 'gate_captain': {
       const q = rt.queueView();
       if (q.running?.kind === 'chat') return { state: 'thinking', action: '回答对话', since: null, next_at: null };
-      const pending = rt.store.bots.handoffs({ status: 'pending', to_role: 'gate_captain', limit: 50 }).length;
-      if (pending) return { state: 'waiting', action: `${pending} 条交接待阅`, since: null, next_at: null };
+      if (captainPending) return { state: 'waiting', action: `${captainPending} 条交接待阅`, since: null, next_at: null };
       const b = rt.team.latestBrief();
       return { state: 'idle', action: b ? '收件箱清空;今日简报已出' : '收件箱清空', since: b?.to ?? null, next_at: null };
     }

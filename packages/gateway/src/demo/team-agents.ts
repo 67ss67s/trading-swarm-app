@@ -22,6 +22,8 @@ export interface TeamAgentOptions {
 
 export class TeamAgents {
   private timer: NodeJS.Timeout | null = null;
+  private nextTick: number | null = null;
+  nextCheckAt(): number | null { return this.timer ? this.nextTick : null; }
   private labRunning: Promise<unknown> | null = null;
   private readonly runExperimentImpl: (m: ExperimentManifest, deps: RunExperimentDeps) => Promise<ExperimentResult>;
   private readonly now: () => number;
@@ -35,7 +37,8 @@ export class TeamAgents {
   }
 
   start(): void {
-    this.timer = setInterval(() => void this.tick().catch(() => {}), TICK_MS);
+    this.nextTick = this.now() + TICK_MS;
+    this.timer = setInterval(() => { this.nextTick = this.now() + TICK_MS; void this.tick().catch(() => {}); }, TICK_MS);
     this.timer.unref?.();
   }
   stop(): void {

@@ -3,7 +3,9 @@ import { api } from '@/api/client';
 import { AgentSwitch } from '@/components/agent-run-controls';
 import { AccountsMenu } from '@/components/accounts-menu';
 import { ExecutionBadge } from '@/components/execution-panel';
+import { JudgeLock } from '@/components/judge-lock';
 import { ModelsPill } from '@/components/models/models-pill';
+import { TourButton } from '@/components/tour/judge-tour';
 import { Button } from '@/components/ui/button';
 import { NeedsYouBadge } from '@/components/approvals';
 import { Separator } from '@/components/ui/separator';
@@ -124,17 +126,20 @@ export function TopBar({ page, account, queue, halted, paused, usage, connected,
         <ExecutionBadge />
 
         <Separator orientation="vertical" className="!h-4" />
-        <Button
-          variant={halted ? 'destructive' : 'outline'}
-          size="xs"
-          className={cn(!halted && 'border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive')}
-          onClick={halted ? onOpenResumeHalt : onOpenHalt}
-        >
-          <OctagonAlert data-slot="icon" />
-          {halted ? t('解除紧急停止') : t('紧急停止')}
-        </Button>
+        <JudgeLock feature="emergency_stop">
+          <Button
+            variant={halted ? 'destructive' : 'outline'}
+            size="xs"
+            className={cn(!halted && 'border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive')}
+            onClick={halted ? onOpenResumeHalt : onOpenHalt}
+          >
+            <OctagonAlert data-slot="icon" />
+            {halted ? t('解除紧急停止') : t('紧急停止')}
+          </Button>
+        </JudgeLock>
 
         <Separator orientation="vertical" className="!h-4" />
+        <TourButton />
         <LangSwitch />
         <Button variant="ghost" size="icon-xs" aria-label={t('命令面板')} title="⌘K" onClick={onOpenCommand}>
           <Command />

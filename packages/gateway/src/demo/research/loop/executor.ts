@@ -1,4 +1,4 @@
-import type { LoopBlocks, LoopPlan, LoopPlanStep } from "@trading-swarm/contracts";
+import type { LoopBlocks, LoopPlan, LoopPlanStep } from "@trade-gate/contracts";
 import { canonical } from "../primitives.js";
 import { emptyUsage, type Step, type InquiryEvent } from "./store.js";
 import {

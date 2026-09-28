@@ -1,6 +1,6 @@
 /**
  * 把批量研究验证段排行榜前 3 名(单资产 IR 变体;组合族不是 IR,跳过并记下)各跑一次改进环(3 代,多步搜索开),零模型。
- * 独立进程、独立 scratch 库(~/.trading-swarm-okx/research-batch/improve.sqlite),数据来自批量研究冻结的 JSON(不联网),不写策略版本。
+ * 独立进程、独立 scratch 库(~/.trade-gate-okx/research-batch/improve.sqlite),数据来自批量研究冻结的 JSON(不联网),不写策略版本。
  * 资产池与周期 = 该行在批量研究里的资产池(整池或训练段筛出的 5 个);窗口 = 批量研究同一窗口(改进环自己按 50/25/25 切段,与批量研究同一实现)。
  * 波动率目标族在改进环里按单位仓位跑(改进环没有这个缩放层),报告里注明。
  * 用法:node --experimental-transform-types --no-warnings --import ./scripts/research-oracle/register.mjs scripts/research-batch/improve-top3.ts [N=3]

@@ -1,4 +1,4 @@
-import { demo } from '@trading-swarm/gateway';
+import { demo } from '@trade-gate/gateway';
 import path from 'node:path';
 
 import { checkEvidenceAndNumbers, detectFutureLeakage, unauthorizedReason } from './checks.js';
@@ -294,7 +294,7 @@ export function buildReport(
     metrics['side_symmetry']!.status === 'PASS';
   return {
     version: 1,
-    harness: '@trading-swarm/eval-b',
+    harness: '@trade-gate/eval-b',
     // Keep report content independent of its output directory for byte-for-byte replay checks.
     run_dir: '.',
     brain: manifest.brain,

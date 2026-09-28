@@ -9,7 +9,7 @@
  * 幂等键:origin.source='import' 且 lab_strategy_id=<内置 id>(未归档);重复执行不重复建,IR 变了才加新版本。
  * 这里只写研究台自己的表,不读写实盘策略库(strategies.ts 的 StrategyLibrary)。
  */
-import type { BindingUnmapped, StrategyIR, StrategyPrimitive } from '@trading-swarm/contracts';
+import type { BindingUnmapped, StrategyIR, StrategyPrimitive } from '@trade-gate/contracts';
 
 export type BuiltinTranslation = 'full' | 'partial' | 'none';
 export interface BuiltinImportSpec {

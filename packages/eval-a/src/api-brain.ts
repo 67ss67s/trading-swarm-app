@@ -4,7 +4,7 @@
 // here the key is borrowed from pi's own credential store (`pi auth print-api-key --provider zai`) or ZAI_API_KEY.
 
 import { spawnSync } from 'node:child_process';
-import type { demo } from '@trading-swarm/gateway';
+import type { demo } from '@trade-gate/gateway';
 
 export interface ApiBrainOptions {
   baseUrl?: string;

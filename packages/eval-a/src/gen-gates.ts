@@ -5,11 +5,11 @@
 // 这些 case 不用来评判断质量(收益/regret 之类对它们没有意义),只用来回答一个问题:
 // 每一道闸、每一条合法边,是不是至少有一个用例必然走到。
 
-import { demo } from '@trading-swarm/gateway';
+import { demo } from '@trade-gate/gateway';
 import type { EvalCase, Judgment, Kline, StrategyThread } from './types.js';
 import type { GateEnv } from './gate-coverage.js';
 // MarketEvent 还没从 demo/index.ts 转出(本轮不动 gateway 源码),走 dist 深路径取类型。
-import type { MarketEvent } from '@trading-swarm/gateway/dist/demo/events.js';
+import type { MarketEvent } from '@trade-gate/gateway/dist/demo/events.js';
 
 const TFS = ['15m', '1h', '4h'] as const;
 const BARS = 24;

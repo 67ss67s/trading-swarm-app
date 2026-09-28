@@ -61,6 +61,36 @@ describe('scanChecklist (NO_TRADE ↔ WATCH boundary)', () => {
     expect(done.watch_eligible).toBe(false);
   });
 
+  it('chase distance is measured to the 20-bar extreme BEFORE the last bar, same level as the breakout test (09-27)', () => {
+    // Breakout bar: prior-20 high 63400, this bar spiked to 63750 and closed 63700 on thin volume.
+    // Old (inclusive) level = 63750 → distance 0.5 ATR, "in range" → WATCH. Now: 63700 − 63400 = 3 ATR → out of range.
+    const brk = scanChecklist([feat('15m', { last_close: 63700, swing_high_20: 63750, swing_high_20_prev: 63400, vol_ratio_20: 0.6 }), feat('1h'), feat('4h')])!;
+    expect(brk.dist_to_break_atr).toBeCloseTo(3);
+    expect(brk.within_chase).toBe(false);
+    expect(brk.retest_confirmed).toBe(false); // broke out, but volume below the retest floor
+    expect(brk.watch_eligible).toBe(false);
+    expect(brk.text).toContain('突破位(前 20 根高,不含当根) 63400');
+    // Same bar on volume: retest confirmed, but the distance still reads 3 ATR (used to be 0.5).
+    const confirmed = scanChecklist([feat('15m', { last_close: 63700, swing_high_20: 63750, swing_high_20_prev: 63400, vol_ratio_20: 1.4 }), feat('1h'), feat('4h')])!;
+    expect(confirmed.retest_confirmed).toBe(true);
+    expect(confirmed.dist_to_break_atr).toBeCloseTo(3);
+    expect(confirmed.within_chase).toBe(false);
+    // Wick above the prior high but closed back below it: distance to the prior high, not to the wick.
+    const wick = scanChecklist([feat('15m', { last_close: 63500, swing_high_20: 63900, swing_high_20_prev: 63600 }), feat('1h'), feat('4h')])!;
+    expect(wick.dist_to_break_atr).toBeCloseTo(1);
+    expect(wick.within_chase).toBe(true);
+    expect(wick.watch_eligible).toBe(true);
+    // Short side mirrors it.
+    const down = { ema20: 63200, ema50: 63400 };
+    const shortBrk = scanChecklist([feat('15m', { ...down, last_close: 63000, swing_low_20: 62950, swing_low_20_prev: 63300, vol_ratio_20: 0.6 }), feat('1h', down), feat('4h', down)])!;
+    expect(shortBrk.trend_agree).toBe('short');
+    expect(shortBrk.dist_to_break_atr).toBeCloseTo(3);
+    expect(shortBrk.within_chase).toBe(false);
+    // Features recorded before `_prev` existed fall back to the inclusive field (the 'far' case above relies on it).
+    const legacy = scanChecklist([feat('15m', { swing_high_20: 63650 }), feat('1h'), feat('4h')])!;
+    expect(legacy.dist_to_break_atr).toBeCloseTo(1.5);
+  });
+
   it('reports the ATR% floor as a checked box, not as part of watch_eligible', () => {
     // The floor is per timeframe now (ATR_PCT_FLOOR): 0.15 % on 15m, 0.6 % on 4h. 0.157 % clears the
     // 15m bar and misses the 4h one — the whole point of dropping the single 0.4 % number.
@@ -196,8 +226,8 @@ describe('buildContext v4 wiring', () => {
     halted: false,
   };
 
-  it('is version demo-playbook-v11.1-ohlc and states the asymmetric rule 8 + the fixed breakout wording', () => {
-    expect(PROMPT_VERSION).toBe('demo-playbook-v11.1-ohlc');
+  it('is version demo-playbook-v11.2-stopfloor and states the asymmetric rule 8 + the fixed breakout wording', () => {
+    expect(PROMPT_VERSION).toBe('demo-playbook-v11.2-stopfloor');
     const built = buildContext({ ...inputs, mode: 'scan', thread: null });
     expect(built.system_text).toContain('watch_eligible=是');
     // v10:派生数字必须带**公式**来源标注(规则 2b/2c),代码按字段级引用复算(09-12 P1-16:只给编号不再算数)。

@@ -1,3 +1,4 @@
+import { claimSlot } from '../../public-demo.js';
 /**
  * 矩阵研究服务:estimate / create / list / get / cancel / resume / finalize / adopt + 进程内排队执行。
  *
@@ -10,7 +11,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
-import type { StrategyIR } from '@trading-swarm/contracts';
+import type { StrategyIR } from '@trade-gate/contracts';
 import type { AssetExecutor, BarsLoader } from '../backtest-report.js';
 import { hash } from '../primitives.js';
 import { ResearchStore } from '../store.js';
@@ -20,16 +21,28 @@ import type { ResearchService } from '../service.js';
 import { JudgeDecisionStore } from '../judge/index.js';
 import type { AssetRecommendation } from '../../recommend.js';
 import type { FrozenModelProfile } from '../judge/types.js';
-import { cellResults, conclusionOf, judgeTrials, JUDGE_ERROR_MAX, ledgerHash, ledgerOf, type JudgedTrial, type TrialRec } from './compute.js';
+import { better, cellResults, conclusionOf, judgeSkipped, judgeStageMarks, judgeTrials, JUDGE_ERROR_MAX, ledgerHash, ledgerOf, type JudgedTrial, type TrialRec } from './compute.js';
 import { evaluateHoldout, judgeBudgetId, judgeRuntimeFor, loadDevView, loadHoldoutView, type DataView, type MatrixJudgeDeps } from './evaluate.js';
-import { buildManifest, estimate, manifestHash, type MatrixEstimate } from './manifest.js';
-import { runIterate, runMatrix, type SearchCtx } from './search.js';
+import { buildManifest, cellJudgeCalls, codeCellIdOf, estimate, manifestHash, type MatrixEstimate } from './manifest.js';
+import { evalCellVariants, runIterate, runMatrix, type SearchCtx } from './search.js';
 import { normalizeSpec, prefillFromRecommendation } from './spec.js';
 import { holdoutTest, holm } from './stats.js';
 import { MatrixStudyStore } from './store.js';
-import { HORIZON_OF, isMyFamily, MATRIX_EVENT, type FailureCause, type MatrixStudySpec, type MyStrategySnapshot, type MatrixConclusion, type MatrixEvent, type MatrixFinalist, type MatrixSource, type MatrixStudyRow, type MatrixStudyStatus, type MatrixTimeframe, type MatrixVariantRef } from './types.js';
+import { TIER_RANK, tierBoard, type TierBoard } from './scorecard.js';
+import { HORIZON_OF, isMyFamily, MATRIX_EVENT, type FailureCause, type JudgeStageSelection, type MatrixStudySpec, type MyStrategySnapshot, type MatrixConclusion, type MatrixEvent, type MatrixFinalist, type MatrixSource, type MatrixStudyRow, type MatrixStudyStatus, type MatrixTier, type MatrixTimeframe, type MatrixVariantRef } from './types.js';
 
 export interface PreflightLike { deployable: boolean; blockers: { code: string; message: string }[]; warnings: { code: string; message: string }[] }
+/** 候补 adoption 记录键前缀:research_matrix_adoptions.finalist_id = `candidate:<trial_id>` 即「未经最终验收」 */
+export const CANDIDATE_KEY = 'candidate:';
+export const candidateKey = (trial_id: string) => `${CANDIDATE_KEY}${trial_id}`;
+const srcText = (s: MatrixSource) => [s.recommendation_id ? `推荐 ${s.recommendation_id}` : null, s.radar_tier ? `雷达 ${s.radar_tier}` : null, s.universe_scan_at ? `扫描 ${new Date(s.universe_scan_at).toISOString().slice(0, 16)}Z` : null].filter(Boolean).join(' / ') || '手动研究';
+const nextOf = (strategy_id: string) => ({ link: `#my-strategies?id=${encodeURIComponent(strategy_id)}`, text: '去我的策略里用模拟盘跑起来' });
+export interface CandidateAdoptResult extends AdoptResult {
+  kind: 'paper_candidate'; final_validation: false; trial_id: string; tier: MatrixTier;
+  scorecard: { value: number; label: string; luck: string };
+  /** 前端引导:去我的策略里用模拟盘跑(不自动启动运行) */
+  next: { link: string; text: string };
+}
 export interface AdoptResult { strategy_id: string; version: number; preflight: { deployable: boolean; warnings: { code: string; message: string }[] }; horizon: MatrixFinalist['horizon']; source: MatrixSource }
 export interface MatrixServiceDeps {
   db: DatabaseSync;
@@ -48,8 +61,13 @@ export interface MatrixServiceDeps {
   runnerHasJudge?: boolean;
   emit?: (event: string, data: unknown) => void;
   onConclusion?: (row: MatrixStudyRow, conclusion: MatrixConclusion) => void;
-  onAdopted?: (row: MatrixStudyRow, adopted: AdoptResult & { finalist_id: string }) => void;
+  onAdopted?: (row: MatrixStudyRow, adopted: (AdoptResult | CandidateAdoptResult) & { finalist_id: string }) => void;
   lease_ms?: number;
+  /**
+   * 重计算外包(worker_threads,见 worker-runner.ts):返回 Promise 表示这次 run / 留出评估交给别处执行,返回 null 表示就在本线程跑。
+   * run 整段外包;finalize 只外包 claim 之后的留出评估(claim 事务仍在调用方线程同步完成,路由 202 看到的状态不变)。
+   */
+  offload?: (job: { op: 'run' | 'finalize'; id: string }, signal?: AbortSignal) => Promise<MatrixStudyRow> | null;
 }
 
 const conflict = (m: string) => Error(`matrix_study_conflict:${m}`);
@@ -95,9 +113,9 @@ export class MatrixStudyService {
     const spec = normalizeSpec({ ...raw, ...(rid ? { recommendation_id: rid } : {}) }, { now: this.now(), recommendation: r, model_profile: this.deps.modelProfile?.() ?? null, resolveStrategy: this.resolveStrategy });
     return { spec, rec: r, mine: this.mineOf(spec) };
   }
-  estimate(body: Record<string, unknown>): { spec: ReturnType<typeof normalizeSpec>; estimate: MatrixEstimate; cells: { id: string; applicability: string; reason: string | null; variants: number }[] } {
+  estimate(body: Record<string, unknown>): { spec: ReturnType<typeof normalizeSpec>; estimate: MatrixEstimate; cells: { id: string; applicability: string; reason: string | null; variants: number; judge_calls: number }[] } {
     const { spec, rec, mine } = this.specOf(body), m = buildManifest(spec, rec, this.now(), mine);
-    return { spec, estimate: estimate(m), cells: m.cells.map((c) => ({ id: c.id, applicability: c.applicability, reason: c.reason, variants: c.variants.length })) };
+    return { spec, estimate: estimate(m), cells: m.cells.map((c) => ({ id: c.id, applicability: c.applicability, reason: c.reason, variants: c.variants.length, judge_calls: cellJudgeCalls(c) })) };
   }
   create(body: Record<string, unknown>): MatrixStudyRow {
     const { spec, rec, mine } = this.specOf(body), m = buildManifest(spec, rec, this.now(), mine), est = estimate(m);
@@ -178,12 +196,21 @@ export class MatrixStudyService {
   private refresh(row: MatrixStudyRow, recs: TrialRec[], stop: string | null) {
     const { trials, variance } = this.judged(row, recs);
     const ledger = ledgerOf(trials, { attempt_count: this.store.attemptCount(row.id), trial_count: this.store.programTrialCount(row.research_program_id), study_trial_count: this.store.studyTrialCount(row.id) });
-    row.state.ledger = ledger; row.state.sharpe_variance = variance; row.state.cells = cellResults(row.manifest, trials, stop); this.usage(row);
+    row.state.ledger = ledger; row.state.sharpe_variance = variance; row.state.cells = cellResults(row.manifest, trials, stop, judgeStageMarks(row.manifest, row.state.judge_stage)); this.usage(row);
     return { trials, ledger };
   }
 
   /** 搜索阶段(开发视图)→ 封存 finalist 或直接给 no_candidate */
   async run(id: string, signal?: AbortSignal): Promise<MatrixStudyRow> {
+    const release = claimSlot('heavy'); // 1 vCPU 保护:重计算并发上限(TG_HEAVY_CONCURRENCY)
+    try {
+      return await this.runInner(id, signal);
+    } finally {
+      release();
+    }
+  }
+  private async runInner(id: string, signal?: AbortSignal): Promise<MatrixStudyRow> {
+    const off = this.deps.offload?.({ op: 'run', id }, signal); if (off) return off;
     const lease = randomUUID(), started = this.now(), lease_ms = this.deps.lease_ms ?? 10 * 60_000;
     this.store.acquireLease(id, lease, lease_ms);
     let row = this.store.update(id, { status: 'running', stage: 'data', expect: ['queued'], lease: { token: lease, until: started + lease_ms } }, { kind: 'status' });
@@ -220,7 +247,13 @@ export class MatrixStudyService {
         save('generation', { generation: g }, { from: 'strategy_lab', to: 'strategy_lab', kind: 'result', key: `gen:${g.cell_id}:${g.n}`, summary: `第 ${g.n} 代 ${g.cell_id}:${g.change.slice(0, 120)} → ${g.promoted ? '晋升' : '未改进'}`, payload: { generation: g.n, cell_id: g.cell_id, trial_id: g.trial_id } });
       });
       stop = stop ?? it.stop;
-      const all = [...recs, ...it.added], { trials, ledger } = this.refresh(row, all, stop);
+      // ---- Jev 两段式补跑(candidates):纯代码臂搜索结束后、封存前;同一开发视图、同一 manifest 冻结的变体,试验照常记账
+      const staged = row.manifest.judge_stage?.mode === 'candidates' ? await this.judgeStage(row, ctx, [...recs, ...it.added], save) : { added: [] as TrialRec[], stop: null as string | null };
+      stop = stop ?? staged.stop;
+      // save() 会换掉 row 对象:完成标记写在当前 row 上
+      if (row.state.judge_stage && row.manifest.judge_stage) row.state.judge_stage.status = 'done';
+      const all = [...recs, ...it.added, ...staged.added], { trials, ledger } = this.refresh(row, all, stop);
+      for (const c of Object.values(row.state.cells)) if (c.judge_stage === 'rerun') this.store.tx(() => this.store.event(this.store.require(id), 'cell', { cell: c }));
       row.state.stop_reason = stop;
       // ---- seal
       const rec = this.rec(row.manifest.spec.recommendation_id);
@@ -231,12 +264,57 @@ export class MatrixStudyService {
       row.state.finalists_hash = hash(row.state.finalists.map((f) => ({ id: f.id, ir: f.ir_hash })));
       row.state.trial_ledger_hash = ledgerHash(ledger, trials);
       row.state.stage = 'sealed'; row.state.holdout_state = 'sealed'; row.state.progress.note = `${finals.length} 个 finalist 已封存,等待留出段一次释放`;
-      row = this.store.update(id, { status: 'ready_to_finalize', state: row.state, lease: { token: null, until: null } }, { kind: 'status' }, { from: 'strategy_lab', to: 'gate_captain', kind: 'review', key: 'sealed', summary: `矩阵研究封存 ${finals.length} 个 finalist,待一次释放留出段`, payload: { finalists_hash: row.state.finalists_hash, trial_count: ledger.trial_count } });
+      row = this.store.update(id, { status: 'ready_to_finalize', state: row.state, lease: { token: null, until: null } }, { kind: 'status' }, { from: 'strategy_lab', to: 'gate_captain', kind: 'review', key: 'sealed', summary: `批量验证选出 ${finals.length} 个候选,等最终验收`, payload: { finalists_hash: row.state.finalists_hash, trial_count: ledger.trial_count } });
       for (const f of row.state.finalists) this.store.tx(() => this.store.event(this.store.require(id), 'finalist', { finalist: f }));
       this.flush();
       if (row.manifest.spec.auto_finalize) return await this.finalize(id, row.manifest_hash, signal);
       return row;
     } catch (e) { return this.fail(id, e, started, lease); }
+  }
+  /**
+   * Jev 两段式第二阶段:入选名单一次算定并写进 state(resume 复用,不因谱系试验数变化重算),再对入选格补跑 code_judge。
+   * 入选:code 格 verdict ∈ pass/near,或三档(未封存口径)∈ pending/paper_candidate;排序:评分卡分数 → 档位 → 选择段夏普 → cell_id;取前 K 格。
+   * 补跑变体:code_judge 格 manifest 里与代表性第 0 代 code 试验同 param 的变体(冻结在 manifest 里,不新造 IR)。
+   */
+  private async judgeStage(row: MatrixStudyRow, ctx: SearchCtx, recs: TrialRec[], save: (kind?: MatrixEvent['kind']) => void): Promise<{ added: TrialRec[]; stop: string | null }> {
+    const rule = row.manifest.judge_stage!, st = row.state.judge_stage ??= { mode: 'candidates', max_cells: rule.max_cells, status: 'pending', eligible: 0, selected: [] };
+    if (st.status === 'pending') {
+      const { trials, variance } = this.judged(row, recs), marks = judgeStageMarks(row.manifest, st);
+      const cells = cellResults(row.manifest, trials, null, marks);
+      const best = Object.fromEntries(Object.values(cells).map((c) => [c.cell_id, c.best_trial_id]));
+      const counts = { study_trials: trials.filter((t) => t.dev).length, program_trials: this.store.programTrialCount(row.research_program_id) };
+      const board = tierBoard(row.manifest, [], trials, counts, variance, best, false, judgeSkipped(marks));
+      const byId = new Map(row.manifest.cells.map((c) => [c.id, c])), pool: JudgeStageSelection[] = [];
+      for (const jc of row.manifest.cells) {
+        if (jc.arm !== 'code_judge' || jc.applicability !== 'applicable') continue;
+        const codeId = codeCellIdOf(jc.id), cc = byId.get(codeId), r = cells[codeId], b = board.cells[codeId];
+        if (!cc || cc.applicability !== 'applicable' || !r || !b) continue;
+        const ok = r.verdict === 'pass' || r.verdict === 'near' || b.tier === 'pending' || b.tier === 'paper_candidate';
+        if (!ok) continue;
+        const gen0 = trials.filter((t) => t.cell_id === codeId && t.generation === 0 && t.dev);
+        const rep = gen0.find((t) => t.trial_id === b.tier_trial_id) ?? [...gen0].sort(better)[0];
+        if (!rep || !jc.variants.some((v) => v.param === rep.param)) continue;
+        pool.push({ cell_id: jc.id, code_cell_id: codeId, code_trial_id: rep.trial_id, param: rep.param, score: b.scorecard?.score.value ?? null, tier: b.tier, verdict: r.verdict === 'ineligible' ? 'fail' : r.verdict });
+      }
+      const sharpe = (x: JudgeStageSelection) => cells[x.code_cell_id]?.selection?.sharpe ?? -Infinity;
+      pool.sort((a, b) => (b.score ?? -1) - (a.score ?? -1) || TIER_RANK[b.tier] - TIER_RANK[a.tier] || (b.verdict === 'pass' ? 1 : 0) - (a.verdict === 'pass' ? 1 : 0) || sharpe(b) - sharpe(a) || a.cell_id.localeCompare(b.cell_id));
+      st.eligible = pool.length; st.selected = pool.slice(0, rule.max_cells); st.status = 'selected';
+      const planned = st.selected.reduce((a, x) => a + byId.get(x.cell_id)!.variants.filter((v) => v.param === x.param).length, 0);
+      row.state.progress.total = row.state.progress.done + planned;
+      row.state.progress.note = `Jev 两段式:${pool.length} 格合格,补跑前 ${st.selected.length} 格`;
+      row.state.notes.push(`Jev 两段式入选 ${st.selected.length}/${pool.length} 格(K=${rule.max_cells}):${st.selected.map((x) => x.code_cell_id).join(', ').slice(0, 600)}`);
+      save();
+    }
+    const added: TrialRec[] = [];
+    let stop: string | null = null;
+    for (const x of st.selected) {
+      const cell = row.manifest.cells.find((c) => c.id === x.cell_id)!;
+      const recsOfCell = await evalCellVariants(ctx, cell, cell.variants.filter((v) => v.param === x.param));
+      added.push(...recsOfCell);
+      const skipped = recsOfCell.find((r) => r.status === 'budget_skipped');
+      if (skipped) { stop = skipped.error; break; }
+    }
+    return { added, stop };
   }
   private finalistOf(row: MatrixStudyRow, t: JudgedTrial, rec: AssetRecommendation | null): MatrixFinalist {
     const cell = row.manifest.cells.find((c) => c.id === t.cell_id)!, horizon = HORIZON_OF[cell.timeframe];
@@ -245,12 +323,18 @@ export class MatrixStudyService {
     return { id: t.trial_id, trial_id: t.trial_id, cell_id: t.cell_id, arm: cell.arm, symbol: cell.symbol, timeframe: cell.timeframe, family: cell.family, side: cell.side, ir: t.ir, ir_hash: t.ir_hash, selection: t.dev!.selection, dsr: t.dsr, holdout: null, holdout_gross: null, test: null, passed: null, cause: null, horizon, source, portfolio: null, judge: t.dev!.judge };
   }
   private complete(row: MatrixStudyRow, lease: string | null): MatrixStudyRow {
-    const conclusion = conclusionOf(row.manifest, row.state.cells, row.state.finalists);
+    // v2:结论补「候补 N 组」(三档按 completed 状态算:finalist 的最终验收结果已定)
+    const board = this.safeBoard({ ...row, status: 'completed' }, false);
+    const conclusion = this.withStage(row, conclusionOf(row.manifest, row.state.cells, row.state.finalists, board ?? undefined));
     row.state.conclusion = conclusion; row.state.stage = 'done'; row.state.progress.note = conclusion.text.slice(0, 200);
-    const out = this.store.update(row.id, { status: 'completed', state: row.state, lease: { token: null, until: null } }, { kind: 'conclusion', extra: { conclusion } }, { from: 'strategy_lab', to: 'gate_captain', kind: 'result', key: 'complete', summary: conclusion.text.slice(0, 400), payload: { kind: conclusion.kind, finalist_ids: conclusion.finalist_ids, causes: conclusion.causes } });
+    const out = this.store.update(row.id, { status: 'completed', state: row.state, lease: { token: null, until: null } }, { kind: 'conclusion', extra: { conclusion } }, { from: 'strategy_lab', to: 'gate_captain', kind: 'result', key: 'complete', summary: conclusion.text.slice(0, 400), payload: { kind: conclusion.kind, finalist_ids: conclusion.finalist_ids, causes: conclusion.causes, paper_candidates: conclusion.paper_candidates ?? 0, paper_candidate_trial_ids: conclusion.paper_candidate_trial_ids ?? [] } });
     void lease; this.flush();
     try { this.deps.onConclusion?.(out, conclusion); } catch { /* 回调失败不影响研究结果 */ }
     return out;
+  }
+  private withStage(row: MatrixStudyRow, c: MatrixConclusion): MatrixConclusion {
+    if (c.judge_stage && row.state.judge_stage) c.judge_stage = { ...c.judge_stage, eligible: row.state.judge_stage.eligible };
+    return c;
   }
   private fail(id: string, e: unknown, started: number, _lease: string | null): MatrixStudyRow {
     const msg = e instanceof Error ? e.message : String(e), row = this.store.require(id);
@@ -260,7 +344,7 @@ export class MatrixStudyService {
       return this.store.update(id, { status: 'cancelled', state: row.state, lease: { token: null, until: null } }, { kind: 'status' });
     }
     row.state.error = msg.slice(0, 1000);
-    const out = this.store.update(id, { status: 'failed', state: row.state, lease: { token: null, until: null } }, { kind: 'status' }, { from: 'strategy_lab', to: 'gate_captain', kind: 'blocked', key: `failed:${row.state.run_ms}`, summary: `矩阵研究失败:${msg.slice(0, 200)}` });
+    const out = this.store.update(id, { status: 'failed', state: row.state, lease: { token: null, until: null } }, { kind: 'status' }, { from: 'strategy_lab', to: 'gate_captain', kind: 'blocked', key: `failed:${row.state.run_ms}`, summary: `批量验证失败:${msg.slice(0, 200)}` });
     this.flush(); return out;
   }
 
@@ -291,6 +375,7 @@ export class MatrixStudyService {
       });
       this.flush();
     } else if (row.status === 'finalizing' && row.state.holdout_state === 'claimed') { if (!resume) throw Error('holdout_already_claimed'); } else throw conflict(row.status);
+    const off = this.deps.offload?.({ op: 'finalize', id }, signal); if (off) return off;
     try {
       const s = row.manifest.spec, check = () => { if (signal?.aborted) throw Error('CANCELLED'); };
       const judge = judgeRuntimeFor(this.deps.db, row, this.judgeDeps(), signal), views = new Map<string, DataView>();
@@ -346,58 +431,141 @@ export class MatrixStudyService {
     if (f.passed !== true) throw Error('finalist_not_passed');
     const prior = this.store.adoption(id, finalist_id);
     if (prior) return { ...prior, preflight: { deployable: true, warnings: [] }, horizon: f.horizon, source: f.source };
-    const svc = new StrategyService(new StrategyStore(this.deps.db), new ResearchStore(this.deps.db), null as unknown as ResearchService);
     const H = { short: '短线', mid: '中线', long: '长线' }[f.horizon];
-    const src = [f.source.recommendation_id ? `推荐 ${f.source.recommendation_id}` : null, f.source.radar_tier ? `雷达 ${f.source.radar_tier}` : null, f.source.universe_scan_at ? `扫描 ${new Date(f.source.universe_scan_at).toISOString().slice(0, 16)}Z` : null].filter(Boolean).join(' / ') || '手动研究';
     const h = f.holdout!;
-    const description = `[矩阵研究 ${id} · horizon=${f.horizon}(${H} ${f.timeframe}) · ${f.family}/${f.side}/${f.arm} · 来源:${src}] 留出段 ${(h.total_return * 100).toFixed(1)}%(同敞口持有 ${h.exposure_matched_hold === null ? '—' : (h.exposure_matched_hold * 100).toFixed(1) + '%'},${h.trades} 笔,Holm p=${f.test?.p_value?.toFixed(4) ?? '—'});账户级回放 ${f.portfolio ? (f.portfolio.total_return * 100).toFixed(1) + '%' : '—'};证据口径 ${row.manifest.spec.protocol.evidence_mode}`;
+    const description = `[矩阵研究 ${id} · horizon=${f.horizon}(${H} ${f.timeframe}) · ${f.family}/${f.side}/${f.arm} · 来源:${srcText(f.source)}] 留出段 ${(h.total_return * 100).toFixed(1)}%(同敞口持有 ${h.exposure_matched_hold === null ? '—' : (h.exposure_matched_hold * 100).toFixed(1) + '%'},${h.trades} 笔,Holm p=${f.test?.p_value?.toFixed(4) ?? '—'});账户级回放 ${f.portfolio ? (f.portfolio.total_return * 100).toFixed(1) + '%' : '—'};证据口径 ${row.manifest.spec.protocol.evidence_mode}`;
+    const result = this.saveStrategy(row, {
+      key: finalist_id, kind: 'finalist', symbol: f.symbol, timeframe: f.timeframe, family: f.family, side: f.side, arm: f.arm, ir: f.ir, horizon: f.horizon, source: f.source, description, name,
+      summary: (st) => st.base ? `批量验证 finalist ${f.symbol} ${f.timeframe} 已存为「${st.name}」v${st.version}(基于 v${st.base}),可设为当前策略` : `批量验证 finalist ${f.symbol} ${f.timeframe} ${f.family} 已存为策略 ${st.strategy_id} v${st.version},可设为当前策略`,
+      payload: { finalist_id },
+    });
+    try { this.deps.onAdopted?.(this.store.require(id), { ...result, finalist_id }); } catch { /* 回调失败不影响 adopt */ }
+    return result;
+  }
+
+  /**
+   * 批量验证 v2「存为候补策略」:tier=paper_candidate 或 verdict=near 的试验 → 我的策略(新策略,或「我的策略」行的新版本)。
+   * 与 adopt 同一条保存路径(同 IR 不重复建版本、先过运行器预检、handoff + outbox);描述前缀「[批量验证候补 … · 未经最终验收」,
+   * adoption 记录键 `candidate:<trial_id>`(据此可判断未经最终验收)。不自动启动运行。
+   */
+  adoptCandidate(id: string, trial_id: string, name?: string): CandidateAdoptResult {
+    const row = this.store.require(id);
+    if (row.status !== 'completed') throw conflict(row.status);
+    const b = this.board(row), tt = b.trials.get(trial_id);
+    if (!tt) throw Error('trial_not_found');
+    if (row.state.finalists.some((f) => f.trial_id === trial_id)) throw Error('candidate_is_finalist:use_adopt');
+    const cell = row.manifest.cells.find((c) => c.id === this.store.trials(id).find((t) => t.trial_id === trial_id)?.cell_id);
+    if (!cell) throw Error('trial_not_found');
+    if (row.state.finalists.some((f) => f.cell_id === cell.id && f.passed === false)) throw Error('candidate_not_allowed:cell_failed_final_validation');
+    if (tt.tier !== 'paper_candidate' && tt.verdict !== 'near') throw Error(`candidate_not_allowed:${tt.tier}`);
+    const key = candidateKey(trial_id), card = tt.scorecard!;
+    const horizon = HORIZON_OF[cell.timeframe], rec = this.rec(row.manifest.spec.recommendation_id), recRow = rec?.rows.find((r) => r.symbol === cell.symbol);
+    const source: MatrixSource = { recommendation_id: row.manifest.spec.recommendation_id, radar_tier: recRow ? ({ short: 'short', mid: 'swing', long: 'weekly' } as const)[horizon] : null, universe_scan_at: rec?.source.universe_scan_at ?? null };
+    const prior = this.store.adoption(id, key);
+    const extra = { kind: 'paper_candidate' as const, final_validation: false as const, trial_id, tier: tt.tier, scorecard: { value: card.score.value, label: card.score.label, luck: card.luck.text } };
+    if (prior) return { ...prior, preflight: { deployable: true, warnings: [] }, horizon, source, ...extra, next: nextOf(prior.strategy_id) };
+    const ir = this.trialIR(row, trial_id);
+    const H = { short: '短线', mid: '中线', long: '长线' }[horizon], m = card.metrics;
+    const description = `[批量验证候补 ${id} · 未经最终验收 · horizon=${horizon}(${H} ${cell.timeframe}) · ${cell.family}/${cell.side}/${cell.arm} · 来源:${srcText(source)}] 选择段 ${(m.total_return * 100).toFixed(1)}%(同敞口持有 ${m.exposure_matched_hold === null ? '—' : (m.exposure_matched_hold * 100).toFixed(1) + '%'},${m.trades} 笔,最大回撤 ${(m.max_drawdown * 100).toFixed(1)}%);评分 ${card.score.value}(${card.score.label});${card.luck.text};档位 ${tt.tier}(${tt.reasons.join(';')});证据口径 ${row.manifest.spec.protocol.evidence_mode};没做最终验收,只建议先用模拟盘跑前向`;
+    const result = this.saveStrategy(row, {
+      key, kind: 'paper_candidate', symbol: cell.symbol, timeframe: cell.timeframe, family: cell.family, side: cell.side, arm: cell.arm, ir, horizon, source, description, name,
+      summary: (st) => `批量验证候补(未经最终验收)${cell.symbol} ${cell.timeframe} ${cell.family} 已存为${st.base ? `「${st.name}」v${st.version}(基于 v${st.base})` : `策略 ${st.strategy_id} v${st.version}`},建议先用模拟盘跑`,
+      payload: { trial_id, kind: 'paper_candidate', final_validation: false, score: card.score.value, score_label: card.score.label },
+    });
+    const out: CandidateAdoptResult = { ...result, ...extra, next: nextOf(result.strategy_id) };
+    try { this.deps.onAdopted?.(this.store.require(id), { ...out, finalist_id: key }); } catch { /* 回调失败不影响 adopt */ }
+    return out;
+  }
+  /** 试验的 IR(开发视图登记时冻结的变体 IR;不含任何留出信息) */
+  private trialIR(row: MatrixStudyRow, trial_id: string): StrategyIR {
+    const t = this.store.trials(row.id).find((x) => x.trial_id === trial_id), v = t?.candidate.variant as MatrixVariantRef | undefined;
+    if (!v?.ir) throw Error('trial_ir_missing');
+    return v.ir;
+  }
+
+  /** adopt / adoptCandidate 共用:我的策略行 → 该策略新版本;否则新建策略。预检不过整笔回滚 */
+  private saveStrategy(row: MatrixStudyRow, a: { key: string; kind: 'finalist' | 'paper_candidate'; symbol: string; timeframe: MatrixTimeframe; family: string; side: string; arm: string; ir: StrategyIR; horizon: MatrixFinalist['horizon']; source: MatrixSource; description: string; name?: string | undefined; summary: (st: { strategy_id: string; version: number; name: string; base: number | null }) => string; payload: Record<string, unknown> }): AdoptResult {
+    const id = row.id, svc = new StrategyService(new StrategyStore(this.deps.db), new ResearchStore(this.deps.db), null as unknown as ResearchService);
+    const H = { short: '短线', mid: '中线', long: '长线' }[a.horizon];
     let result: AdoptResult | null = null;
+    const finish = (strategy_id: string, version: number, pf: PreflightLike, name: string, base: number | null) => {
+      if (!pf.deployable) throw Error(`adopt_preflight_blocked:${pf.blockers.map((b) => `${b.code}(${b.message})`).join(';').slice(0, 600)}`);
+      this.store.insertAdoption(id, a.key, strategy_id, version);
+      result = { strategy_id, version, preflight: { deployable: true, warnings: pf.warnings }, horizon: a.horizon, source: a.source };
+      const cur = this.store.require(id);
+      this.store.handoff(cur, { from: 'gate_captain', to: 'thread_manager', kind: 'request', key: `adopt:${a.key}`, summary: a.summary({ strategy_id, version, name, base }), payload: { ...a.payload, strategy_id, version, ...(base ? { base_version: base } : {}), horizon: a.horizon, source: a.source } });
+      this.store.event(cur, 'adopted', { adopted: { finalist_id: a.key, strategy_id, version, ...(a.kind === 'paper_candidate' ? { kind: a.kind, trial_id: String(a.payload.trial_id) } : {}) } });
+    };
+    const pre = (sid: string, v: number) => (this.deps.preflight ? this.deps.preflight(sid, v) : staticPreflight(svc, sid, v, a.ir, !!this.deps.runnerHasJudge));
     // 我的策略行:adopt 出来的是该策略的新版本(同 IR 不重复建版本),不是新策略;登记的资产 / 周期跟到这一版
-    const snap = isMyFamily(f.family) ? (row.manifest.my_strategies ?? []).find((m) => `my:${m.strategy_id}@v${m.version}` === f.family) ?? null : null;
-    if (isMyFamily(f.family) && !snap) throw Error('my_strategy_snapshot_missing');
+    const snap = isMyFamily(a.family) ? (row.manifest.my_strategies ?? []).find((m) => `my:${m.strategy_id}@v${m.version}` === a.family) ?? null : null;
+    if (isMyFamily(a.family) && !snap) throw Error('my_strategy_snapshot_missing');
     if (snap) {
       this.store.tx(() => {
         const st = svc.store.require(snap.strategy_id);
         if (st.status === 'archived') throw Error('strategy_archived_conflict');
-        const moved = [st.symbol !== f.symbol ? `资产 ${st.symbol}→${f.symbol}` : null, st.timeframe !== f.timeframe ? `周期 ${st.timeframe}→${f.timeframe}` : null].filter(Boolean).join(',');
-        svc.addVersion(snap.strategy_id, { strategy_ir: f.ir, note: `${description}(基于 v${snap.version}${moved ? `;${moved}` : ''})`.slice(0, 4000) });
-        const version = svc.store.versionByHash(snap.strategy_id, irHash(f.ir));
+        const moved = [st.symbol !== a.symbol ? `资产 ${st.symbol}→${a.symbol}` : null, st.timeframe !== a.timeframe ? `周期 ${st.timeframe}→${a.timeframe}` : null].filter(Boolean).join(',');
+        svc.addVersion(snap.strategy_id, { strategy_ir: a.ir, note: `${a.description}(基于 v${snap.version}${moved ? `;${moved}` : ''})`.slice(0, 4000) });
+        const version = svc.store.versionByHash(snap.strategy_id, irHash(a.ir));
         if (!version) throw Error('adopt_version_missing');
-        if (moved) { svc.store.update(snap.strategy_id, { symbol: f.symbol, timeframe: f.timeframe }); svc.store.event(snap.strategy_id, 'version_added', { version, note: `矩阵研究 ${id} adopt:${moved}` }); }
-        const pf = this.deps.preflight ? this.deps.preflight(snap.strategy_id, version) : staticPreflight(svc, snap.strategy_id, version, f.ir, !!this.deps.runnerHasJudge);
-        if (!pf.deployable) throw Error(`adopt_preflight_blocked:${pf.blockers.map((b) => `${b.code}(${b.message})`).join(';').slice(0, 600)}`);
-        this.store.insertAdoption(id, finalist_id, snap.strategy_id, version);
-        result = { strategy_id: snap.strategy_id, version, preflight: { deployable: true, warnings: pf.warnings }, horizon: f.horizon, source: f.source };
-        const cur = this.store.require(id);
-        this.store.handoff(cur, { from: 'gate_captain', to: 'thread_manager', kind: 'request', key: `adopt:${finalist_id}`, summary: `矩阵研究 finalist ${f.symbol} ${f.timeframe} 已存为「${snap.name}」v${version}(基于 v${snap.version}),可设为当前策略`, payload: { finalist_id, strategy_id: snap.strategy_id, version, base_version: snap.version, horizon: f.horizon, source: f.source } });
-        this.store.event(cur, 'adopted', { adopted: { finalist_id, strategy_id: snap.strategy_id, version } });
+        if (moved) { svc.store.update(snap.strategy_id, { symbol: a.symbol, timeframe: a.timeframe }); svc.store.event(snap.strategy_id, 'version_added', { version, note: `矩阵研究 ${id} ${a.kind === 'paper_candidate' ? '存候补' : 'adopt'}:${moved}` }); }
+        finish(snap.strategy_id, version, pre(snap.strategy_id, version), snap.name, snap.version);
       });
-      this.flush();
-      try { this.deps.onAdopted?.(this.store.require(id), { ...result!, finalist_id }); } catch { /* 回调失败不影响 adopt */ }
-      return result!;
+    } else {
+      this.store.tx(() => {
+        const s = svc.create({ name: (a.name?.trim() || `${a.symbol.replace(/USDT$/, '')} ${H}${a.timeframe} ${a.family}${a.arm === 'code_judge' ? '+判断' : ''}${a.kind === 'paper_candidate' ? ' 候补' : ''}`).slice(0, 120), description: a.description.slice(0, 4000), symbol: a.symbol, timeframe: a.timeframe, strategy_ir: a.ir });
+        const version = svc.store.require(s.id).current_version;
+        if (!version) throw Error('adopt_version_missing');
+        finish(s.id, version, pre(s.id, version), s.name, null);
+      });
     }
-    this.store.tx(() => {
-      const s = svc.create({ name: (name?.trim() || `${f.symbol.replace(/USDT$/, '')} ${H}${f.timeframe} ${f.family}${f.arm === 'code_judge' ? '+判断' : ''}`).slice(0, 120), description: description.slice(0, 4000), symbol: f.symbol, timeframe: f.timeframe, strategy_ir: f.ir });
-      const version = svc.store.require(s.id).current_version;
-      if (!version) throw Error('adopt_version_missing');
-      const pf = this.deps.preflight ? this.deps.preflight(s.id, version) : staticPreflight(svc, s.id, version, f.ir, !!this.deps.runnerHasJudge);
-      if (!pf.deployable) throw Error(`adopt_preflight_blocked:${pf.blockers.map((b) => `${b.code}(${b.message})`).join(';').slice(0, 600)}`);
-      this.store.insertAdoption(id, finalist_id, s.id, version);
-      result = { strategy_id: s.id, version, preflight: { deployable: true, warnings: pf.warnings }, horizon: f.horizon, source: f.source };
-      const cur = this.store.require(id);
-      this.store.handoff(cur, { from: 'gate_captain', to: 'thread_manager', kind: 'request', key: `adopt:${finalist_id}`, summary: `矩阵研究 finalist ${f.symbol} ${f.timeframe} ${f.family} 已存为策略 ${s.id} v${version},可设为当前策略`, payload: { finalist_id, strategy_id: s.id, version, horizon: f.horizon, source: f.source } });
-      this.store.event(cur, 'adopted', { adopted: { finalist_id, strategy_id: s.id, version } });
-    });
     this.flush();
-    try { this.deps.onAdopted?.(this.store.require(id), { ...result!, finalist_id }); } catch { /* 回调失败不影响 adopt */ }
     return result!;
+  }
+
+  // ---------------------------------------------------------------- v2 三档 / 评分卡(读视图重算,只读开发视图评估)
+  private boards = new Map<string, TierBoard>();
+  /** 从库里重建本 Study 的判定试验:试验登记 + 已完成的开发视图评估(segment='dev');留出段评估不在这张表的 dev 行里 */
+  private judgedFromStore(row: MatrixStudyRow): { trials: JudgedTrial[]; variance: number } {
+    const devs = this.store.devResults(row.id);
+    const recs: TrialRec[] = this.store.trials(row.id).map((t) => {
+      const v = t.candidate.variant as MatrixVariantRef | undefined, dev = devs.get(t.trial_id) ?? null;
+      return { trial_id: t.trial_id, cell_id: t.cell_id, variant_id: t.variant_id, param: v?.param ?? t.variant_id, parent_trial_id: t.parent_trial_id, generation: t.generation, config_hash: t.config_hash, ir_hash: t.ir_hash, ir: (v?.ir ?? null) as StrategyIR, ...(v?.vol_target ? { vol_target: v.vol_target } : {}), dev, error: dev ? null : t.status, status: dev ? 'evaluated' : 'failed' };
+    });
+    return judgeTrials(recs, row.state.ledger?.trial_count ?? this.store.programTrialCount(row.research_program_id), row.manifest.spec.protocol);
+  }
+  /** 三档 + 评分卡(按 study id + updated_at 缓存) */
+  board(row: MatrixStudyRow, useCache = true): TierBoard {
+    const key = `${row.id}:${row.updated_at}:${row.status}`, hit = useCache ? this.boards.get(key) : undefined;
+    if (hit) return hit;
+    const { trials, variance } = this.judgedFromStore(row), vis = trials.filter((t) => t.dev).length;
+    const counts = { study_trials: row.state.ledger?.study_trial_count ?? vis, program_trials: row.state.ledger?.trial_count ?? this.store.programTrialCount(row.research_program_id) };
+    const best = Object.fromEntries(Object.values(row.state.cells).map((c) => [c.cell_id, c.best_trial_id]));
+    const sealed = row.state.finalists_hash !== null || ['completed', 'ready_to_finalize', 'finalizing'].includes(row.status);
+    const b = tierBoard(row.manifest, row.state.finalists, trials, counts, row.state.sharpe_variance ?? variance, best, sealed, judgeSkipped(judgeStageMarks(row.manifest, row.state.judge_stage)));
+    if (useCache) { if (this.boards.size > 64) this.boards.delete(this.boards.keys().next().value!); this.boards.set(key, b); }
+    return b;
+  }
+  private safeBoard(row: MatrixStudyRow, useCache = true): TierBoard | null { try { return this.board(row, useCache); } catch { return null; } }
+  /** 某个试验的明细(给「在研究台继续打磨」带 IR;只含训练 / 选择段) */
+  trialDetail(id: string, trial_id: string) {
+    const row = this.store.require(id), b = this.board(row), tt = b.trials.get(trial_id);
+    const t = this.store.trials(id).find((x) => x.trial_id === trial_id);
+    if (!tt || !t) throw Error('trial_not_found');
+    const cell = row.manifest.cells.find((c) => c.id === t.cell_id)!, snap = isMyFamily(cell.family) ? (row.manifest.my_strategies ?? []).find((m) => `my:${m.strategy_id}@v${m.version}` === cell.family) ?? null : null;
+    return { study_id: id, trial_id, cell: { id: cell.id, symbol: cell.symbol, timeframe: cell.timeframe, horizon: HORIZON_OF[cell.timeframe], family: cell.family, family_name: snap ? `${snap.name} v${snap.version}` : null, side: cell.side, arm: cell.arm, market: row.manifest.spec.market }, ir: this.trialIR(row, trial_id), tier: tt.tier, reasons: tt.reasons, verdict: tt.verdict, scorecard: tt.scorecard, adopted: this.store.adoption(id, candidateKey(trial_id)) };
   }
 
   // ---------------------------------------------------------------- 读视图与事件
   view(row: MatrixStudyRow, detail = true) {
-    const s = row.state, base = { id: row.id, status: row.status, stage: row.stage, research_program_id: row.research_program_id, manifest_hash: row.manifest_hash, protocol_hash: row.protocol_hash, created_at: row.created_at, updated_at: row.updated_at, progress: s.progress, holdout_state: s.holdout_state, conclusion: s.conclusion, usage: s.usage, ledger: s.ledger, stop_reason: s.stop_reason, error: s.error, origin: row.manifest.spec.origin, spec: row.manifest.spec, my_strategies: (row.manifest.my_strategies ?? []).map((m) => ({ strategy_id: m.strategy_id, version: m.version, name: m.name, symbol: m.symbol, timeframe: m.timeframe })) };
+    const s = row.state, b = this.safeBoard(row);
+    // v2:结论按三档重算(旧研究也能看到候补);kind 与 v1 同一规则,不变
+    const conclusion = s.conclusion ? (b ? { ...this.withStage(row, conclusionOf(row.manifest, s.cells, s.finalists, b)), kind: s.conclusion.kind } : s.conclusion) : null;
+    const base = { id: row.id, status: row.status, stage: row.stage, research_program_id: row.research_program_id, manifest_hash: row.manifest_hash, protocol_hash: row.protocol_hash, created_at: row.created_at, updated_at: row.updated_at, progress: s.progress, holdout_state: s.holdout_state, conclusion, usage: s.usage, ledger: s.ledger, judge_stage: s.judge_stage ?? null, stop_reason: s.stop_reason, error: s.error, origin: row.manifest.spec.origin, spec: row.manifest.spec, my_strategies: (row.manifest.my_strategies ?? []).map((m) => ({ strategy_id: m.strategy_id, version: m.version, name: m.name, symbol: m.symbol, timeframe: m.timeframe })) };
     if (!detail) return { ...base, finalists: s.finalists.map((f) => ({ id: f.id, symbol: f.symbol, timeframe: f.timeframe, family: f.family, arm: f.arm, passed: f.passed, horizon: f.horizon })) };
-    return { ...base, segments: row.manifest.segments, cells: row.manifest.cells.map((c) => ({ id: c.id, symbol: c.symbol, timeframe: c.timeframe, horizon: HORIZON_OF[c.timeframe], family: c.family, side: c.side, arm: c.arm, applicability: c.applicability, reason: c.reason, variants: c.variants.length, result: s.cells[c.id] ?? null })), generations: s.generations, finalists: s.finalists, notes: s.notes.slice(-50), release: this.store.release(row.id) ? { status: this.store.release(row.id)!.status, released_at: this.store.release(row.id)!.released_at } : null, adoptions: s.finalists.map((f) => ({ finalist_id: f.id, adopted: this.store.adoption(row.id, f.id) })).filter((x) => x.adopted) };
+    const adoptionRows = this.deps.db.prepare('SELECT finalist_id,strategy_id,version FROM research_matrix_adoptions WHERE study_id=?').all(row.id) as { finalist_id: string; strategy_id: string; version: number }[];
+    return { ...base, segments: row.manifest.segments, cells: row.manifest.cells.map((c) => ({ id: c.id, symbol: c.symbol, timeframe: c.timeframe, horizon: HORIZON_OF[c.timeframe], family: c.family, side: c.side, arm: c.arm, applicability: c.applicability, reason: c.reason, variants: c.variants.length, result: s.cells[c.id] ? { ...s.cells[c.id]!, ...(b?.cells[c.id] ?? {}) } : null })), generations: s.generations, finalists: s.finalists, notes: s.notes.slice(-50), release: this.store.release(row.id) ? { status: this.store.release(row.id)!.status, released_at: this.store.release(row.id)!.released_at } : null, adoptions: s.finalists.map((f) => ({ finalist_id: f.id, adopted: this.store.adoption(row.id, f.id) })).filter((x) => x.adopted),
+      candidate_adoptions: adoptionRows.filter((a) => a.finalist_id.startsWith(CANDIDATE_KEY)).map((a) => ({ trial_id: a.finalist_id.slice(CANDIDATE_KEY.length), adopted: { strategy_id: a.strategy_id, version: Number(a.version) } })) };
   }
   get(id: string) { return this.view(this.store.require(id)); }
   list(limit = 50) { return { items: this.store.list(limit).map((r) => this.view(r, false)) }; }

@@ -6,7 +6,7 @@
  *  - 资金费套利:每个资产一条两腿曲线,持有基准 = 该资产现货买入持有;敞口记净敞口(≈ 0,市场中性)。
  *  - 资格:段首之前已有数据(横截面动量要求回看期已满)的资产才算成员,与单资产族同一规则。
  */
-import type { ResearchBar } from '@trading-swarm/contracts';
+import type { ResearchBar } from '@trade-gate/contracts';
 import type { FundingSeries } from '../orders/types.js';
 import { runXsmom, type PortfolioAsset, type PortfolioSample, type XsmomParams } from '../primitives/portfolio-xsmom.js';
 import { runCarry, type CarryParams } from '../primitives/portfolio-carry.js';

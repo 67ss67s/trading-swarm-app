@@ -1,3 +1,6 @@
+import { reserveJev } from './public-demo.js';
+import { assertRealModelsAllowed } from './model-guard.js';
+import { dependencyHealth } from './dependency-health.js';
 // §9.52 DecisionClient:结构化决策(OpenRouter Decisions API,Jev 等),给 §9.53 判断要素用。
 // 只回概率/档位,没有文本、没有推理;便宜到可以在回测里对每个候选都问一遍(设计 §1:一次三问 ≈ $0.00003)。
 // 闸门三道:并发闸(缺省 8)、429 退避、日花费闸 workflow.decision_daily_usd_cap(超了抛 decision_budget_exhausted)。
@@ -157,6 +160,7 @@ export class JevDecisionClient implements DecisionClient {
       this.active++;
       return;
     }
+    if (this.waiters.length >= 128) throw new DecisionError('decision_queue_full: 判断请求队列已满', 'decision_budget_exhausted');
     await new Promise<void>((r) => this.waiters.push(r));
     this.active++;
   }
@@ -173,7 +177,13 @@ export class JevDecisionClient implements DecisionClient {
     if (this.ledger.spent(day) >= cap) throw new DecisionError(`decision_budget_exhausted:今日判断要素花费已达 $${cap}`, 'decision_budget_exhausted');
     await this.acquire();
     try {
-      return await this.send(req, o, day);
+      if (this.ledger.spent(utcDay(this.now())) >= (this.opts.dailyCapUsd?.() ?? DEFAULT_DECISION_DAILY_USD_CAP)) throw new DecisionError('decision_budget_exhausted: 排队期间额度耗尽', 'decision_budget_exhausted');
+      const result = await this.send(req, o, utcDay(this.now()));
+      dependencyHealth.observe('decision', !result.response_error, result.response_error);
+      return result;
+    } catch (e) {
+      dependencyHealth.observe('decision', false, e);
+      throw e;
     } finally {
       this.release();
     }
@@ -191,6 +201,8 @@ export class JevDecisionClient implements DecisionClient {
       const left = budget - (this.now() - started);
       if (left <= 0) break;
       const signal = o?.signal ? AbortSignal.any([o.signal, AbortSignal.timeout(left)]) : AbortSignal.timeout(left);
+      assertRealModelsAllowed('decision');
+      reserveJev();
       let res: Response | null = null;
       try {
         // 不跟随重定向:跟随会把 Authorization 带到新地址。

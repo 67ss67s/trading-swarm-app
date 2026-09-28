@@ -51,7 +51,7 @@ P3拥有context.ts与判断页。P5没有直接改其映射：现有事件证据
 
 ## 验证与运行边界
 
-测试覆盖代理回环/限长、日历DST/多源冲突/降级、任务幂等/预算/重试/取消/并发、BLS发布月份与统计口径、API输入和真实SSE广播。实抓样例与全量测试结果见 内部评审记录。未启动、重启或部署任何服务，未发真实订单；上线与重启仍由主线负责。合并时注意runtime事件与信息员段、workflow研究键、SSE名称数组、0020迁移及§9.33追加位置。
+测试覆盖代理回环/限长、日历DST/多源冲突/降级、任务幂等/预算/重试/取消/并发、BLS发布月份与统计口径、API输入和真实SSE广播。实抓样例与全量测试结果见 `.codex-reports/event-research.md`。未启动、重启或部署任何服务，未发真实订单；上线与重启仍由主线负责。合并时注意runtime事件与信息员段、workflow研究键、SSE名称数组、0020迁移及§9.33追加位置。
 
 补充实抓：Fed 2026-07-29声明的带连字符分数区间已成功解析上限3.75%；BLS季调CPI CUSR0000SA0返回REQUEST_SUCCEEDED、2026-M08指数334.131。该指数不是当月涨幅。WPSFD4本机此次请求超时，故不能声称PPI季调序列完成了在线可用性验收；单测覆盖其数据形状与计算。
 
@@ -60,4 +60,4 @@ P3拥有context.ts与判断页。P5没有直接改其映射：现有事件证据
 - `evidence.events` 可包含普通 TriggerKind 或 `EVENT_SUBKINDS` 列出的事件 subkind。普通触发保持旧交集语义；事件 subkind 是显式订阅，为该策略增加 `event` 入口并按结构化 `event_subkind` 匹配，不要求改写原 trigger.kinds。最小周期继续生效。`vol_spike` 两种语义并存，由 hit.kind 区分。空 evidence 沿用原触发集合；显式泛型 event 且无 subkind 限制时可接收全部事件。
 - 事件触发携带 `event_id/event_subkind/source_ref/research_task_id`，冻结在判断的 `trigger.hits` 并写入触发证据。排队后按 liveFor 复核；被撤销、资产不符、窗口外的旧 event hit 被移除。只有事件触发且事实失效时，不能回退成全策略唤醒。
 - 简报来源以 `source=research + task_id` 为准，判断里呈现 task ID、任务详情入口、摘录 refs。旧 brief 历史保留并明确标注非 research，不作为一手简报进入模型。研究完成不代表新策略族/执行器或自动交易已实现；本次只交付事件证据与唤醒接线。
-- 静态表逐条双官方发布物核对见 内部评审记录；BLS curl 403 的事实与浏览工具人工核对明确分开。
+- 静态表逐条双官方发布物核对见 `.codex-reports/calendar-verification-0912.json`；BLS curl 403 的事实与浏览工具人工核对明确分开。

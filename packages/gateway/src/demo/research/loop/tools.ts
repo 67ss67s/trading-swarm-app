@@ -1,5 +1,5 @@
 import { prepareRevision, runRevision, compareRuns, buildReport } from './revisions.js';
-import type { StrategyCompileResult } from "@trading-swarm/contracts";
+import type { StrategyCompileResult } from "@trade-gate/contracts";
 import type { Brain } from "../../brain.js";
 import type {
   LoopTaskKind,
@@ -10,7 +10,7 @@ import type {
   LoopErrorCode,
   LoopResult,
   ResearchBar,
-} from "@trading-swarm/contracts";
+} from "@trade-gate/contracts";
 import type {
   MarketData,
   Coverage,
@@ -1212,7 +1212,7 @@ export function createToolRegistry(): ToolRegistry {
  * 研究图表产物(charts.ts 模板,确定性):同一 inquiry 里同一报告同一模板只落一次(回测步与持有对比步共用一张权益曲线)。
  * 返回产物 id;模板对这份报告不适用(比如没有交易就没有退出类型图)时跳过。
  */
-export function ensureCharts(ctx: ToolContext, reports: import("@trading-swarm/contracts").BacktestReport[], templates: readonly import("@trading-swarm/contracts").LoopChartTemplate[], snapshot_refs: string[] = [], run_id?: string): string[] {
+export function ensureCharts(ctx: ToolContext, reports: import("@trade-gate/contracts").BacktestReport[], templates: readonly import("@trade-gate/contracts").LoopChartTemplate[], snapshot_refs: string[] = [], run_id?: string): string[] {
   if (!reports.length) return [];
   const q = ctx.store.inquiry(ctx.inquiry_id);
   const key = (template: string, ids: string[]) => template + "|" + [...ids].sort().join(",");
@@ -1253,7 +1253,7 @@ const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 const pctText = (x: number | null | undefined) => (x === null || x === undefined ? "—" : `${x >= 0 ? "+" : ""}${(x * 100).toFixed(2)}%`);
 const lm = (value: number | null | undefined, unit: string, enough = true) => ({ value: value ?? null, unit, status: value === null || value === undefined ? ("not_applicable" as const) : enough ? ("ok" as const) : ("insufficient" as const) });
 /** 全窗口报告 → 研究 loop 的分析产物(typed metrics + 代码生成的观察句,含窗口起止日期与样本内/外表现)。 */
-function backtestAnalysis(report: import("@trading-swarm/contracts").BacktestReport) {
+function backtestAnalysis(report: import("@trade-gate/contracts").BacktestReport) {
   const lines: string[] = [], rows: Record<string, unknown>[] = [];
   const is = report.segments.find((s) => s.name === "in_sample"), oos = report.segments.find((s) => s.name === "out_of_sample");
   lines.push(`全窗口回测 ${day(report.window.from_ms)} → ${day(report.window.to_ms)}(${report.timeframe},预热之后到最后一根已收盘 K 线;样本内 ${is ? day(is.to_ms) : "—"} 之前、样本外之后,按 70/30 标注)`);
@@ -1270,7 +1270,7 @@ function backtestAnalysis(report: import("@trading-swarm/contracts").BacktestRep
   return { report_id: report.id, engine_version: report.engine_version, window: report.window, segments: report.segments, score: { value: report.score.value, unit: "score_0_100", status: "ok" as const }, rows, observation: lines.join("。\n"), method_version: "backtest-report/v1" };
 }
 /** 持有对比:读报告里同窗口的买入持有(同费率同滑点),A/B 同一窗口同一基准。 */
-function holdComparison(report: import("@trading-swarm/contracts").BacktestReport) {
+function holdComparison(report: import("@trade-gate/contracts").BacktestReport) {
   const p = report.assets.find((a) => a.key === report.primary_key), m = p?.metrics ?? null;
   const comparable = !!m && m.benchmark_return !== null;
   return {

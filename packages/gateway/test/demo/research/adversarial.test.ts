@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
-import type { ResearchBar, ResearchDataset, ResearchExecution, ResearchRequest, ResearchStudy } from '@trading-swarm/contracts';
+import type { ResearchBar, ResearchDataset, ResearchExecution, ResearchRequest, ResearchStudy } from '@trade-gate/contracts';
 import { SpotLedger } from '../../../src/demo/research/ledger.js';
 import { runReplay, type AgentAction, type DecisionView } from '../../../src/demo/research/engine.js';
 import { budgetBrain, contextFor } from '../../../src/demo/research/agent.js';

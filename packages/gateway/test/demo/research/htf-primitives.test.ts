@@ -1,7 +1,7 @@
 // 多周期原语(2026-09-23 夜):htf_ma_state(高周期均线上下)、macd_divergence / macd_divergence_exit 的 htf 与 direction 参数。
 // 第一段是旧口径钉子:改动前实测的结果哈希——不用新参数的 IR 走 engine v5 快路径、v3 慢路径、订单周期执行核(现货 + 永续多空)逐字节不变。
 import { describe, it, expect } from 'vitest';
-import type { ResearchRequest, StrategyIR } from '@trading-swarm/contracts';
+import type { ResearchRequest, StrategyIR } from '@trade-gate/contracts';
 import { runReplay } from '../../../src/demo/research/engine.js';
 import { runOrderPath } from '../../../src/demo/research/orders/index.js';
 import { DEFAULT_ORDER_GATE, orderGateFor } from '../../../src/demo/research/order-gate.js';
@@ -53,7 +53,7 @@ describe('多周期参数接入前后,不用新参数的 IR 结果逐字节不�
 
 // ── 以下是新原语 / 新参数本身的行为 ────────────────────────────────────────────
 
-import type { ResearchBar } from '@trading-swarm/contracts';
+import type { ResearchBar } from '@trade-gate/contracts';
 import { checkIR, irWarmup, irHistoryBars } from '../../../src/demo/research/strategy.js';
 import { registry } from '../../../src/demo/research/primitives/index.js';
 import { htfSeries, htfMaStates, htfMaParams } from '../../../src/demo/research/primitives/htf.js';

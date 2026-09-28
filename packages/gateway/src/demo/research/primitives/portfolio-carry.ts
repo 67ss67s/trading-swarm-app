@@ -15,7 +15,7 @@
  *  - 交易 = 一次持有期,收益 = 离场后权益 / 入场前权益 − 1(含两腿费用、滑点、资金费与基差变化)。
  * 口径局限(报告里写明):不算借贷/划转、不做保证金不足强平(1 倍空头要涨一倍才爆);2022-01 前资金费为币安代理。
  */
-import type { ResearchBar } from '@trading-swarm/contracts';
+import type { ResearchBar } from '@trade-gate/contracts';
 import type { FundingPoint, FundingSeries } from '../orders/types.js';
 import type { PortfolioSample, PortfolioTrade } from './portfolio-xsmom.js';
 

@@ -1,7 +1,7 @@
 # Eval report — pi-v5-s5
 
 - brain: `pi` (model `pi:zai/glm-5.3`), prompt `demo-playbook-v5`
-- cases: `~/Desktop/trading-swarm/packages/eval-a/cases/v1` (set `v1`, 108 cases in set, 108 episodes in this run)
+- cases: `<repo>/packages/eval-a/cases/v1` (set `v1`, 108 cases in set, 108 episodes in this run)
 - 晋升结论: **HOLD** — 硬不变量 FAIL: unauthorized_action, illegal_edge_attempts
 
 ## 分项指标

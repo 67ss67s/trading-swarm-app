@@ -8,7 +8,7 @@
  *  - 高周期趋势复刻 trend-state.ts 的 trendState(同一递推顺序,测试里逐根对拍);
  *  - 结构位复刻 structure.ts 的 htfStructure:structure() 是逐根因果的,跑一遍全序列后按「截至第 i 根」还原当时的状态(测试里对拍)。
  */
-import type { ResearchBar, StrategyPrimitive } from '@trading-swarm/contracts';
+import type { ResearchBar, StrategyPrimitive } from '@trade-gate/contracts';
 import { atrSeries, indicatorLine } from '../../primitives/indicators.js';
 import { structure, completeBuckets } from '../../primitives/structure.js';
 import { registry } from '../../primitives/index.js';

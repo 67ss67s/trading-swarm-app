@@ -6,13 +6,32 @@ import { DEFAULT_ACTIVE_STRATEGIES } from './strategies.js';
 import { DEFAULT_FUNNEL_SYMBOLS } from './funnel.js';
 import { PROTECTION_TTL_DAYS_BOUNDS, PROTECTION_TTL_DAYS_DEFAULT } from './protection.js';
 import { DEFAULT_FOLLOW_SETTINGS, normalizeFollowSettings } from './trader-follow.js';
+import { DEFAULT_EXECUTION_THRESHOLDS, EXECUTION_NUMERIC_BOUNDS, LEGACY_EXECUTION_DEFAULTS, STOP_FLOOR_ATR_TFS, executionThresholds } from './execution-policy.js';
 import { TIERS, type AgentCliKind, type Backend, type BrainKind, type CliCommandsView, type Tier, type TierPolicy, type Workflow } from './types.js';
 
 declare module './types.js' { interface Workflow { research_daily_cap?: { model_calls: number; fetches: number } } }
 // §9.52 判断要素(Decisions API)的日花费闸,美元;超了 DecisionClient 抛 decision_budget_exhausted。
 declare module './types.js' { interface Workflow { decision_daily_usd_cap?: number } }
+// §9.56 只暂停 AI 扫盘(不再扫新机会、扫完的也不开仓);paused 是全停,策略运行不受这个开关影响。
+declare module './types.js' { interface Workflow { ai_scan_paused?: boolean } }
 
 export const DEFAULT_PLAYBOOK = [
+  '突破-回踩(单一策略,v3):',
+  '- 适用:交易方向与 1h 趋势一致(EMA20 与 EMA50 同向),且 4h 不是明显反向趋势(4h 反向时只允许限价挂回踩位、信心 ≤ 0.5);价格刚突破 20 根高/低点,或回踩 EMA20 站稳。',
+  '- 入场两种形态:①回踩已确认(最近一根收在突破位之上/之下,量比 ≥ 1.0)→ 市价;②突破刚发生、回踩还没来 → PROPOSE 一个限价 entry_zone 挂在突破位到 EMA20 之间,等它回来(不成交按所选策略 horizon 的复查周期等待,长线不因下一根短线波动撤单)。不要因为"还没回踩"就只 WATCH——挂限价就是等回踩的方式。',
+  '- 不追:距离 20 根高/低点已超过 1.5 个 ATR 的位置不追;资金费率绝对值 > 0.05% 且与方向同侧时降低信心。',
+  '- NO_TRADE 条件:1h 与 4h 明显反向(4h 价格在 EMA20/EMA50 的另一侧且距离 > 1 ATR);价格夹在 EMA20 与 EMA50 之间震荡;ATR% < 0.4%(没波动);信息员标了高相关的风险事件在 2 小时内。',
+  '- 日线状态(代码算的证据):bear 时不做多突破(只允许做空或 NO_TRADE),bull 时不做空突破;range 时突破要求量比 ≥ 1.5;volatile 时止损至少 1.2 ATR。',
+  '- 交易时段:美股开盘窗口(开盘后 15 分钟内)不追单,等第一根 15m 收盘再判断;周末流动性差,只做回踩确认过的入场。',
+  '- 急拉急跌触发(fast_move):先判断是不是新闻驱动(看信息员证据),没有新闻的急拉急跌大概率均值回归,不追;有新闻且与 1h 趋势同向才考虑回踩入场。',
+  '- 失效:收盘跌回突破位另一侧,或触及止损。',
+  '- 止损放在最近结构位(swing 低/高)之外,至少 1%(波动大的币按规则里的 ATR 下限放得更宽);第一止盈至少是止损距离的 1.5 倍,可给第二止盈。',
+  '- 有持仓时:论点未变 → HOLD;触及失效条件 → EXIT;浮盈超过 1 倍止损距离且结构转弱 → REDUCE;演示版不允许 ADD。',
+  '- 挂单等待中:结构没坏 → HOLD;结构坏了或价格已远离入场区 → INVALIDATE(撤单)。',
+].join('\n');
+
+/** 09-27 之前的出厂 playbook。库里存的和它逐字相同 = 没人改过,迁移到新默认;改过的不动。 */
+export const LEGACY_DEFAULT_PLAYBOOK_V3 = [
   '突破-回踩(单一策略,v3):',
   '- 适用:交易方向与 1h 趋势一致(EMA20 与 EMA50 同向),且 4h 不是明显反向趋势(4h 反向时只允许限价挂回踩位、信心 ≤ 0.5);价格刚突破 20 根高/低点,或回踩 EMA20 站稳。',
   '- 入场两种形态:①回踩已确认(最近一根收在突破位之上/之下,量比 ≥ 1.0)→ 市价;②突破刚发生、回踩还没来 → PROPOSE 一个限价 entry_zone 挂在突破位到 EMA20 之间,等它回来(不成交按所选策略 horizon 的复查周期等待,长线不因下一根短线波动撤单)。不要因为"还没回踩"就只 WATCH——挂限价就是等回踩的方式。',
@@ -50,19 +69,28 @@ export const DEFAULT_WORKFLOW: Workflow = {
   timeframe: '15m',
   info_every_ms: 30 * 60_000,
   risk_pct: '0.5',
-  sizing_agent: 'advise',
+  sizing_agent: 'apply',
   leverage: 3,
   margin_mode: 'cross',
   max_open_threads: 3,
   max_opens_per_day: 4,
   daily_loss_stop_pct: '3',
+  // §9.56 执行层止损/净RR 阈值(原来写死在 gates.ts / 持仓计划里);所有机会来源共用。
+  stop_floor_mode: DEFAULT_EXECUTION_THRESHOLDS.stop_floor_mode,
+  stop_floor_atr_tf: DEFAULT_EXECUTION_THRESHOLDS.stop_floor_atr_tf,
+  min_stop_pct: DEFAULT_EXECUTION_THRESHOLDS.min_stop_pct,
+  max_stop_pct: DEFAULT_EXECUTION_THRESHOLDS.max_stop_pct,
+  min_stop_atr: DEFAULT_EXECUTION_THRESHOLDS.min_stop_atr,
+  min_net_rr: DEFAULT_EXECUTION_THRESHOLDS.min_net_rr,
   auto_approve: true,
-  brain: 'pi',
-  cheap_brain: 'pi',
+  // 没接模型时不调用任何模型:用户在 Model connections 里接上自己的模型、给角色绑定后才会真正调用
+  brain: 'stub',
+  cheap_brain: 'stub',
   brain_model: null,
   cheap_brain_model: null,
   playbook_text: DEFAULT_PLAYBOOK,
   paused: false,
+  ai_scan_paused: false,
   narrate: true,
   chat_requires_approval: false,
   scan_mode: 'triggered',
@@ -115,11 +143,16 @@ export const WORKFLOW_BOUNDS = {
   watchlist_max: [1, 300] as const,
   timeframes: ['1m', '3m', '5m', '15m', '30m', '1h', '4h'],
   info_every_ms: [2 * 60_000, 6 * 3_600_000] as const,
-  risk_pct: [0.1, 2] as const,
-  leverage: [1, 10] as const,
-  max_open_threads: [1, 6] as const,
-  max_opens_per_day: [1, 12] as const,
-  daily_loss_stop_pct: [0.5, 20] as const,
+  // 执行层数值边界的唯一来源是 execution-policy.ts(§9.56 PATCH /api/execution-policy 与这里同一份)
+  risk_pct: [EXECUTION_NUMERIC_BOUNDS.risk_pct.min, EXECUTION_NUMERIC_BOUNDS.risk_pct.max] as const,
+  leverage: [EXECUTION_NUMERIC_BOUNDS.leverage.min, EXECUTION_NUMERIC_BOUNDS.leverage.max] as const,
+  max_open_threads: [EXECUTION_NUMERIC_BOUNDS.max_open_threads.min, EXECUTION_NUMERIC_BOUNDS.max_open_threads.max] as const,
+  max_opens_per_day: [EXECUTION_NUMERIC_BOUNDS.max_opens_per_day.min, EXECUTION_NUMERIC_BOUNDS.max_opens_per_day.max] as const,
+  daily_loss_stop_pct: [EXECUTION_NUMERIC_BOUNDS.daily_loss_stop_pct.min, EXECUTION_NUMERIC_BOUNDS.daily_loss_stop_pct.max] as const,
+  min_stop_pct: [EXECUTION_NUMERIC_BOUNDS.min_stop_pct.min, EXECUTION_NUMERIC_BOUNDS.min_stop_pct.max] as const,
+  max_stop_pct: [EXECUTION_NUMERIC_BOUNDS.max_stop_pct.min, EXECUTION_NUMERIC_BOUNDS.max_stop_pct.max] as const,
+  min_stop_atr: [EXECUTION_NUMERIC_BOUNDS.min_stop_atr.min, EXECUTION_NUMERIC_BOUNDS.min_stop_atr.max] as const,
+  min_net_rr: [EXECUTION_NUMERIC_BOUNDS.min_net_rr.min, EXECUTION_NUMERIC_BOUNDS.min_net_rr.max] as const,
   playbook_max_chars: 4000,
   heartbeat_every_ms: [5 * 60_000, 4 * 3_600_000] as const,
   invalidation_confirm_bars: [1, 5] as const,
@@ -268,6 +301,28 @@ export function applyWorkflowPatch(current: Workflow, patch: Record<string, unkn
     const v = clampNum(patch['daily_loss_stop_pct'], WORKFLOW_BOUNDS.daily_loss_stop_pct, 'daily_loss_stop_pct');
     if (v !== null) next.daily_loss_stop_pct = String(Math.round(v * 10) / 10);
   }
+  // §9.56 执行层止损/净RR 阈值:越界报错不静默钳(用户以为设上了 0.1% 其实被钳成 0.2%,比报错更糟)。
+  for (const f of ['min_stop_pct', 'max_stop_pct', 'min_stop_atr', 'min_net_rr'] as const) {
+    if (!(f in patch)) continue;
+    const [lo, hi] = WORKFLOW_BOUNDS[f];
+    const n = Number(patch[f]);
+    if (patch[f] === null || patch[f] === '' || typeof patch[f] === 'boolean' || !Number.isFinite(n) || n < lo || n > hi) errors.push(`${f} 需在 ${lo}–${hi}${f === 'min_stop_atr' ? '(0 = 关闭)' : ''}`);
+    else next[f] = Math.round(n * 1000) / 1000;
+  }
+  if ('stop_floor_mode' in patch) {
+    if (patch['stop_floor_mode'] !== 'pct' && patch['stop_floor_mode'] !== 'atr') errors.push('stop_floor_mode 只能是 pct / atr');
+    else next.stop_floor_mode = patch['stop_floor_mode'];
+  }
+  if ('stop_floor_atr_tf' in patch) {
+    const tf = patch['stop_floor_atr_tf'];
+    if (typeof tf !== 'string' || !(STOP_FLOOR_ATR_TFS as readonly string[]).includes(tf)) errors.push(`stop_floor_atr_tf 只能是 ${STOP_FLOOR_ATR_TFS.join(' / ')}`);
+    else next.stop_floor_atr_tf = tf as Workflow['stop_floor_atr_tf'];
+  }
+  if (('min_stop_pct' in patch || 'max_stop_pct' in patch) && !((next.min_stop_pct ?? DEFAULT_EXECUTION_THRESHOLDS.min_stop_pct) < (next.max_stop_pct ?? DEFAULT_EXECUTION_THRESHOLDS.max_stop_pct))) {
+    errors.push('min_stop_pct 必须小于 max_stop_pct');
+    next.min_stop_pct = current.min_stop_pct;
+    next.max_stop_pct = current.max_stop_pct;
+  }
   if ('auto_approve' in patch) {
     if (typeof patch['auto_approve'] !== 'boolean') errors.push('auto_approve 必须是布尔');
     else next.auto_approve = patch['auto_approve'];
@@ -359,6 +414,10 @@ export function applyWorkflowPatch(current: Workflow, patch: Record<string, unkn
   if ('paused' in patch) {
     if (typeof patch['paused'] !== 'boolean') errors.push('paused 必须是布尔');
     else next.paused = patch['paused'];
+  }
+  if ('ai_scan_paused' in patch) {
+    if (typeof patch['ai_scan_paused'] !== 'boolean') errors.push('ai_scan_paused 必须是布尔');
+    else next.ai_scan_paused = patch['ai_scan_paused'];
   }
   if ('narrate' in patch) {
     if (typeof patch['narrate'] !== 'boolean') errors.push('narrate 必须是布尔');
@@ -590,11 +649,14 @@ export function loadWorkflow(json: string | undefined): Workflow {
       ...parsed,
       markets: Array.isArray(parsed.markets) && parsed.markets.length && parsed.markets.every(m => m === 'spot' || m === 'perp') ? [...new Set(parsed.markets)] : ['perp'],
       default_market: parsed.default_market === 'spot' && parsed.markets?.includes('spot') ? 'spot' : 'perp',
-      sizing_agent: ['off', 'advise', 'apply'].includes(parsed.sizing_agent ?? '') ? parsed.sizing_agent! : 'advise',
+      sizing_agent: parsed.sizing_agent === undefined ? 'apply' : ['off', 'advise', 'apply'].includes(parsed.sizing_agent) ? parsed.sizing_agent : 'advise', // 缺字段按拍板默认生效;乱值 fail-closed 回只建议
       // 手改过 / 老库里可能是别的字符串:票池的自动开关必须 fail closed 回 manual。
       active_mode: parsed.active_mode === 'auto' ? 'auto' : 'manual',
+      ai_scan_paused: parsed.ai_scan_paused === true,
       // 老库没有这个字段 / 手改坏了:分层配额必须 fail-closed 回「不额外限制」,而不是回一个乱数。
       tier_policy: normalizeTierPolicies(parsed.tier_policy),
+      // §9.56 老库没有这几个字段或者值被改坏了,就用默认值,不会换成更宽松的数。
+      ...(() => { const th = executionThresholds(parsed); return { stop_floor_mode: th.stop_floor_mode, stop_floor_atr_tf: th.stop_floor_atr_tf, min_stop_pct: th.min_stop_pct, max_stop_pct: th.max_stop_pct, min_stop_atr: th.min_stop_atr, min_net_rr: th.min_net_rr }; })(),
       // 手改过的库里可能是 0 / 字符串 / 缺字段:凭证有效期必须是合法天数,否则凭证永不过期或立刻全部过期。
       protection_ttl_days: Number.isInteger(ttl) && ttl >= PROTECTION_TTL_DAYS_BOUNDS[0] && ttl <= PROTECTION_TTL_DAYS_BOUNDS[1] ? ttl : PROTECTION_TTL_DAYS_DEFAULT,
       // 手改过的库里缺这个字段 = 没有授权过自动真钱金丝雀:按 0 兜底,不继承一个不存在的额度。
@@ -606,6 +668,40 @@ export function loadWorkflow(json: string | undefined): Workflow {
   } catch {
     return { ...DEFAULT_WORKFLOW, updated_at: Date.now() };
   }
+}
+
+/**
+ * 09-27 一次性迁移(启动时 runtime 调一次,改了就存库并记活动日志)。评审站和 18811 的 workflow 是整份存过的,
+ * 改代码里的默认值管不到它们:
+ *  - 库里 min_stop_pct 恰好是旧默认 0.3、又没有 stop_floor_mode(= 这个字段上线之前存的,没人动过)→ 改成 1.0;
+ *    min_stop_atr 恰好是旧默认 0.5 的同样改成 1.0(它的含义也从「工作周期 ATR」改成了「所选周期 ATR」)。人改过的值不动。
+ *  - playbook_text 和旧出厂 playbook 逐字相同 → 换成新默认;改过一个字都不动。
+ * 迁移后 stop_floor_mode 会被存成 pct,下次启动不会再触发。
+ */
+export function migrateWorkflowJson(json: string | undefined): { changes: { key: string; from: unknown; to: unknown }[] } {
+  if (!json) return { changes: [] };
+  let parsed: Record<string, unknown>;
+  try { parsed = JSON.parse(json) as Record<string, unknown>; } catch { return { changes: [] }; }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return { changes: [] };
+  const changes: { key: string; from: unknown; to: unknown }[] = [];
+  if (parsed['stop_floor_mode'] === undefined) {
+    if (parsed['min_stop_pct'] === LEGACY_EXECUTION_DEFAULTS.min_stop_pct) changes.push({ key: 'min_stop_pct', from: LEGACY_EXECUTION_DEFAULTS.min_stop_pct, to: DEFAULT_EXECUTION_THRESHOLDS.min_stop_pct });
+    if (parsed['min_stop_atr'] === LEGACY_EXECUTION_DEFAULTS.min_stop_atr) changes.push({ key: 'min_stop_atr', from: LEGACY_EXECUTION_DEFAULTS.min_stop_atr, to: DEFAULT_EXECUTION_THRESHOLDS.min_stop_atr });
+  }
+  if (parsed['playbook_text'] === LEGACY_DEFAULT_PLAYBOOK_V3) changes.push({ key: 'playbook_text', from: 'legacy_default_v3', to: 'default' });
+  return { changes };
+}
+
+/** 按 migrateWorkflowJson 的结论改一份已加载的 workflow。 */
+export function applyWorkflowMigration(w: Workflow, changes: { key: string }[]): Workflow {
+  const next = { ...w };
+  for (const c of changes) {
+    if (c.key === 'min_stop_pct') next.min_stop_pct = DEFAULT_EXECUTION_THRESHOLDS.min_stop_pct;
+    if (c.key === 'min_stop_atr') next.min_stop_atr = DEFAULT_EXECUTION_THRESHOLDS.min_stop_atr;
+    if (c.key === 'playbook_text') next.playbook_text = DEFAULT_PLAYBOOK;
+  }
+  if (changes.some((c) => c.key === 'min_stop_pct' || c.key === 'min_stop_atr')) next.stop_floor_mode = next.stop_floor_mode ?? 'pct';
+  return next;
 }
 
 /** `workflow.tier_policy` → allocator 要的每层名额(0 的层直接不写,等于不限)。 */

@@ -66,7 +66,7 @@ function checklistOf(step: BacktestStep | undefined): string {
 
 export function attributionPrompt(run: BacktestRun, steps: BacktestStep[], trades: BacktestTrade[], strategies: StrategySpec[]): { system: string; user: string } {
   const system = [
-    '你是 trading-swarm 的归因模块。你读一次回测的成交、导致它们的判断、以及亏损单当时的理由,找出最多 3 个「问题点位」。',
+    '你是 trade-gate 的归因模块。你读一次回测的成交、导致它们的判断、以及亏损单当时的理由,找出最多 3 个「问题点位」。',
     '每个点位必须同时说清四件事:证据当时显示了什么(evidence_said)、规则当时说了什么(rule_said)、实际发生了什么(actual)、提议怎么改(proposal)。',
     '提议只能是三种类型之一:',
     '- "rule_wording":某条规则的措辞不够可判定,给出新措辞(text)。',

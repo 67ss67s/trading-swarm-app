@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import type { StrategyIR } from '@trading-swarm/contracts';
+import type { StrategyIR } from '@trade-gate/contracts';
 import { openStateDb } from '../../../../src/state-db.js';
 import type { AssetExecutor } from '../../../../src/demo/research/backtest-report.js';
 import { buildManifest, manifestHash } from '../../../../src/demo/research/matrix-study/manifest.js';

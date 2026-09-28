@@ -1,10 +1,10 @@
 {
-  "name": "@trading-swarm/pine-engine",
+  "name": "@trade-gate/pine-engine",
   "version": "1.0.0",
   "private": true,
   "type": "commonjs",
   "license": "AGPL-3.0-only",
-  "description": "trading-swarm 自己的 Pine 引擎:PineTS(AGPL-3.0)包成独立子进程,由 gateway 托管拉起,只经本地 HTTP 通信,gateway 绝不 import 它。",
+  "description": "trade-gate 自己的 Pine 引擎:PineTS(AGPL-3.0)包成独立子进程,由 gateway 托管拉起,只经本地 HTTP 通信,gateway 绝不 import 它。",
   "main": "server.js",
   "files": [
     "server.js",

@@ -4,7 +4,7 @@
  * 平台检验数据:plateauNeighbors(ir) = 整体 ±25% 两个点;runner 对进入验证段前的候选各跑一次训练段,
  *   邻域目标不低于 ratio×候选目标(Objective.plateau_ratio)才算平台,否则判为孤立尖峰淘汰。
  */
-import type { StrategyIR } from '@trading-swarm/contracts';
+import type { StrategyIR } from '@trade-gate/contracts';
 import type { CandidateGenerator, GeneratorContext } from '../types.js';
 import { scalePeriods, type Diff, type Section } from './params.js';
 

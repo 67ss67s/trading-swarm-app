@@ -6,7 +6,7 @@
  * 数据按 (周期, 市场) 缓存,只留最近一组,控制内存。
  */
 import { parentPort } from 'node:worker_threads';
-import type { StrategyIR } from '@trading-swarm/contracts';
+import type { StrategyIR } from '@trade-gate/contracts';
 import { EvalEnv, runPool, scoreSegment } from '../../packages/gateway/src/demo/research/improve/evaluate.ts';
 import { randomEntryBaseline } from '../../packages/gateway/src/demo/research/improve/random-entry.ts';
 import { hash } from '../../packages/gateway/src/demo/research/primitives.ts';

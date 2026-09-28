@@ -8,7 +8,7 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { CalendarRange, Loader2, RotateCw } from 'lucide-react';
 import { toast } from 'sonner';
-import type { BacktestReport } from '@trading-swarm/contracts';
+import type { BacktestReport } from '@trade-gate/contracts';
 import { researchApi } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

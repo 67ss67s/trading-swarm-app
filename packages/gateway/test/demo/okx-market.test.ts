@@ -65,7 +65,7 @@ describe('K 线', () => {
     expect(okx.tfToBar('4h')).toBe('4H');
     expect(okx.tfToBar('1d')).toBe('1Dutc');
     expect(okx.tfToBar('1w')).toBe('1Wutc');
-    // review #15:OKX 的 `6H`/`12H` 按 UTC+8 分桶,UTC 版要带后缀。
+    // codex-review #15:OKX 的 `6H`/`12H` 按 UTC+8 分桶,UTC 版要带后缀。
     expect(okx.tfToBar('6h')).toBe('6Hutc');
     expect(okx.tfToBar('12h')).toBe('12Hutc');
     expect(okx.tfToBar('3d')).toBe('3Dutc');
@@ -396,5 +396,121 @@ describe('spot symbols rules cache isolation', () => {
     expect(perp.find(s => s.symbol === 'BTCUSDT')).toMatchObject({ step_size: '0.0001', min_notional: '8.14201' });
     const queries = fake.requests.filter(r => r.path.endsWith('/instruments')).map(r => r.query['instType']);
     expect(queries).toContain('SPOT'); expect(queries).toContain('SWAP');
+  });
+});
+
+describe('K 线缓存与 429 熔断(评审版公网访客多标签页轮询)', () => {
+  it('同一 (币, 周期, 根数) 在 TTL 内只出网一次;并发请求合并成一个(single-flight);返回的是拷贝', async () => {
+    const [a, b] = await Promise.all([okx.fetchKlinesOkx('BTCUSDT', '1m', 5), okx.fetchKlinesOkx('BTCUSDT', '1m', 5)]);
+    expect(fake.calls['/api/v5/market/candles']).toBe(1);
+    expect(a).toEqual(b);
+    const c = await okx.fetchKlinesOkx('BTCUSDT', '1m', 5);
+    expect(fake.calls['/api/v5/market/candles']).toBe(1);
+    c[0]!.close = 'mutated';
+    const d = await okx.fetchKlinesOkx('BTCUSDT', '1m', 5);
+    expect(d[0]!.close).not.toBe('mutated');
+    // 不同根数 / 周期是不同的键
+    await okx.fetchKlinesOkx('BTCUSDT', '1m', 6);
+    await okx.fetchKlinesOkx('BTCUSDT', '5m', 5);
+    expect(fake.calls['/api/v5/market/candles']).toBe(3);
+  });
+
+  it('TTL 过了重新出网;TG_OKX_KLINE_TTL_MS=0 关缓存', async () => {
+    process.env['TG_OKX_KLINE_TTL_MS'] = '0';
+    try {
+      await okx.fetchKlinesOkx('ETHUSDT', '1m', 3);
+      await okx.fetchKlinesOkx('ETHUSDT', '1m', 3);
+      expect(fake.calls['/api/v5/market/candles']).toBe(2);
+    } finally {
+      delete process.env['TG_OKX_KLINE_TTL_MS'];
+    }
+  });
+
+  it('429 之后同一端点熔断:窗口内不再出网;有旧 K 线就沿用,没有就报限频', async () => {
+    process.env['TG_OKX_KLINE_TTL_MS'] = '0'; // 让每次都想出网,才能看出熔断
+    try {
+      const fresh = await okx.fetchKlinesOkx('BTCUSDT', '1m', 5);
+      fake.failStatus['/api/v5/market/candles'] = 429;
+      // 第一次撞 429:有 60s 内的旧数据 → 沿用
+      expect(await okx.fetchKlinesOkx('BTCUSDT', '1m', 5)).toEqual(fresh);
+      expect(fake.calls['/api/v5/market/candles']).toBe(2);
+      // 熔断中:别的币也不出网,没有旧数据 → 报限频
+      await expect(okx.fetchKlinesOkx('ETHUSDT', '1m', 5)).rejects.toThrow(/429/);
+      expect(fake.calls['/api/v5/market/candles']).toBe(2);
+      // 已有旧数据的照样沿用
+      expect(await okx.fetchKlinesOkx('BTCUSDT', '1m', 5)).toEqual(fresh);
+      expect(fake.calls['/api/v5/market/candles']).toBe(2);
+      // 其它端点不受这个端点的熔断影响
+      await okx.fetchTicker24hOkx('BTCUSDT');
+      expect(fake.calls['/api/v5/market/tickers']).toBe(1);
+    } finally {
+      delete process.env['TG_OKX_KLINE_TTL_MS'];
+    }
+  });
+
+  it('熔断到期后恢复出网', async () => {
+    process.env['TG_OKX_KLINE_TTL_MS'] = '0';
+    process.env['TG_OKX_429_COOLDOWN_MS'] = '50';
+    try {
+      fake.failStatus['/api/v5/market/candles'] = 429;
+      await expect(okx.fetchKlinesOkx('SOLUSDT', '1m', 3)).rejects.toThrow(/429/);
+      delete fake.failStatus['/api/v5/market/candles'];
+      await new Promise((r) => setTimeout(r, 80));
+      expect(await okx.fetchKlinesOkx('SOLUSDT', '1m', 3)).toHaveLength(3);
+      expect(fake.calls['/api/v5/market/candles']).toBe(2);
+    } finally {
+      delete process.env['TG_OKX_KLINE_TTL_MS'];
+      delete process.env['TG_OKX_429_COOLDOWN_MS'];
+    }
+  });
+});
+
+describe('出网令牌桶(事件触发同一毫秒对十来个币拉 K 线)', () => {
+  it('突发请求排队等令牌、全部成功,不会撞 429;节流按端点计', async () => {
+    process.env['TG_OKX_KLINE_TTL_MS'] = '0';
+    process.env['TG_OKX_RATE_CANDLES'] = '20'; // 突发容量 20、之后 20/s
+    try {
+      const syms = ['BTCUSDT', 'ETHUSDT'];
+      const started = Date.now();
+      // 26 个并发请求:前 20 个立刻出网,后 6 个按 50ms 间隔排队 → 总耗时 ≥ ~300ms
+      const jobs = Array.from({ length: 26 }, (_, i) => okx.fetchKlinesOkx(syms[i % 2]!, '1m', 2 + i));
+      const out = await Promise.all(jobs);
+      const elapsed = Date.now() - started;
+      expect(out.every((ks) => ks.length > 0)).toBe(true);
+      expect(fake.calls['/api/v5/market/candles']).toBe(26);
+      expect(elapsed).toBeGreaterThanOrEqual(250);
+    } finally {
+      delete process.env['TG_OKX_KLINE_TTL_MS'];
+      delete process.env['TG_OKX_RATE_CANDLES'];
+    }
+  });
+
+  it('预计排队超过上限就直接按限频失败,不出网', async () => {
+    process.env['TG_OKX_KLINE_TTL_MS'] = '0';
+    process.env['TG_OKX_RATE_CANDLES'] = '1';
+    process.env['TG_OKX_RATE_MAX_WAIT_MS'] = '100';
+    try {
+      await okx.fetchKlinesOkx('BTCUSDT', '1m', 2); // 用掉唯一的令牌
+      await expect(okx.fetchKlinesOkx('ETHUSDT', '1m', 2)).rejects.toThrow(/本机节流/);
+      expect(fake.calls['/api/v5/market/candles']).toBe(1);
+    } finally {
+      delete process.env['TG_OKX_KLINE_TTL_MS'];
+      delete process.env['TG_OKX_RATE_CANDLES'];
+      delete process.env['TG_OKX_RATE_MAX_WAIT_MS'];
+    }
+  });
+
+  it('TG_OKX_RATE_CANDLES=0 不节流', async () => {
+    process.env['TG_OKX_KLINE_TTL_MS'] = '0';
+    process.env['TG_OKX_RATE_CANDLES'] = '0';
+    try {
+      const started = Date.now();
+      await Promise.all(Array.from({ length: 30 }, (_, i) => okx.fetchKlinesOkx('BTCUSDT', '1m', 2 + i)));
+      expect(fake.calls['/api/v5/market/candles']).toBe(30);
+      expect(Date.now() - started).toBeLessThan(3000);
+    } finally {
+      delete process.env['TG_OKX_KLINE_TTL_MS'];
+      delete process.env['TG_OKX_RATE_CANDLES'];
+    }
   });
 });

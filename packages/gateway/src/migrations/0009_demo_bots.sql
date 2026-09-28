@@ -1,5 +1,5 @@
 -- 0009_demo_bots.sql — Bot 团队注册表 + Radar 筛选器(Phase-2-lite)。
--- 设计:docs/design/trading-swarm-bot-team-guide-2026-09-04.ipynb §13「建议增加的持久对象」,
+-- 设计:docs/design/trade-gate-bot-team-guide-2026-09-04.ipynb §13「建议增加的持久对象」,
 --       落地范围与取舍见 docs/design/screener-radar-2026-09-05.md。
 --
 -- 这一版只落四张表:bot_profiles / bot_runs / bot_handoffs(可审计的角色与交接)+ watch_candidates

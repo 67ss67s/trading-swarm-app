@@ -7,7 +7,7 @@ import type { RouteContext, RouteModule } from './http-extra.js';
 
 export const modelConnectionRoutes: RouteModule = (ctx: RouteContext) => {
   const { route, guarded, json, readBody, rt } = ctx;
-  // 注册即建:启动时顺带把 ~/.trading-swarm-okx/openrouter.env 导入成一条 openrouter 连接(契约「启动时」)。
+  // 注册即建:启动时顺带把 ~/.trade-gate-okx/openrouter.env 导入成一条 openrouter 连接(契约「启动时」)。
   rt.modelConnections();
 
   route('GET', '/api/models', guarded(async (_req, res) => json(res, 200, rt.modelConnections().view())));

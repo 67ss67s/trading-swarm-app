@@ -1,4 +1,4 @@
-// §9.52 真实联通验证(默认跳过):TG_LIVE_MODEL_TEST=1 时用 ~/.trading-swarm-okx/openrouter.env 的 key
+// §9.52 真实联通验证(默认跳过):TG_LIVE_MODEL_TEST=1 时用 ~/.trade-gate-okx/openrouter.env 的 key
 // 各发一次 Decisions API(Jev)与一次 chat/completions(deepseek flash),打印延迟与花费。
 // 每次跑约 $0.00006;本机要走代理:HTTPS_PROXY=http://127.0.0.1:7897。
 import { describe, expect, it } from 'vitest';
@@ -12,7 +12,7 @@ import { parseEnvKey } from '../../src/demo/model-connections.js';
 const LIVE = process.env['TG_LIVE_MODEL_TEST'] === '1';
 
 describe.skipIf(!LIVE)('live OpenRouter', () => {
-  const key = LIVE ? parseEnvKey(readFileSync(path.join(os.homedir(), '.trading-swarm-okx', 'openrouter.env'), 'utf8')) : null;
+  const key = LIVE ? parseEnvKey(readFileSync(path.join(os.homedir(), '.trade-gate-okx', 'openrouter.env'), 'utf8')) : null;
 
   it('Jev decisions: one noul + one choice question', async () => {
     let raw = '';

@@ -15,7 +15,7 @@
  * 产出:冠军不是基线且任务带 strategy_id 时,以新版本写入策略对象(StrategyService.addVersion,状态不推进)。
  */
 import type { DatabaseSync } from 'node:sqlite';
-import type { StrategyIR } from '@trading-swarm/contracts';
+import type { StrategyIR } from '@trade-gate/contracts';
 import { ResearchStore } from '../store.js';
 import { hash } from '../primitives.js';
 import { checkIR, compileConstraints } from '../strategy.js';

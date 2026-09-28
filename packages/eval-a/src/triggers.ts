@@ -3,7 +3,7 @@
 // live ones (triggers.ts in the gateway); nothing is re-implemented here except the direction each kind
 // implies and the favourable-excursion measurement, which the runtime has no reason to know about.
 
-import { demo } from '@trading-swarm/gateway';
+import { demo } from '@trade-gate/gateway';
 import type { EvalCase, Kline, MarketView } from './types.js';
 
 export type TriggerDirection = 'long' | 'short' | null;

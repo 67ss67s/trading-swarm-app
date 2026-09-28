@@ -15,7 +15,7 @@ import type { ActivityItem, BotHandoff, BotRole, BotsResponse, DemoIntent, Episo
 import { DESK_SLICES, type AgentStrategyView } from '@/api/agent-strategy';
 import { roleBrainDisplay } from '@/lib/role-brain';
 import type { EvoDailyResponse } from '@/api/evolution';
-import type { ResearchStrategy } from '@trading-swarm/contracts';
+import type { ResearchStrategy } from '@trade-gate/contracts';
 import { activityToFeed, derivePresence } from '@/components/floor/presence';
 import { LOCAL_ROSTER } from '@/components/floor/roles';
 import type { BotPresence, BotProfileWithPresence, PresenceState } from '@/components/floor/types';
@@ -24,6 +24,7 @@ import type { Deco } from './deco';
 import type { FloorSnapshot as SnapshotA, TaskIcon } from './engine-a/types';
 import { ROLES, ROLE_ORDER } from './engine-b/roles';
 import type { ActivityItem as EngineActivity, AgentSnap, AgentStat, AgentStatus, DeskInfo, EvoRoleRow, HandoffSnap, InboxItem, MarketState, MeetingSnap, Role, Snapshot, StrategyCard } from './engine-b/types';
+import { st as serverText } from '@/lib/server-text-en';
 
 export type { Role };
 
@@ -376,7 +377,7 @@ export function buildEvoRows(evo: EvoDailyResponse | null | undefined, now: numb
       if (!d || typeof d.date !== 'string') continue;
       const date = d.date.slice(0, 10);
       const status = EVO_STATUS.has(d.status) ? d.status : 'none';
-      m.set(date, { date, status, score: d.score ?? null, headline: d.headline ?? null, ...(d.events != null ? { events: d.events } : {}) });
+      m.set(date, { date, status, score: d.score ?? null, headline: d.headline ? serverText(d.headline) : null, ...(d.events != null ? { events: d.events } : {}) });
     }
     byRole.set(role, m);
   }
@@ -447,7 +448,7 @@ export function buildFloorModel(inp: FloorInputs): FloorModel {
   const feed: FeedRow[] = [];
   for (const h of allHandoffs) {
     if (!isRole(h.from_role) || !isRole(h.to_role)) continue;
-    feed.push({ key: `hof:${h.handoff_id}`, at: h.created_at, from: h.from_role, to: h.to_role, text: clip(h.summary, 90), source: 'handoff', status: h.status, tone: h.kind === 'alert' || h.kind === 'blocked' ? 'bad' : 'plain' });
+    feed.push({ key: `hof:${h.handoff_id}`, at: h.created_at, from: h.from_role, to: h.to_role, text: clip(serverText(h.summary), 90), source: 'handoff', status: h.status, tone: h.kind === 'alert' || h.kind === 'blocked' ? 'bad' : 'plain' });
   }
   for (const a of activity) {
     const f = activityToFeed(a);
@@ -455,7 +456,7 @@ export function buildFloorModel(inp: FloorInputs): FloorModel {
     const from = f.from === 'user' ? 'user' : isRole(f.from) ? f.from : null;
     const to = f.to === 'user' ? 'user' : isRole(f.to) ? f.to : null;
     if (!from) continue;
-    feed.push({ key: `act:${a.id}`, at: a.at, from, to, text: clip(a.title, 90), source: 'activity', status: null, tone: TONE[a.kind] ?? 'plain' });
+    feed.push({ key: `act:${a.id}`, at: a.at, from, to, text: clip(serverText(a.title), 90), source: 'activity', status: null, tone: TONE[a.kind] ?? 'plain' });
   }
   feed.sort((a, b) => b.at - a.at);
 
@@ -488,7 +489,7 @@ export function buildFloorModel(inp: FloorInputs): FloorModel {
     const task = inp.tasks?.[role] ?? null;
     if (task && status === 'idle') status = 'working';
     const said = lastSaid.get(role);
-    const line = clip(presence.action || (presence.state === 'off' ? p.note ?? t('没上岗') : '') || said?.text || t('空闲'), 48);
+    const line = clip(serverText(presence.action) || (presence.state === 'off' ? (p.note ? t(p.note) : t('没上岗')) : '') || said?.text || t('空闲'), 48);
     const ev = evoToday.get(role);
     const today = ev?.headline ? ev.headline : said ? t('最近一件事:{text}', { text: said.text }) : t('今天还没有可说的事。');
     const b = roleBrainDisplay(role as BotRole, inp.models ?? null, ov?.loop ?? null);
@@ -509,7 +510,7 @@ export function buildFloorModel(inp: FloorInputs): FloorModel {
       id: h.handoff_id,
       kind: 'handoff' as const,
       title: t('{from} → {to} 的交接待阅', { from: ROLES[h.from_role as Role].callsign, to: isRole(h.to_role) ? ROLES[h.to_role].callsign : h.to_role }),
-      detail: clip(h.summary, 60),
+      detail: clip(serverText(h.summary), 60),
       at: h.created_at,
     })),
   ];
@@ -529,7 +530,7 @@ export function buildFloorModel(inp: FloorInputs): FloorModel {
     const f = activityToFeed(a);
     if (!f) return [];
     const role = f.from === 'user' ? 'user' : isRole(f.from) ? f.from : null;
-    return role ? [{ id: a.id, role, kind: engineActivityKind(a.kind), text: a.title, at: a.at }] : [];
+    return role ? [{ id: a.id, role, kind: engineActivityKind(a.kind), text: serverText(a.title), at: a.at }] : [];
   });
 
   return {

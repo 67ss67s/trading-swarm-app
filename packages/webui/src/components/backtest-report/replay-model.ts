@@ -4,7 +4,7 @@
  * 否则 lightweight-charts 会把非整根的时间点插进时间轴,把蜡烛间距打乱。
  * 同一条线序列里线段不能在时间上重叠,所以按时间把计划分到若干「泳道」,每条泳道一组序列。
  */
-import type { BacktestCandle, BacktestPlan, BacktestTrade } from '@trading-swarm/contracts';
+import type { BacktestCandle, BacktestPlan, BacktestTrade } from '@trade-gate/contracts';
 import { t } from '@/lib/i18n';
 
 export const LONG_COLOR = '#3f9ac2';

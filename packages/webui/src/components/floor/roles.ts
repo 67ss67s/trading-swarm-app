@@ -59,7 +59,7 @@ export function fallbackRoleMeta(role: string, index: number): RoleMeta {
     role: role as BotRole,
     callsign: role.replace(/_agent$/, '').replace(/_/g, ' ').toUpperCase().slice(0, 8) || 'AGENT',
     title: role.split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
-    desk: `${role} 台`,
+    desk: t('{role} 台', { role }),
     badge: 'CODE',
     color: FALLBACK_COLORS[index % FALLBACK_COLORS.length]!,
     x: slotsX[index % slotsX.length]!,

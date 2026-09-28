@@ -4,7 +4,7 @@ import type {
   LoopPlan,
   ResearchRequest,
   StrategyIR,
-} from "@trading-swarm/contracts";
+} from "@trade-gate/contracts";
 import { hash, canonical } from "../primitives.js";
 import {
   compileStrategy,

@@ -1,4 +1,4 @@
-import type { StrategyIR } from '@trading-swarm/contracts';
+import type { StrategyIR } from '@trade-gate/contracts';
 import { hash } from '../primitives.js';
 import type { PlanIntent } from '../orders/types.js';
 import type { JudgeCandidateSnapshot } from './types.js';

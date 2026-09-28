@@ -16,7 +16,7 @@ Jacky 的问题:「目前还没有赚钱的策略,要不逆过来反推一下怎
 
 ## 一、数据与切段
 
-- 资产池:BTC、ETH、SOL、DOGE、XRP、BNB 的 USDT 现货,1h,OKX 公共 K 线。经 backtest-report 的 okxLoader 取数(先读 research_datasets 缓存,再补齐头尾),冻结在 `~/.trading-swarm-okx/research-oracle/*-1h-1790121599999.json`。每个币 17517 根,时间从 2024-09-23 00:00 到 2026-09-22 20:59 UTC。
+- 资产池:BTC、ETH、SOL、DOGE、XRP、BNB 的 USDT 现货,1h,OKX 公共 K 线。经 backtest-report 的 okxLoader 取数(先读 research_datasets 缓存,再补齐头尾),冻结在 `~/.trade-gate-okx/research-oracle/*-1h-1790121599999.json`。每个币 17517 根,时间从 2024-09-23 00:00 到 2026-09-22 20:59 UTC。
 - 切段:按共同时间轴切,切点对齐整点。
   - 训练段 50%:2024-09-23 → 2025-09-22 21:59。
   - 验证段 25%:2025-09-22 22:00 → 2026-03-24 08:59。
@@ -152,7 +152,7 @@ Jacky 的问题:「目前还没有赚钱的策略,要不逆过来反推一下怎
 
 ### 做空版
 
-只在报告里给出,不落库,也不用引擎回测:做空执行正由订单周期工作线接入。
+只在报告里给出,不落库,也不用引擎回测:做空执行正由订单周期子代理接入。
 
 训练段最优的几条做空规则(带周末、分位条件的那些)都无法用原语表达。能表达并且在训练后 1/3 仍然成立的 3 条如下。它们的 IR 草稿都带 `order: {direction: "short", market: "perp", leverage: 1}`,都过了 checkIR,但单条置换 p 都是 1.0,在训练段排名里远不靠前。
 
@@ -195,7 +195,7 @@ node --experimental-transform-types --no-warnings --import ./scripts/research-or
 ```
 
 - 全程零模型调用,在独立进程里跑,不经过 18811 网关。
-- 结果文件是 `~/.trading-swarm-okx/research-oracle/study-result.json`。
+- 结果文件是 `~/.trade-gate-okx/research-oracle/study-result.json`。
 - 生成器接口 `oracleGenerator` 的行为:
   - 以父策略 IR 为底,把规则作为入场过滤加进去:signal 追加 AND 条件;父策略没有 regime 时才加方向门;
   - 最优规则的同步平移置换 p 大于 0.1 时不出候选;

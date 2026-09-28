@@ -1,4 +1,4 @@
-//! contracts-rs —— trading-swarm 契约的 Rust 侧(与 `packages/contracts` 的 JSON Schema 逐字段对拍)。
+//! contracts-rs —— trade-gate 契约的 Rust 侧(与 `packages/contracts` 的 JSON Schema 逐字段对拍)。
 //!
 //! 唯一契约源是 `packages/contracts/schema/*.json`;本 crate 的每个结构都是手写 serde
 //! 镜像,由 `tests/` 里的 round-trip(R3/R4/R5/R6)保证不漂移。规则见 `docs/contracts/README.md`:

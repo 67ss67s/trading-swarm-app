@@ -1,3 +1,4 @@
+import { CacheNote, cachePollMs } from './cache-note';
 /**
  * 市场栏的「目录」视图:okx.ai 全站 agent(网关从 SSR 页面扒的,只读,6h 一刷)。
  * 卡片信息与 okx.ai/agents 同源:评分 / 好评率 / 已售 / 起价 / 标签 / 分类。
@@ -8,6 +9,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ExternalLink, RefreshCw, Star } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/api/client';
+import { JudgeLock } from '@/components/judge-lock';
+import { friendlyError } from '@/lib/edition';
+import { pickSnapshotAsOf } from '@/api/market-adapt';
 import type { CatalogAgent, CatalogService } from '@/api/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -118,13 +122,17 @@ function AgentCard({ a, onDetail, onSubscribe, busy }: { busy: boolean; a: Catal
           {monthly && !a.subscription ? (
             <>
               {trial ? (
-                <Button size="xs" variant="outline" disabled={busy} onClick={() => onSubscribe(true)}>
-                  {t('试用')}
-                </Button>
+                <JudgeLock feature="asp_subscribe">
+                  <Button size="xs" variant="outline" disabled={busy} onClick={() => onSubscribe(true)}>
+                    {t('试用')}
+                  </Button>
+                </JudgeLock>
               ) : null}
-              <Button size="xs" disabled={busy} onClick={() => onSubscribe(false)}>
-                {t('订阅')}
-              </Button>
+              <JudgeLock feature="asp_subscribe">
+                <Button size="xs" disabled={busy} onClick={() => onSubscribe(false)}>
+                  {t('订阅')}
+                </Button>
+              </JudgeLock>
             </>
           ) : null}
         </div>
@@ -166,51 +174,53 @@ export function CatalogDetailSheet({
   onSubscribe: (agent: CatalogAgent, service: CatalogService, trial: boolean) => void;
 }) {
   const now = useNow();
-  const q = useQuery({ queryKey: ['market', 'catalog', 'detail', agentId], queryFn: () => api.marketCatalogDetail(agentId!), enabled: agentId !== null, staleTime: 600_000 });
+  const q = useQuery({ queryKey: ['market', 'catalog', 'detail', agentId], queryFn: () => api.marketCatalogDetail(agentId!), refetchInterval: cachePollMs, enabled: agentId !== null, staleTime: 600_000 });
   const d = q.data ?? null;
+  const selectedAgent = d?.agent;
   return (
     <Sheet open={agentId !== null} onOpenChange={(o) => !o && onClose()}>
       <SheetContent side="right" className="gap-0 data-[side=right]:w-full data-[side=right]:sm:max-w-xl">
         <SheetHeader className="border-b">
-          <SheetTitle>{d ? `${d.agent.name} #${d.agent.agent_id}` : t('ASP 详情')}</SheetTitle>
+          <SheetTitle>{d && selectedAgent ? `${selectedAgent.name} #${selectedAgent.agent_id}` : t('ASP 详情')}</SheetTitle>
           <SheetDescription>{t('与 okx.ai/agents/{id} 同源;评价评的是交付合规,不是盈亏。', { id: agentId ?? '' })}</SheetDescription>
         </SheetHeader>
         <div className="min-h-0 flex-1 overflow-y-auto p-4 text-[12px]">
-          {q.isLoading ? (
+          <CacheNote cache={q.data?.cache} asOf={pickSnapshotAsOf(q.data)} />
+          {q.isLoading || q.data?.cache?.fetched_at === null ? (
             <div className="space-y-2">
               <Skeleton className="h-16 w-full" />
               <Skeleton className="h-24 w-full" />
             </div>
           ) : q.isError ? (
             <ErrorNote err={q.error} />
-          ) : d ? (
+          ) : d && selectedAgent ? (
             <div className="flex flex-col gap-4">
               <div className="flex items-start gap-3">
-                {d.agent.avatar ? <img alt="" src={d.agent.avatar} className="size-12 rounded-md border object-cover" /> : <div className="size-12 rounded-md border bg-muted" />}
+                {selectedAgent.avatar ? <img alt="" src={selectedAgent.avatar} className="size-12 rounded-md border object-cover" /> : <div className="size-12 rounded-md border bg-muted" />}
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[13px] font-semibold">{d.agent.name}</span>
-                    {d.agent.categories.map((c) => (
+                    <span className="text-[13px] font-semibold">{selectedAgent.name}</span>
+                    {selectedAgent.categories.map((c) => (
                       <Badge key={c} variant="outline" className="text-[10px]">
                         {catLabel(c)}
                       </Badge>
                     ))}
-                    <a href={`https://www.okx.ai/agents/${encodeURIComponent(d.agent.agent_id)}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 text-[11px] text-primary hover:underline">
+                    <a href={`https://www.okx.ai/agents/${encodeURIComponent(selectedAgent.agent_id)}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 text-[11px] text-primary hover:underline">
                       okx.ai <ExternalLink className="size-3" />
                     </a>
                   </div>
                   <div className="mt-0.5 flex flex-wrap gap-x-3 text-[11px] text-muted-foreground">
                     <span className="inline-flex items-center gap-0.5">
                       <Star className="size-2.5 fill-warn text-warn" />
-                      {d.agent.score ?? '—'}
+                      {selectedAgent.score ?? '—'}
                     </span>
-                    {d.agent.approval_rate ? <span>{t('好评 {p}', { p: d.agent.approval_rate })}</span> : null}
-                    <span>{t('已售 {n}', { n: d.agent.usage_count })}</span>
-                    <span>{d.agent.online ? t('在线') : t('离线')}</span>
+                    {selectedAgent.approval_rate ? <span>{t('好评 {p}', { p: selectedAgent.approval_rate })}</span> : null}
+                    <span>{t('已售 {n}', { n: selectedAgent.usage_count })}</span>
+                    <span>{selectedAgent.online ? t('在线') : t('离线')}</span>
                     {typeof d.overview['ownerAddress'] === 'string' ? <span className="num">{shortId(d.overview['ownerAddress'] as string)}</span> : null}
                     {typeof d.overview['createdAt'] === 'number' ? <span>{t('注册于 {d}', { d: fmtDateTime(d.overview['createdAt'] as number).slice(0, 10) })}</span> : null}
                   </div>
-                  <p className="mt-1 whitespace-pre-line text-[11px] text-muted-foreground">{d.agent.description}</p>
+                  <p className="mt-1 whitespace-pre-line text-[11px] text-muted-foreground">{selectedAgent.description}</p>
                 </div>
               </div>
 
@@ -231,13 +241,17 @@ export function CatalogDetailSheet({
                         {s.price_interval === 'month' ? (
                           <div className="ml-auto flex gap-1">
                             {s.free_trial ? (
-                              <Button size="xs" variant="outline" disabled={busy} onClick={() => onSubscribe(d.agent, s, true)}>
-                                {t('试用')}
-                              </Button>
+                              <JudgeLock feature="asp_subscribe">
+                                <Button size="xs" variant="outline" disabled={busy} onClick={() => onSubscribe(selectedAgent, s, true)}>
+                                  {t('试用')}
+                                </Button>
+                              </JudgeLock>
                             ) : null}
-                            <Button size="xs" disabled={busy} onClick={() => onSubscribe(d.agent, s, false)}>
-                              {t('订阅')}
-                            </Button>
+                            <JudgeLock feature="asp_subscribe">
+                              <Button size="xs" disabled={busy} onClick={() => onSubscribe(selectedAgent, s, false)}>
+                                {t('订阅')}
+                              </Button>
+                            </JudgeLock>
                           </div>
                         ) : (
                           <span className="ml-auto text-[10.5px] text-muted-foreground">{t('按次 · 暂不支持')}</span>
@@ -310,7 +324,7 @@ export function CatalogView({ onSubscribe, busy = false }: { busy?: boolean; onS
     queryKey: ['market', 'catalog', category, sort, text, monthly, trial, page],
     queryFn: () => api.marketCatalog({ category, sort, q: text || undefined, monthly, trial, page, page_size: 60 }),
     // 目录在网关后台重建时 building=true,这时每 5s 看一眼进度。
-    refetchInterval: (query) => (query.state.data?.building ? 5_000 : 300_000),
+    refetchInterval: (query) => (query.state.data?.building || query.state.data?.cache?.refreshing ? 5_000 : 300_000),
   });
   const c = q.data ?? null;
   const categories = useMemo(() => (c?.categories.length ? c.categories : [{ id: 'ALL', name: 'All' }]), [c]);
@@ -370,6 +384,7 @@ export function CatalogView({ onSubscribe, busy = false }: { busy?: boolean; onS
               {c.building ? <span className="ml-1 text-primary">{t('抓取中…')}</span> : null}
             </span>
           ) : null}
+          <JudgeLock feature="asp_settings">
           <Button
             size="xs"
             variant="outline"
@@ -381,14 +396,16 @@ export function CatalogView({ onSubscribe, busy = false }: { busy?: boolean; onS
                   toast.success(t('已开始重抓'));
                   void qc.invalidateQueries({ queryKey: ['market', 'catalog'] });
                 },
-                (err) => toast.error(t('重抓失败'), { description: err instanceof Error ? err.message : String(err) }),
+                (err) => toast.error(t('重抓失败'), { description: friendlyError(err instanceof Error ? err.message : String(err)) }),
               );
             }}
           >
             <RefreshCw data-slot="icon" className={cn(c?.building && 'animate-spin')} />
           </Button>
+          </JudgeLock>
         </span>
       </div>
+      <CacheNote cache={c?.cache} asOf={pickSnapshotAsOf(c)} />
       {q.isLoading ? (
         <div className="grid grid-cols-1 gap-2 p-3 sm:grid-cols-2 xl:grid-cols-3">
           <Skeleton className="h-40 w-full" />
@@ -403,7 +420,7 @@ export function CatalogView({ onSubscribe, busy = false }: { busy?: boolean; onS
         <ScrollArea className="min-h-0 flex-1">
           <div className="grid grid-cols-1 gap-2 p-3 sm:grid-cols-2 xl:grid-cols-3">
             {c.agents.map((a) => (
-              <AgentCard busy={busy} key={a.agent_id} a={a} onDetail={() => setDetailId(a.agent_id)} onSubscribe={(tr) => onSubscribe(a, null, tr)} />
+              <AgentCard busy={busy || c?.subscriptions_known === false} key={a.agent_id} a={a} onDetail={() => setDetailId(a.agent_id)} onSubscribe={(tr) => onSubscribe(a, null, tr)} />
             ))}
           </div>
           {pages > 1 ? (
@@ -421,7 +438,7 @@ export function CatalogView({ onSubscribe, busy = false }: { busy?: boolean; onS
           ) : null}
         </ScrollArea>
       )}
-      <CatalogDetailSheet busy={busy} agentId={detailId} onClose={() => setDetailId(null)} onOpenAgent={setDetailId} onSubscribe={(a, s, tr) => onSubscribe(a, s, tr)} />
+      <CatalogDetailSheet busy={busy || c?.subscriptions_known === false} agentId={detailId} onClose={() => setDetailId(null)} onOpenAgent={setDetailId} onSubscribe={(a, s, tr) => onSubscribe(a, s, tr)} />
     </>
   );
 }

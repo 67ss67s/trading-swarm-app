@@ -2,7 +2,7 @@
 //!
 //! 两个来源,只有这两个:
 //! 1. env `TG_MAIN_API_KEY` / `TG_MAIN_API_SECRET`;
-//! 2. `~/.trading-swarm/secrets/apikey-main.json`,**文件权限必须不对 group/other 开放**
+//! 2. `~/.trade-gate/secrets/apikey-main.json`,**文件权限必须不对 group/other 开放**
 //!    (即 `chmod 600`),否则拒读。
 //!
 //! **绝不接受命令行参数传密钥** —— argv 在 `ps` 里对同机器的任何用户可见,
@@ -100,19 +100,19 @@ pub enum CredentialError {
     Malformed { path: PathBuf, reason: String },
 }
 
-/// 运行时数据目录 `~/.trading-swarm`(可用 `TG_HOME` 覆盖,测试用)。
-pub fn trading_swarm_home() -> PathBuf {
+/// 运行时数据目录 `~/.trade-gate`(可用 `TG_HOME` 覆盖,测试用)。
+pub fn trade_gate_home() -> PathBuf {
     if let Ok(value) = std::env::var("TG_HOME")
         && !value.trim().is_empty()
     {
         return PathBuf::from(value);
     }
     let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_owned());
-    PathBuf::from(home).join(".trading-swarm")
+    PathBuf::from(home).join(".trade-gate")
 }
 
 pub fn default_secrets_path() -> PathBuf {
-    trading_swarm_home().join("secrets").join("apikey-main.json")
+    trade_gate_home().join("secrets").join("apikey-main.json")
 }
 
 /// env 优先,其次凭证文件。

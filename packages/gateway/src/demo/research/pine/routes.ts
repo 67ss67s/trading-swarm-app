@@ -12,7 +12,7 @@
  *
  * 主线程只需在 routes-research.ts 里加一行 registerPineRoutes(ctx, store)。
  */
-import type { ResearchBar } from '@trading-swarm/contracts';
+import type { ResearchBar } from '@trade-gate/contracts';
 import type { RouteContext, RouteHandler } from '../../http-extra.js';
 import { PineCatalog, setPineCatalog, summarize, type PineScriptDraft } from './catalog.js';
 import {

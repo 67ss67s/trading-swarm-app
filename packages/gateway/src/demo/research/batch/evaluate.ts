@@ -11,7 +11,7 @@
  * 指标:日收益夏普(年化 √365)、日收盘回撤、总收益、压力收益、平均敞口、笔数、每笔扣成本期望(return_pct 均值)、胜率;
  *   基准:资产池等权持有、同敞口持有(持有 × 敞口,空头取负号)、BTC 持有。
  */
-import type { ResearchBar, StrategyIR } from '@trading-swarm/contracts';
+import type { ResearchBar, StrategyIR } from '@trade-gate/contracts';
 import { hash } from '../primitives.js';
 import { runPool, type EvalEnv, type PoolRun, type Window } from '../improve/evaluate.js';
 import { mean, stdev, moments, periodSharpe } from '../improve/stats.js';

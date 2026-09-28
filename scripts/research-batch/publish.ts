@@ -27,7 +27,7 @@ const rows = all.filter((r) => { const k = `${r.family}|${r.market}|${r.side}|${
 const portfolioOnly = summary.leaderboard.filter((r) => r.promotable && byId.get(r.variant_id)?.kind === 'portfolio').map((r) => r.id);
 console.log(`过门槛 IR 行 ${all.length} 个,按 (族, 市场, 方向, 周期) 去重后 ${rows.length} 个;组合族过门槛 ${portfolioOnly.length} 个(不能落 IR):${portfolioOnly.join(', ')}`);
 if (!rows.length || dry) { for (const r of rows) console.log('[dry]', r.id); process.exit(0); }
-const db = new DatabaseSync(path.join(homedir(), '.trading-swarm-okx', 'demo', 'state.sqlite'));
+const db = new DatabaseSync(path.join(homedir(), '.trade-gate-okx', 'demo', 'state.sqlite'));
 db.exec('PRAGMA busy_timeout=15000');
 const svc = new StrategyService(new StrategyStore(db), new ResearchStore(db), null as never), published: unknown[] = [];
 const pct = (x: number | null | undefined) => (x === null || x === undefined ? '—' : `${(x * 100).toFixed(1)}%`);

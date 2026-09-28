@@ -6,7 +6,7 @@
  * 研究策略 ↔ 实盘策略的对应只认 lab_strategy_id(导入的内置策略 = 内置 id;以后 apply 下发写回的 = StrategySpec.id,
  * 可能带 @version,取 @ 前)。这里只读,不写实盘注册表。
  */
-import type { ResearchStrategy } from '@trading-swarm/contracts';
+import type { ResearchStrategy } from '@trade-gate/contracts';
 import type { AllocatorCandidate, AllocatorView, ShadowStats, StrategyView } from '@/api/types';
 import { tmap } from '@/lib/i18n';
 
@@ -91,7 +91,7 @@ export function liveStrategyIds(strategies: readonly ResearchStrategy[], registr
   return out;
 }
 
-/** 深链:实盘部署台(#strategies,原策略库)打开这条实盘策略的详情 */
+/** 深链:实盘部署台(#strategies,原策略库)。09-25 起 #strategies 已重定向到 #my-strategies、界面不再引用,留着给旧调用方 */
 export function deployDeskHash(labId: string | null): string {
   return labId ? `strategies?id=${encodeURIComponent(labId)}` : 'strategies';
 }

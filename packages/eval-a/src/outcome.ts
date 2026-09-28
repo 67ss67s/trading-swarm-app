@@ -3,7 +3,7 @@
 // semantics. This file is the eval-side alias — import sites and `export * from './outcome.js'` are
 // unchanged; the rules themselves now live next to the runtime that also uses them.
 
-import { demo } from '@trading-swarm/gateway';
+import { demo } from '@trade-gate/gateway';
 
 export type Outcome = demo.Outcome;
 export type OutcomeInput = demo.OutcomeInput;

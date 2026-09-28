@@ -7,7 +7,7 @@
  *  - 永续:标记价 K 线判强平、真实 8h 资金费序列、维持保证金分档(当前值)由调用方从 data/perp-market.ts 取来喂进;缺哪样执行核照 flags 标注,不伪造。
  *  - 输出与 engine v4 执行器同形(AssetRunOutput):净值序列前面补一点 from_ms-1 = 初始资金(与 v4 的 mark(first) 对齐,持有基准从同一点起算)。
  */
-import type { BacktestPlan, ResearchPolicy, StrategyIR } from '@trading-swarm/contracts';
+import type { BacktestPlan, ResearchPolicy, StrategyIR } from '@trade-gate/contracts';
 import type { AssetExecutor, AssetRunOutput } from '../backtest-report.js';
 import { viewBars, numericBars } from '../engine.js';
 import { strategyNodes, orderNodes } from '../strategy.js';
@@ -39,7 +39,7 @@ export const orderExecutor: AssetExecutor = async (x) => {
   return {
     status: 'completed', error: null, engine_version: r.engine_version, ...(r.candidates ? {candidates:r.candidates} : {}),
     equity: [{ at: x.from_ms - 1, equity: initial, holdings: 0, exposure: 0 }, ...r.equity.map((e) => ({ at: e.at, equity: e.equity, holdings: e.exposure * e.equity, exposure: e.exposure }))],
-    trades: r.trades.map(({ segment: _s, ...t }) => t), fees, plans: r.plans, plan_stats: r.stats, warnings,
+    trades: r.trades.map(({ segment: _s, ...t }) => t), fees, plans: r.plans, plan_stats: r.stats, warnings, ...(r.execution_gate ? { execution_gate: r.execution_gate } : {}),
   };
 };
 /** backtest-report 的执行器选择:IR 带 order 块 → 订单执行核;否则 null(engine v4)。 */

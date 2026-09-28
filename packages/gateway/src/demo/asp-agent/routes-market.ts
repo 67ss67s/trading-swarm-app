@@ -1,3 +1,4 @@
+import { ReadCache, type ReadCacheMeta } from '../read-cache.js';
 import type { IncomingMessage } from 'node:http';
 import type { RouteModule } from '../http-extra.js';
 import { data, list, object, CliError } from './cli.js';
@@ -23,31 +24,55 @@ const limitOf = (url: URL) => {
 };
 export const marketRoutes: RouteModule = ({ route, guarded: outerGuarded, json, readBody, rt }) => {
   const guarded: typeof outerGuarded = (fn) => outerGuarded(async (req, res, url, p) => {
-    try { await fn(req, res, url, p); } catch (e) {
+    try { await fn(req, res, url, p); if (req.method !== 'GET') for (const c of views.values()) c.invalidate(); } catch (e) {
       if (!(e instanceof CliError)) throw e;
       json(res, e.status, { error: { code: e.code, message: e.message, hint: e.hint, raw_message: e.raw_message } });
     }
   });
   const agent = () => rt.marketAgent();
+  // 缓存只用于 GET 展示。写入口继续走原有实时核实，不以缓存授权。
+  const views = new Map<string, ReadCache<Record<string, unknown>>>();
+  const cached = (key: string, loader: () => Promise<Record<string, unknown>>, fallback: Record<string, unknown>): Record<string, unknown> & { cache: ReadCacheMeta } => {
+    let c = views.get(key);
+    if (!c) { if (views.size >= 128) views.delete(views.keys().next().value!); c = new ReadCache(); views.set(key, c); }
+    const { value, cache } = c.read(loader, fallback);
+    return { ...value, cache };
+  };
+  for (const event of ['market_subscription', 'market_aftersale', 'market_publish', 'workflow.changed']) {
+    rt.on?.(event, () => { for (const c of views.values()) c.invalidate(); });
+  }
   route('GET', '/api/market/status', guarded(async (_req, res) => {
-    const a = agent(); const errors: Record<string, string> = {};
-    const safe = async <T>(key: string, fn: () => Promise<T>): Promise<T | null> => { try { return await fn(); } catch (e) { errors[key] = (e as Error).message; return null; } };
-    const [lights, wallet, identity, cost] = await Promise.all([
-      rt.okxAccountLights(), safe('wallet', () => a.wallet.status()), safe('identity', () => a.identity.mine()), safe('cost', async () => data(await a.cli.call('subscribe-cost'))),
-    ]);
-    json(res, 200, { lights, wallet, a2a: lights.a2a, trade_kit: lights.trade_kit, buyer: identity?.buyer ?? null, asp: identity?.asp ?? null, subscribe_cost: cost, inbox: a.inbox.status(), errors });
+    const a = agent();
+    const wallet = cached('wallet', async () => ({ wallet: await a.wallet.status() }), { wallet: null });
+    const identity = cached('identity', async () => await a.identity.mine(), { buyer: null, asp: null });
+    const cost = cached('cost', async () => ({ subscribe_cost: data(await a.cli.call('subscribe-cost')) }), { subscribe_cost: null });
+    const lightView = cached('lights', async () => ({ lights: await rt.okxAccountLights() }), { lights: {} });
+    const lights = lightView['lights'] as Record<string, unknown>;
+    const sections = { wallet: wallet.cache, identity: identity.cache, cost: cost.cache, lights: lightView.cache };
+    const metas = Object.values(sections);
+    const cache = { fetched_at: metas.every(m => m.fetched_at !== null) ? Math.min(...metas.map(m => m.fetched_at!)) : null,
+      stale: metas.some(m => m.stale), refreshing: metas.some(m => m.refreshing),
+      state: metas.some(m => m.state === 'error') ? 'error' : metas.some(m => m.state === 'loading') ? 'loading' : 'ready',
+      error: metas.map(m => m.error).filter(Boolean).join('; ') || null };
+    json(res, 200, { lights, wallet: wallet['wallet'], a2a: lights.a2a, trade_kit: lights.trade_kit,
+      buyer: identity['buyer'], asp: identity['asp'], subscribe_cost: cost['subscribe_cost'], inbox: a.inbox.status(),
+      errors: Object.fromEntries(Object.entries(sections).filter(([, m]) => m.error).map(([k, m]) => [k, m.error])), cache, sections });
   }));
   route('POST', '/api/market/wallet/deposit-notice', guarded(async (_req, res) => json(res, 200, await agent().wallet.depositNotice())));
   route('GET', '/api/market/search', guarded(async (_req, res, url) => {
+    const fee = url.searchParams.get('max_fee');
+    if (fee !== null && !/^\d+(?:\.\d+)?$/.test(fee)) throw Object.assign(new Error('max_fee 无效'), { status: 400 });
     const after = url.searchParams.get('after');
     const aspId = url.searchParams.get('asp_agent_id');
     // 三种起手:续页(只能带 search-after)/ 按 ASP 列它的全部服务(订阅前拿 serviceId/feeToken 用)/ 关键词。
     const args = after ? ['--search-after', after] : aspId ? ['--asp-agent-id', aspId] : ['--keywords', url.searchParams.get('keywords') || '信号 signal 合约 perp'];
+    json(res, 200, cached(`search:${url.searchParams.toString()}`, async () => {
     const result = data(await agent().cli.call('service-match', args));
     let services = Array.isArray(result['services']) ? result['services'] as Record<string, unknown>[] : [];
     if (url.searchParams.get('trial') === 'true' || url.searchParams.get('trial') === '1') services = services.filter((x) => x['supportTrial'] === true || !!x['freeTrial']);
     const max = url.searchParams.get('max_fee'); if (max !== null) { if (!/^\d+(?:\.\d+)?$/.test(max)) throw Object.assign(new Error('max_fee 无效'), { status: 400 }); services = services.filter((x) => Number(x['feeAmount']) <= Number(max)); }
-    json(res, 200, { ...result, services, searchAfter: result['searchAfter'] ?? null, hasMore: result['hasMore'] === true });
+    return { ...result, services, searchAfter: result['searchAfter'] ?? null, hasMore: result['hasMore'] === true };
+    }, { services: [], searchAfter: null, hasMore: false }));
   }));
   // Static /asp routes precede the dynamic identity route.
   // 网页目录(SSR 扒的,只读;设计 §2.3 补充):全站 agent + 分类,详情含服务/评价分布。
@@ -58,20 +83,23 @@ export const marketRoutes: RouteModule = ({ route, guarded: outerGuarded, json, 
     const q = { category: url.searchParams.get('category'), text: url.searchParams.get('q'), monthly: url.searchParams.get('monthly') === '1', trial: url.searchParams.get('trial') === '1', sort: url.searchParams.get('sort') };
     const all = filterCatalog(c.agents, q);
     // 不把订阅读取失败渲染成“未订阅”，避免基于未知状态重复开通。
-    const mine = await agent().subscribedByProvider();
-    json(res, 200, { fetched_at: c.fetched_at, building: c.building, total_site: c.total_site, categories: c.categories, total: all.length, page, page_size: size, agents: all.slice((page - 1) * size, page * size).map((a) => ({ ...a, subscription: mine[a.agent_id] ?? null })), errors: c.errors });
+    const subs = cached('catalog-subscriptions', async () => ({ mine: await agent().subscribedByProvider() }), { mine: {} });
+    const mine = subs['mine'] as Awaited<ReturnType<ReturnType<typeof agent>['subscribedByProvider']>>;
+    json(res, 200, { cache: subs.cache, subscriptions_known: subs.cache.fetched_at !== null, fetched_at: c.fetched_at, building: c.building, total_site: c.total_site, categories: c.categories, total: all.length, page, page_size: size, agents: all.slice((page - 1) * size, page * size).map((a) => ({ ...a, subscription: mine[a.agent_id] ?? null })), errors: c.errors });
   }));
   route('POST', '/api/market/catalog/refresh', guarded(async (_req, res) => { void agent().catalog.rebuild(); json(res, 202, { building: true }); }));
   route('GET', '/api/market/catalog/:agent_id', guarded(async (_req, res, _url, p) => {
+    json(res, 200, cached(`detail:${p['agent_id']!}`, async () => {
     const d = await agent().catalog.detail(p['agent_id']!);
     if (!d) throw Object.assign(new Error('okx.ai 上没有这个 agent 或页面结构变了'), { status: 404 });
-    json(res, 200, d);
+    return d as unknown as Record<string, unknown>;
+    }, { agent: null }));
   }));
-  route('GET', '/api/market/asp', guarded(async (_req, res) => json(res, 200, await agent().asp())));
+  route('GET', '/api/market/asp', guarded(async (_req, res) => json(res, 200, cached('asp', () => agent().asp(), { identity: null, services: null, active: null, subscriptions: null, claimable: null, aftersales: [] }))));
   route('GET', '/api/market/asp/deliveries', guarded(async (_req, res, url) => json(res, 200, { deliveries: agent().publisher.deliveries(limitOf(url)) })));
-  route('GET', '/api/market/asp/:agent_id', guarded(async (_req, res, _url, p) => json(res, 200, await agent().identity.detail(p['agent_id']!))));
+  route('GET', '/api/market/asp/:agent_id', guarded(async (_req, res, _url, p) => json(res, 200, cached(`asp-detail:${p['agent_id']!}`, async () => object(await agent().identity.detail(p['agent_id']!)), { profile: null, services: [], feedback: [] }))));
   route('POST', '/api/market/subscribe', guarded(async (req, res) => json(res, 200, await agent().subscribe(await readBody(req)))));
-  route('GET', '/api/market/subscriptions', guarded(async (_req, res) => json(res, 200, await agent().subscriptions())));
+  route('GET', '/api/market/subscriptions', guarded(async (_req, res) => json(res, 200, cached('subscriptions', () => agent().subscriptions(), { thisDeviceId: null, subscriptions: [] }))));
   route('PATCH', '/api/market/subscriptions/:job_id', guarded(async (req, res, _url, p) => {
     const o = await readBody(req); const a = agent(); a.validateConfig(o);
     if (o['this_device_receives'] !== undefined) await a.devices(p['job_id']!, o['this_device_receives'] === true);

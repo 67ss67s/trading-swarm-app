@@ -1,4 +1,4 @@
-import type { JudgeQuestion, StrategyJudge } from '@trading-swarm/contracts';
+import type { JudgeQuestion, StrategyJudge } from '@trade-gate/contracts';
 import { validateJudge } from './pure.js';
 export const JUDGE_TEMPLATE_KEYS=['take','quality','support_holds','resistance_breaks','retreat_risk','regime_fit'] as const;
 export type JudgeTemplateKey=typeof JUDGE_TEMPLATE_KEYS[number];

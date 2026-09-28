@@ -3,7 +3,7 @@
  * 各周期三段窗口(训练 / 选择 / 留出,段间 purge_bars 根空档)、各类哈希、事前估算。
  * 展开结果写库后不可改(research_matrix_studies.manifest_json 有触发器)。
  */
-import type { StrategyIR } from '@trading-swarm/contracts';
+import type { StrategyIR } from '@trade-gate/contracts';
 import { DEFAULT_EXECUTION } from '../backtest-report.js';
 import { irVariants, type FamilyKey } from '../batch/families.js';
 import { PERP_MAKER, PERP_TAKER, STRESS_FEE_MULTIPLE } from '../improve/evaluate.js';
@@ -12,7 +12,8 @@ import { checkIR, timeframeMillis } from '../strategy.js';
 import { requiredPurgeBars } from '../judge/purge.js';
 import type { AssetRecommendation, Horizon } from '../../recommend.js';
 import { usdMul } from './stats.js';
-import { MATRIX_RUNNER_VERSION, RUNNABLE_TIMEFRAMES, myFamilyKey, type MatrixCell, type MatrixFamily, type MatrixSide, type MyStrategySnapshot, type MatrixManifest, type MatrixStudySpec, type MatrixTimeframe, type MatrixVariantRef, type TimeframeSegments } from './types.js';
+import { DEFAULT_JUDGE_STAGE_MAX_CELLS, MAX_SYMBOLS } from './spec.js';
+import { MATRIX_RUNNER_VERSION, RUNNABLE_TIMEFRAMES, myFamilyKey, type JudgeStageRule, type MatrixCell, type MatrixFamily, type MatrixSide, type MyStrategySnapshot, type MatrixManifest, type MatrixStudySpec, type MatrixTimeframe, type MatrixVariantRef, type TimeframeSegments } from './types.js';
 
 const DAY = 86_400_000;
 export const horizonOf = (tf: MatrixTimeframe): Horizon => (tf === '1d' ? 'long' : tf === '4h' ? 'mid' : 'short');
@@ -134,7 +135,16 @@ export function expandCells(spec: MatrixStudySpec, rec: AssetRecommendation | nu
 }
 
 export const executionSpec = () => ({ runner: MATRIX_RUNNER_VERSION, spot_fee_rate: DEFAULT_EXECUTION.fee_rate, perp_taker: PERP_TAKER, perp_maker: PERP_MAKER, slippage_bps: DEFAULT_EXECUTION.slippage_bps, stress_fee_multiple: STRESS_FEE_MULTIPLE, sizing: 'unit_notional_single_asset' });
-export const protocolHashOf = (s: MatrixStudySpec) => hash({ protocol: s.protocol, split: s.split, purge_bars: s.purge_bars, iterate: s.iterate, budget: s.budget, judge: s.judge, judge_templates: s.judge_templates ?? null, model_profile: s.model_profile });
+/** 两段式规则进协议哈希;all 模式不加键(旧研究 / 不传的 API 调用哈希不变) */
+export const protocolHashOf = (s: MatrixStudySpec) => hash({ protocol: s.protocol, split: s.split, purge_bars: s.purge_bars, iterate: s.iterate, budget: s.budget, judge: s.judge, judge_templates: s.judge_templates ?? null, model_profile: s.model_profile, ...(judgeStageRuleOf(s) ? { judge_stage: judgeStageRuleOf(s) } : {}) });
+export const isCandidatesStage = (s: Pick<MatrixStudySpec, 'judge_stage'>) => s.judge_stage === 'candidates';
+/** spec → 冻结的两段式规则(candidates 才有) */
+export function judgeStageRuleOf(s: MatrixStudySpec): JudgeStageRule | null {
+  if (!isCandidatesStage(s)) return null;
+  return { version: 'judge_stage_v1', mode: 'candidates', max_cells: s.judge_stage_max_cells ?? DEFAULT_JUDGE_STAGE_MAX_CELLS, eligible: 'code_cell_verdict_pass_near_or_tier_pending_paper_candidate', rank: 'scorecard_desc_tier_sharpe_cell_id', variants: 'manifest_variants_same_param_as_generation0_code_trial', timing: 'after_code_search_before_seal' };
+}
+/** code_judge 格对应的 code 格 id */
+export const codeCellIdOf = (judgeCellId: string) => judgeCellId.replace(/\|code_judge$/, '|code');
 export const dataScopeOf = (s: MatrixStudySpec) => `scope_${hash({ symbols: [...s.symbols].sort(), market: s.market }).slice(0, 16)}`;
 
 export function buildManifest(spec: MatrixStudySpec, rec: AssetRecommendation | null, now: number, mine: MyStrategySnapshot[] = []): MatrixManifest {
@@ -142,48 +152,108 @@ export function buildManifest(spec: MatrixStudySpec, rec: AssetRecommendation | 
   for (const tf of spec.timeframes) if (RUNNABLE_TIMEFRAMES.includes(tf)) segments[tf] = segmentsFor(spec, tf, spec.window_days[tf]!);
   const cells = expandCells(spec, rec, segments, mine);
   const dev = Object.fromEntries(Object.entries(segments).map(([tf, s]) => [tf, { from_ms: s!.train.from_ms, to_ms: s!.selection.to_ms }]));
+  const rule = judgeStageRuleOf(spec);
   return {
-    version: 'matrix_manifest_v1', spec, ...(mine.length ? { my_strategies: mine } : {}), segments, cells,
+    version: 'matrix_manifest_v1', spec, ...(rule ? { judge_stage: rule } : {}), ...(mine.length ? { my_strategies: mine } : {}), segments, cells,
     data_request_hash: hash({ symbols: spec.symbols, market: spec.market, dev }),
     protocol_hash: protocolHashOf(spec), execution_spec_hash: hash(executionSpec()), data_scope_id: dataScopeOf(spec), created_at: now,
   };
 }
 export const manifestHash = (m: MatrixManifest) => hash(m);
 
+export type BudgetDim = 'variants' | 'judge_calls' | 'judge_usd' | 'symbols';
 export interface MatrixEstimate {
   cells: { total: number; applicable: number; not_applicable: number; research_only: number };
+  /** 预算口径的矩阵变体数:all = 全部格子变体;candidates = 纯代码臂变体 + 最坏 K 格补跑变体 */
   matrix_trials: number; iteration_trials_max: number; variants: number;
+  /** 判断调用 / 预留美元(candidates 按最坏 K 格) */
   judge_calls: number; judge_usd: string;
   data: { series: number; bars: number; cold_fetch_ms_upper: number };
+  /** 不变:只看变体数(create 只因它拒绝) */
   within_budget: boolean; warnings: string[];
+  /** 纯代码臂的变体数(all 模式 = matrix_trials) */
+  stage1_trials: number;
+  judge_stage: { mode: 'all' | 'candidates'; max_cells: number | null; judge_cells: number; trials_max: number; calls_max: number };
+  budget: { variants: { value: number; limit: number }; judge_calls: { value: number; limit: number }; judge_usd: { value: string; limit: string }; symbols: { value: number; limit: number } };
+  /** 超预算的维度 / 用到 80% 以上但没超的维度 */
+  over: BudgetDim[]; near: BudgetDim[];
+  /** 单次判断预留价(model_profile.max_call_usd);没有模型配置时 null */
+  judge_call_usd: string | null;
+}
+/** 一个 code_judge 格按 all 模式的判断调用粗估:变体 × 开发段根数 / 30 */
+export function cellJudgeCalls(c: MatrixCell): number {
+  if (c.arm !== 'code_judge' || c.applicability !== 'applicable' || !c.segments) return 0;
+  const g = c.segments;
+  return c.variants.length * Math.ceil((g.selection.to_ms - g.train.from_ms) / g.timeframe_ms / 30);
+}
+/** 两段式补跑一格的最坏变体数:同一 param 的变体最多几个(无模板 = 1,模板组 = 模板数) */
+export function stageVariantsMax(c: MatrixCell): number {
+  const by = new Map<string, number>();
+  for (const v of c.variants) by.set(v.param, (by.get(v.param) ?? 0) + 1);
+  return Math.max(0, ...by.values());
+}
+/** 两段式最坏情况:可补跑的 code_judge 格(对应 code 格可评估)按单格最坏判断调用降序取前 K 格 */
+export function judgeStageWorst(m: MatrixManifest): { judge_cells: number; trials_max: number; calls_max: number; max_cells: number } {
+  const K = m.judge_stage?.max_cells ?? m.spec.judge_stage_max_cells ?? DEFAULT_JUDGE_STAGE_MAX_CELLS;
+  const byId = new Map(m.cells.map((c) => [c.id, c]));
+  const js = m.cells.filter((c) => c.arm === 'code_judge' && c.applicability === 'applicable' && byId.get(codeCellIdOf(c.id))?.applicability === 'applicable').map((c) => {
+    const n = stageVariantsMax(c), per = c.variants.length ? cellJudgeCalls(c) / c.variants.length : 0;
+    return { trials: n, calls: Math.ceil(n * per) };
+  }).sort((a, b) => b.calls - a.calls || b.trials - a.trials);
+  const top = js.slice(0, K);
+  // 变体与调用分别取最坏(两者的最坏格可能不同)
+  const trialsTop = [...js].sort((a, b) => b.trials - a.trials).slice(0, K);
+  return { judge_cells: js.length, trials_max: trialsTop.reduce((a, x) => a + x.trials, 0), calls_max: top.reduce((a, x) => a + x.calls, 0), max_cells: K };
 }
 /**
  * 事前估算(不落库):试验数 = 矩阵全部变体 + 迭代上限(top_k × 代数 × 每代候选);
  * 判断调用 = code_judge 试验 × 开发段根数 / 30(粗估候选率)× 1(正常/压力两次运行共用同一决策);
  * 美元上限 = 调用数 × 单次最大预留;冷数据上限按 OKX 每请求 100 根、300ms 估。
+ * 两段式(candidates):第一阶段只算 code 格变体;补跑按最坏 K 格(单格判断调用最多的 K 格)算变体与判断调用。
  */
 export function estimate(m: MatrixManifest): MatrixEstimate {
-  const s = m.spec, app = m.cells.filter((c) => c.applicability === 'applicable');
-  const matrix_trials = app.reduce((a, c) => a + c.variants.length, 0), iteration = s.iterate.top_k * s.iterate.generations * s.iterate.candidates_per_generation;
-  let judge_calls = 0;
-  for (const c of app) if (c.arm === 'code_judge') { const g = c.segments!; judge_calls += c.variants.length * Math.ceil((g.selection.to_ms - g.train.from_ms) / g.timeframe_ms / 30); }
+  const s = m.spec, app = m.cells.filter((c) => c.applicability === 'applicable'), cand = isCandidatesStage(s);
+  const iteration = s.iterate.top_k * s.iterate.generations * s.iterate.candidates_per_generation;
+  const stage1_trials = app.filter((c) => !cand || c.arm === 'code').reduce((a, c) => a + c.variants.length, 0);
+  const worst = cand ? judgeStageWorst(m) : null;
+  const judgeAll = app.reduce((a, c) => a + cellJudgeCalls(c), 0);
+  const matrix_trials = cand ? stage1_trials + worst!.trials_max : stage1_trials;
+  const judge_calls = cand ? worst!.calls_max : judgeAll;
   let bars = 0, series = 0;
   for (const g of Object.values(m.segments)) { series += s.symbols.length; bars += s.symbols.length * Math.ceil((g!.holdout.to_ms - g!.train.from_ms) / g!.timeframe_ms + 301); }
+  const judge_usd = s.model_profile ? usdMul(s.model_profile.max_call_usd, judge_calls) : '0';
   const warnings: string[] = [];
   if (matrix_trials > s.budget.max_variants) warnings.push(`矩阵变体 ${matrix_trials} 超过预算 ${s.budget.max_variants},请缩小资产 / 周期 / 族`);
-  if (judge_calls > s.budget.max_judge_calls) warnings.push(`判断调用粗估 ${judge_calls} 超过预算 ${s.budget.max_judge_calls},超出部分的 code_judge 格会标执行不支持`);
+  if (judge_calls > s.budget.max_judge_calls) warnings.push(`判断调用粗估 ${judge_calls}${cand ? '(两段式最坏情况)' : ''} 超过预算 ${s.budget.max_judge_calls},超出部分的 code_judge 格会标执行不支持`);
   if (m.cells.some((c) => c.applicability === 'research_only')) warnings.push('3m/5m 首版只标 research_only(运行器与延迟撮合未验证),不评估、不填零');
   if (s.arms.includes('code_judge') && !(s.judge && s.model_profile)) warnings.push('没有冻结的判断模型配置,code_judge 臂全部标 not_applicable');
   // 预算按单次价格上限(max_call_usd)原子预留:上限总额超过研究预算时,跑到一半就会被预算挡住(2026-09-25 端到端发现)
-  if (s.model_profile && s.arms.includes('code_judge') && Number(usdMul(s.model_profile.max_call_usd, judge_calls)) > Number(s.budget.max_judge_usd)) {
-    warnings.push(`判断花费上限 $${usdMul(s.model_profile.max_call_usd, judge_calls)}(按单次上限 $${s.model_profile.max_call_usd} 预留,实际通常低一个数量级)超过研究预算 $${s.budget.max_judge_usd},超出部分的 code_judge 格会标执行不支持;请缩小矩阵或调高预算`);
+  if (s.model_profile && s.arms.includes('code_judge') && Number(judge_usd) > Number(s.budget.max_judge_usd)) {
+    warnings.push(`判断花费上限 $${judge_usd}(按单次上限 $${s.model_profile.max_call_usd} 预留,实际通常低一个数量级)超过研究预算 $${s.budget.max_judge_usd},超出部分的 code_judge 格会标执行不支持;请缩小矩阵或调高预算`);
   }
+  if (cand && s.arms.includes('code_judge')) warnings.push(`Jev 两段式:先只跑纯代码,候补 / 接近 / 通过的格子按评分取前 ${worst!.max_cells} 格补跑 Jev(判断次数按最坏 ${Math.min(worst!.max_cells, worst!.judge_cells)} 格估)`);
+  const budget: MatrixEstimate['budget'] = {
+    variants: { value: matrix_trials, limit: s.budget.max_variants },
+    judge_calls: { value: judge_calls, limit: s.budget.max_judge_calls },
+    judge_usd: { value: judge_usd, limit: s.budget.max_judge_usd },
+    symbols: { value: s.symbols.length, limit: MAX_SYMBOLS },
+  };
+  const ratio: Record<BudgetDim, number> = {
+    variants: matrix_trials / Math.max(1, s.budget.max_variants),
+    judge_calls: s.budget.max_judge_calls > 0 ? judge_calls / s.budget.max_judge_calls : judge_calls > 0 ? Infinity : 0,
+    judge_usd: Number(s.budget.max_judge_usd) > 0 ? Number(judge_usd) / Number(s.budget.max_judge_usd) : Number(judge_usd) > 0 ? Infinity : 0,
+    symbols: s.symbols.length / MAX_SYMBOLS,
+  };
+  const dims: BudgetDim[] = ['variants', 'judge_calls', 'judge_usd', 'symbols'];
   return {
     cells: { total: m.cells.length, applicable: app.length, not_applicable: m.cells.filter((c) => c.applicability === 'not_applicable').length, research_only: m.cells.filter((c) => c.applicability === 'research_only').length },
     matrix_trials, iteration_trials_max: iteration, variants: matrix_trials + iteration,
-    judge_calls, judge_usd: s.model_profile ? usdMul(s.model_profile.max_call_usd, judge_calls) : '0',
+    judge_calls, judge_usd,
     data: { series, bars, cold_fetch_ms_upper: Math.ceil(bars / 100) * 300 },
     within_budget: matrix_trials <= s.budget.max_variants, warnings,
+    stage1_trials,
+    judge_stage: cand ? { mode: 'candidates', max_cells: worst!.max_cells, judge_cells: worst!.judge_cells, trials_max: worst!.trials_max, calls_max: worst!.calls_max } : { mode: 'all', max_cells: null, judge_cells: app.filter((c) => c.arm === 'code_judge').length, trials_max: app.filter((c) => c.arm === 'code_judge').reduce((a, c) => a + c.variants.length, 0), calls_max: judgeAll },
+    budget, over: dims.filter((d) => ratio[d] > 1), near: dims.filter((d) => ratio[d] > 0.8 && ratio[d] <= 1),
+    judge_call_usd: s.model_profile?.max_call_usd ?? null,
   };
 }
-

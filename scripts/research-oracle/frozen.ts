@@ -2,11 +2,11 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
-import type { ResearchBar } from '@trading-swarm/contracts';
+import type { ResearchBar } from '@trade-gate/contracts';
 import type { FrozenData } from '../../packages/gateway/src/demo/research/improve/types.ts';
 
 export const UNIVERSE = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'DOGEUSDT', 'XRPUSDT', 'BNBUSDT'];
-export const DATA_DIR = path.join(homedir(), '.trading-swarm-okx', 'research-oracle');
+export const DATA_DIR = path.join(homedir(), '.trade-gate-okx', 'research-oracle');
 export const TO_MS = Date.UTC(2026, 8, 23) - 1;
 export function loadFrozen(to_ms = TO_MS): FrozenData {
   const files = readdirSync(DATA_DIR);

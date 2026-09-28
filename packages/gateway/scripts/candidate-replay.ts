@@ -9,7 +9,7 @@
 //
 // --source fetch(默认):market.ts fetchKlines 拉交易所公共 K 线(OKX 需要代理:HTTPS_PROXY=http://127.0.0.1:7897);
 // --source dataset:用副本里 research_datasets 已冻结的 1h 数据(不联网,但只到数据集的截止时间)。
-// **只准跑在副本上**:路径指向 ~/.trading-swarm/demo/state.sqlite 或 ~/.trading-swarm-okx/demo/state.sqlite 直接拒绝。
+// **只准跑在副本上**:路径指向 ~/.trade-gate/demo/state.sqlite 或 ~/.trade-gate-okx/demo/state.sqlite 直接拒绝。
 // openStateDb 会给副本补跑未执行的迁移(包括 0041)。
 import { existsSync, realpathSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -45,7 +45,7 @@ if (!existsSync(dbPath)) {
   console.error(`没有这个库:${dbPath}`);
   process.exit(2);
 }
-const LIVE = [resolve(homedir(), '.trading-swarm/demo/state.sqlite'), resolve(homedir(), '.trading-swarm-okx/demo/state.sqlite')];
+const LIVE = [resolve(homedir(), '.trade-gate/demo/state.sqlite'), resolve(homedir(), '.trade-gate-okx/demo/state.sqlite')];
 const real = (p: string): string => (existsSync(p) ? realpathSync(p) : p);
 if (LIVE.map(real).includes(real(dbPath))) {
   console.error(`拒绝:${dbPath} 是现网库。先 sqlite3 <src> '.backup <copy>' 再对副本跑。`);

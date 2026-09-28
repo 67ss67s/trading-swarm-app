@@ -6,10 +6,10 @@
 // 模型实际离场 vs 按计划拿到止损/止盈 vs 机械吊灯线(ATR22×3,研究台 IR 的默认追踪)管理到底。
 //
 //   npx jiti packages/gateway/scripts/ledger-backfill.ts --db <state.sqlite 的副本> \
-//     [--klines-dir <K 线缓存目录,默认 TG_DEMO_KLINE_CACHE_DIR 或 ~/.trading-swarm/demo/klines>] \
+//     [--klines-dir <K 线缓存目录,默认 TG_DEMO_KLINE_CACHE_DIR 或 ~/.trade-gate/demo/klines>] \
 //     [--json <结果 JSON 输出路径>] [--dry-run]
 //
-// **只准跑在副本上**:路径指向 ~/.trading-swarm/demo/state.sqlite 或 ~/.trading-swarm-okx/demo/state.sqlite 直接拒绝。
+// **只准跑在副本上**:路径指向 ~/.trade-gate/demo/state.sqlite 或 ~/.trade-gate-okx/demo/state.sqlite 直接拒绝。
 // K 线走 backtest.ts 的磁盘缓存(`loadKlines`);缓存没覆盖到的区间才会请求币安公共行情(需要代理时设
 // NODE_USE_ENV_PROXY=1 HTTPS_PROXY=…)。缓存缺口补回来会写进 --klines-dir,所以建议指向一份缓存副本。
 //
@@ -51,7 +51,7 @@ if (!existsSync(dbPath)) {
   console.error(`没有这个库:${dbPath}`);
   process.exit(2);
 }
-const LIVE = [resolve(homedir(), '.trading-swarm/demo/state.sqlite'), resolve(homedir(), '.trading-swarm-okx/demo/state.sqlite')];
+const LIVE = [resolve(homedir(), '.trade-gate/demo/state.sqlite'), resolve(homedir(), '.trade-gate-okx/demo/state.sqlite')];
 const real = (p: string): string => (existsSync(p) ? realpathSync(p) : p);
 if (LIVE.map(real).includes(real(dbPath))) {
   console.error(`拒绝:${dbPath} 是现网库。先 sqlite3 <src> '.backup <copy>' 再对副本跑。`);

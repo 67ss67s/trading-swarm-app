@@ -28,7 +28,7 @@ if (process.argv.includes('--study') && process.argv[process.argv.indexOf('--stu
 }
 const { StrategyLibrary } = await import('../packages/gateway/src/demo/strategies.ts');
 const { registerManifest, runExperiment, labCacheFetchSpans } = await import('../packages/gateway/src/demo/strategy-lab.ts');
-const root = `${homedir()}/.trading-swarm/demo`;
+const root = `${homedir()}/.trade-gate/demo`;
 const db = new DatabaseSync(`${root}/state.sqlite`, { readOnly: true });
 const specs = new StrategyLibrary(db).list().filter(s => s.status !== 'retired');
 const workflow = JSON.parse(db.prepare('SELECT value FROM kv WHERE key=?').get('demo.workflow').value);

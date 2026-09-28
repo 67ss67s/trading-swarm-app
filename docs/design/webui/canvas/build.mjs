@@ -1,4 +1,4 @@
-// trading-swarm WebUI 设计画板生成器(静态 .dc.html + canvas.json)。
+// trade-gate WebUI 设计画板生成器(静态 .dc.html + canvas.json)。
 // 用法:node build.mjs  → 在本目录产出 *.dc.html 与 canvas.json;随后用 design 技能的 seed 助手拼装发布。
 // 视觉基线:借 8794 shadcn 变体「Graphite & Ice」的暗色三层地面 / 冰青强调 / 等宽数字 / 联排面板,
 // 令牌值由其 oklch 换算为 hex(见 README「视觉决策」)。示例数据全部取自 packages/contracts/fixtures。
@@ -230,7 +230,7 @@ const NAV = [
 ];
 const sidebar = (active) => `
 <aside class="side">
-  <div class="brand"><span class="logo mono">TG</span><span style="font-size:13px;font-weight:600">trading-swarm</span><span class="hint num" style="margin-left:auto">v0.1</span></div>
+  <div class="brand"><span class="logo mono">TG</span><span style="font-size:13px;font-weight:600">trade-gate</span><span class="hint num" style="margin-left:auto">v0.1</span></div>
   ${NAV.map(
     (g) => `<div class="nav-g"><div class="nav-l">${g.g}</div>${g.items
       .map(([id, label, icon, dim, count, dotc]) => `<div class="nav-i ${id === active ? "on" : ""} ${dim || ""}"${dim ? ' title="B 阶段铺面"' : ""}>${ico(icon, 14)}<span class="ell">${label}</span>${count ? `<span class="cnt warn num" style="margin-left:auto">${count}</span>` : ""}${dotc ? `<span style="margin-left:auto;width:6px;height:6px;border-radius:999px;background:${C.warn}"></span>` : ""}</div>`)
@@ -361,7 +361,7 @@ files["Main.dc.html"] = page({ id: "dashboard", title: "总览", sub: "Dashboard
 // ───────────────────────── 2. Onboarding 向导 ─────────────────────────
 const WIZ = [
   ["1", "模式与风险确认", "quickstart · securityAcknowledgedAt 19:38"],
-  ["2", "Workspace", "~/.trading-swarm/workspace"],
+  ["2", "Workspace", "~/.trade-gate/workspace"],
   ["3", "大脑", "api · deepseek-chat · completion"],
   ["4", "Binance MCP 授权", "Agentic 子账户 · OAuth PKCE"],
   ["4b", "主账户 API key", "可选:手动交易与划转"],
@@ -374,7 +374,7 @@ const WIZ = [
   ["11", "完成", "先 Observe 一周"],
 ];
 const wizardRail = (current, doneUpTo) =>
-  `<div class="ws" style="width:250px;flex:none"><div class="pane-h"><span class="pane-t">向导 · tswarm onboard</span><span class="hint">wizard.status</span></div>
+  `<div class="ws" style="width:250px;flex:none"><div class="pane-h"><span class="pane-t">向导 · tgate onboard</span><span class="hint">wizard.status</span></div>
   <div class="list" style="padding:4px 0">${WIZ.map(([n, label, note]) => {
     const idx = WIZ.findIndex((w) => w[0] === n);
     const state = n === current ? "on" : idx < doneUpTo ? "done" : "todo";
@@ -393,7 +393,7 @@ const scopeChips = (trade) => `${pill("market", "ok")}${pill("account", "ok")}${
 const oauthWaiting = `
 <div class="pane-h" style="height:44px"><span class="pane-t" style="font-size:13px">第 4 步 · Binance MCP 授权(Agentic 子账户)</span><span class="hint">exchange.oauth.start → 浏览器 → /oauth/callback → exchange.oauth.complete</span><span style="margin-left:auto">${pill("等待回调", "warn")}</span></div>
 <div class="col" style="flex:1;gap:0;overflow:hidden">
-  ${phase("ok", "启动本地回调监听", kv([["redirect_uri", "http://127.0.0.1:18801/oauth/callback"], ["为什么固定端口", "CIMD 元数据里的 redirect_uri 必须逐字匹配"], ["client_id", "CIMD 托管元数据 · <bridge-domain>/.well-known/trading-swarm-client.json(P0 验证)"], ["PKCE", "S256 · code_verifier 已生成(只在内存)"]]), "19:41:02")}
+  ${phase("ok", "启动本地回调监听", kv([["redirect_uri", "http://127.0.0.1:18801/oauth/callback"], ["为什么固定端口", "CIMD 元数据里的 redirect_uri 必须逐字匹配"], ["client_id", "CIMD 托管元数据 · bridge.example.com/.well-known/trade-gate-client.json(P0 验证)"], ["PKCE", "S256 · code_verifier 已生成(只在内存)"]]), "19:41:02")}
   ${phase("ok", "打开浏览器授权", `<div class="row" style="gap:8px">${btn("已打开浏览器", "out", { icon: "globe" })}${btn("复制授权链接", "ghost", { icon: "copy" })}<span class="hint">accounts.binance.com/oauth/authorize?client_id=…&amp;scope=market+account&amp;code_challenge=…</span></div><div class="row" style="gap:6px"><span class="lbl">申请 scope</span>${scopeChips(false)}<span class="hint">Observe 阶段只授 market+account;进入 Draft 前再重新授权加 trade</span></div>`, "19:41:03")}
   ${phase("on", "等待回环回调", `<div class="row" style="gap:10px"><span class="spin"></span><span>在浏览器里登录 Binance 并点「授权」后会自动继续,不要关闭本页</span></div>
      <div class="row" style="gap:16px"><span class="num" style="font-size:22px;font-weight:600">00:42</span><span class="col" style="gap:4px;flex:1"><span class="hint">已等待 · 超时 10:00 后需重新开始(code 一次性)</span>${meter(0.07, C.ice)}</span></div>
@@ -427,7 +427,7 @@ const mainKey = `
   <div class="col" style="padding:14px;gap:12px;border-right:1px solid ${C.line}">
     <div class="field"><span class="lbl">API key</span><div class="inp num">${ico("key", 13, C.mutedFg)}Ab3kQ7mN…9Qx2</div></div>
     <div class="field"><span class="lbl">Secret</span><div class="inp num">${ico("lock", 13, C.mutedFg)}••••••••••••••••••••••••<span class="hint" style="margin-left:auto">已填</span></div></div>
-    <div class="banner ice">${ico("lock", 14)}<span>只由 execd 落盘 ~/.trading-swarm/secrets/apikey-main.json(0600)。gateway、UI、agent 永不接触明文;agent 的 effective catalog 里没有任何 main 写工具。</span></div>
+    <div class="banner ice">${ico("lock", 14)}<span>只由 execd 落盘 ~/.trade-gate/secrets/apikey-main.json(0600)。gateway、UI、agent 永不接触明文;agent 的 effective catalog 里没有任何 main 写工具。</span></div>
     <div class="row" style="gap:8px">${btn("重新探测", "out", { icon: "refresh" })}<span class="hint num">上次 19:43:10 · 380 ms</span></div>
     <div class="note">探测顺序:读 → 合约 → 子账户划转 → 提币 → IP 白名单 → 读主账户余额 → 子账户列表。任何一步失败都不阻塞向导,只把对应页面按钮退化为 Binance 深链。</div>
   </div>
@@ -1004,7 +1004,7 @@ const canvas = {
     AB("Activity.dc.html", 2, 4, 1440, 900, "8 Activity trace 回放"),
   ],
   annotations: [
-    { id: "cover", x: 0, y: -420, w: 900, text: "trading-swarm WebUI · A3 最小 UI 设计稿 v1 · 2026-09-02\n每个画板 = 一页(桌面 1440 宽),小画板 = 组件 1:1 / 移动端。示例数据全部取自 packages/contracts/fixtures(intent / plan / authorization / account_snapshot / policy / events / attempt / exchange_order / position_effect / fill),状态枚举保留英文小写。\n气质借 8794 shadcn 变体「Graphite & Ice」:三层暗色地面、冰青只给界面 chrome、绿红只表达多空、数字全部等宽;两账户用固定视觉约定区分:main · REST = 石板灰 chip,sub · MCP = 冰青 chip。\n行 1 交易台 · 行 2 向导 · 行 3 系统 · 行 4 主账户动钱 · 行 5 agent 动钱与回放" },
+    { id: "cover", x: 0, y: -420, w: 900, text: "trade-gate WebUI · A3 最小 UI 设计稿 v1 · 2026-09-02\n每个画板 = 一页(桌面 1440 宽),小画板 = 组件 1:1 / 移动端。示例数据全部取自 packages/contracts/fixtures(intent / plan / authorization / account_snapshot / policy / events / attempt / exchange_order / position_effect / fill),状态枚举保留英文小写。\n气质借 8794 shadcn 变体「Graphite & Ice」:三层暗色地面、冰青只给界面 chrome、绿红只表达多空、数字全部等宽;两账户用固定视觉约定区分:main · REST = 石板灰 chip,sub · MCP = 冰青 chip。\n行 1 交易台 · 行 2 向导 · 行 3 系统 · 行 4 主账户动钱 · 行 5 agent 动钱与回放" },
     NOTE("n-dashboard", 0, 0, "Dashboard\nRPC:account.truth(两账户合并)· intents.list · strategies.list(attention 桶)· exchange.status · policy.get · usage.summary\n事件:account.updated|stale · intent.* · strategy.attention · exchange.auth.* · health · usage"),
     NOTE("n-chart", 1, 0, "Chart\nRPC:market.klines / market.subscribe(4h 收盘)· market.features / market.structure(证据)· intents.get · drawing.create/update/remove(role, state)\n事件:market.kline · market.tick · intent.*\n画线颜色 = 8794 frontend-shared/drawing/palette.ts 的 role 调色(support 蓝 / resistance 琥珀 / trend 品红 / volumeNode·structure 无彩),状态用虚实与透明度编码,不用色相"),
     NOTE("n-portfolio", 2, 0, "Portfolio\nRPC:account.truth(AccountSnapshot:每组件 observed_at / fetched_from-to / completeness / source;consistency = consistent | inconsistent | unavailable;account_version)· orders.list · positions.list\n事件:account.updated|stale · order.* · position.*\n订单 origin:tg- 前缀 = local,ts_ / 其他 = foreign(开仓前强制对账)"),

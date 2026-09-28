@@ -17,8 +17,10 @@ import { toast } from 'sonner';
 import { api } from '@/api/client';
 import type { Market, ProtectionCredential, ProtectionState, ProtectionStatusView } from '@/api/types';
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { JudgeLock } from '@/components/judge-lock';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { friendlyError } from '@/lib/edition';
 import { fmtDateTime, relativeTime } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { t as tr, tmap } from '@/lib/i18n';
@@ -69,7 +71,7 @@ export function protectionText(p: ProtectionStatusView): { text: string; tone: T
     case 'verifying':
       return { text: `${tr('验证中')} · ${tr('第 {i}/{n} 步', { i: cur + 1, n: p.steps.length || '?' })}${p.steps[cur]?.name ? ` ${p.steps[cur]!.name}` : ''}`, tone: 'warn' };
     case 'failed':
-      return { text: `${tr('失败')}:${p.last_error ?? p.steps.find((s) => !s.ok)?.detail ?? tr('原因不明')}${p.last_run_at ? ` · ${relativeTime(p.last_run_at)}` : ''}`, tone: 'bad' };
+      return { text: `${tr('失败')}:${friendlyError(p.last_error ?? p.steps.find((s) => !s.ok)?.detail) ?? tr('原因不明')}${p.last_run_at ? ` · ${relativeTime(p.last_run_at)}` : ''}`, tone: 'bad' };
     default:
       return { text: tr('还没验证:新开仓会被下单前的闸挡住'), tone: 'warn' };
   }
@@ -84,7 +86,7 @@ export function useVerifyProtection() {
       void qc.invalidateQueries({ queryKey: ['execution'] });
       void qc.invalidateQueries({ queryKey: ['risk'] });
     },
-    onError: (e: Error & { status?: number }) => toast.error(e.status === 409 ? tr('正在验证,别重复点') : tr('没跑起来'), { description: e.message }),
+    onError: (e: Error & { status?: number }) => toast.error(e.status === 409 ? tr('正在验证,别重复点') : tr('没跑起来'), { description: friendlyError(e.message) }),
   });
 }
 
@@ -109,9 +111,11 @@ function VerifyButton({
   const verify = useVerifyProtection();
   return (
     <>
-      <Button size="xs" variant={variant} disabled={disabled || verify.isPending} onClick={() => setAsk(true)} title={costNote}>
-        {label}
-      </Button>
+      <JudgeLock feature="protection_verify">
+        <Button size="xs" variant={variant} disabled={disabled || verify.isPending} onClick={() => setAsk(true)} title={costNote}>
+          {label}
+        </Button>
+      </JudgeLock>
       <ConfirmDialog
         open={ask}
         title={symbol ? tr('用最小仓验证 {symbol} 的止损', { symbol: market === 'spot' ? `${symbol} · ${tr('现货')}` : symbol }) : tr('用最小仓验证止损')}
@@ -160,13 +164,13 @@ function CredentialRow({ c, costNote, now }: { c: ProtectionCredential; costNote
       <div className={cn('num bg-card px-2 py-1 text-[10.5px]', c.expires_at !== null && c.expires_at <= now ? 'text-warn' : 'text-muted-foreground')}>
         {c.expires_at ? `${fmtDateTime(c.expires_at)} · ${expiryText(c.expires_at, now)}` : '—'}
       </div>
-      <div className="bg-card px-2 py-1 text-[10.5px]" title={c.last_error ?? undefined}>
+      <div className="bg-card px-2 py-1 text-[10.5px]" title={friendlyError(c.last_error) ?? undefined}>
         {c.last_probe_ok === null || c.last_probe_ok === undefined ? (
           <span className="text-muted-foreground">—</span>
         ) : c.last_probe_ok ? (
           <span className="text-up">{tr('成功')}</span>
         ) : (
-          <span className="truncate text-down">{tr('失败')}{c.last_error ? `:${c.last_error}` : ''}</span>
+          <span className="truncate text-down">{tr('失败')}{c.last_error ? `:${friendlyError(c.last_error)}` : ''}</span>
         )}
       </div>
       <div className="flex items-center justify-end bg-card px-2 py-1">

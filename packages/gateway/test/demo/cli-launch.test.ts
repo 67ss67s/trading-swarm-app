@@ -28,7 +28,7 @@ process.stdin.on('end', () => {
 `;
 
 beforeAll(() => {
-  dir = mkdtempSync(path.join(os.tmpdir(), 'tswarm-cli-launch-'));
+  dir = mkdtempSync(path.join(os.tmpdir(), 'tgate-cli-launch-'));
   writeFileSync(path.join(dir, 'echo.cjs'), ECHO);
   echoScript = path.join(dir, 'echo.cjs');
   // A temp ZDOTDIR so the real ~/.zshrc is never sourced by a test.

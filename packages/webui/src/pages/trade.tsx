@@ -1,27 +1,42 @@
 /**
- * 交易页(docs/demo/v2-agent-loop.md §7「前端」的「交易页」):
- * 左 = 下单面板(单向账户,开多/开空 + 只减仓 = 平多/平空)
- * 中 = 策略线程列表(点一行 → 填入下单面板 + 喂图表价格线)
- * 右上 = 图表 / 线程详情 / Agent 对话 三个 tab 共享区域(图表 tab 左侧挂一条币种列表,
- *        对齐 8794 控制台:持仓/挂单 → 观察列表 → 全部合约,可折叠)
- * 底 = 持仓 / 挂单 两个 tab
+ * 交易页(docs/demo/v2-agent-loop.md §7;09-27 三层改版见 components/trade/*,契约 §9.56):
+ * 顶 = 执行通道 · ①来源 → ②判断 → ③风控与执行 摘要胶囊(点开右栏 Risk)· 急停 / 全部暂停 / 日亏停(正常不显示)
+ * 左 = ① Sources:AI Scan 卡 + 每个策略运行一张卡(判断方式、今日漏斗、被挡在哪层什么原因;点卡 = 线程只看它);
+ *      底部「手动下单」展开区(原下单面板,单向账户,开多/开空 + 只减仓 = 平多/平空)
+ * 中 = 策略线程,分「需要处理 / 持仓中 / 待入场」三组;提交结果未知(卡住的挂单)单独归到「需要处理」
+ * 右上 = 图表 / 线程 / Jev 判断流 / Agent 对话 / 风控与执行(所有来源共用,就地改 + 让 agent 调)
+ * 底 = 持仓 / 挂单(提交结果未知的入场单单列在真实挂单上面)
  *
  * 严格按 App.tsx 顶部注释的 react-query key 约定发 useQuery,不自己开 SSE 连接——
- * App.tsx 的单一 SSE 连接会失效 / 更新这些 key,页面自动跟着活。
+ * App.tsx 的单一 SSE 连接会失效 / 更新这些 key,页面自动跟着活(Jev 判断流用它自己的共享 SSE)。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { api } from '@/api/client';
-import type { BasisView, Direction, ManualOrderRequest, Market, MarketView, Overview, OpenOrderView, PositionView, StrategyThread, SymbolInfo } from '@/api/types';
+import { api, strategyRunsApi } from '@/api/client';
+import type { BasisView, Direction, ManualOrderRequest, Market, MarketView, Overview, OpenOrderView, PositionView, StrategyRunPatch, StrategyThread, SymbolInfo } from '@/api/types';
 import { Workspace, Pane } from '@/components/pane';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { TradeChart } from '@/components/trade-chart';
 import { ChartSymbolList } from '@/components/chart-symbol-list';
 import { ChatPanel } from '@/components/chat-panel';
 import { SymbolPicker } from '@/components/symbol-picker';
-import { ChevronDown, ChevronLeft, ChevronRight, CircleQuestionMark } from 'lucide-react';
-import { askAgent, whyQuestion } from '@/lib/ask-agent';
+import { ChevronDown, ChevronLeft, ChevronRight, TriangleAlert, X } from 'lucide-react';
+import { useAgentStrategy } from '@/api/agent-strategy';
+import { useJudgeLive } from '@/api/judge-live';
+import { TRADING_SOURCES_KEY, tradingApi, useExecutionPolicy, useTradingSources } from '@/api/trading';
+import { RUN_MODE_LABEL, useStrategyRuns } from '@/components/my-strategies/run-panel';
+import { JudgeLiveFeed } from '@/components/judge-live';
+import { SESSION_KEY } from '@/components/chat-session-bar';
+import { TradeContextBar } from '@/components/trade/context-bar';
+import { ThreadRow } from '@/components/trade/thread-row';
+import { ThreadDetail } from '@/components/trade/thread-detail';
+import { SourcesColumn } from '@/components/trade/sources-column';
+import { RiskPanel } from '@/components/trade/risk-panel';
+import { useTradeWriteLock } from '@/components/trade/write-lock';
+import { groupThreads, judgeForThread, matchesOriginFilter, originCounts, sameOriginFilter, threadForOrder, threadHealth, threadOrigin, unknownEntries, type OriginFilter, type ThreadHealth, type ThreadOrigin } from '@/components/trade/logic';
+import { channelOf, riskSummary, sourceCards, tunePrompt } from '@/components/trade/sources-logic';
+import { stageAgentQuestion } from '@/lib/ask-agent';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -35,7 +50,6 @@ import { Separator } from '@/components/ui/separator';
 import {
   DAILY_REGIME_LABEL,
   SESSION_LABEL,
-  THREAD_SOURCE_LABEL,
   THREAD_STATUS_LABEL,
   dailyRegimeClass,
   directionLabel,
@@ -44,8 +58,6 @@ import {
   fmtQty,
   fmtSigned,
   pnlText,
-  relativeTime,
-  threadStatusBadgeClass,
   backendLabel,
   marketLabel,
   marketOf,
@@ -82,12 +94,6 @@ function marketForSymbol(overview: Overview | undefined, symbol: string): Market
   if (overview.markets[symbol]) return overview.markets[symbol];
   if (overview.market?.symbol === symbol) return overview.market;
   return undefined;
-}
-
-function entryText(thread: StrategyThread): string {
-  if (thread.entry.zone) return `${fmtPrice(thread.entry.zone[0])} ~ ${fmtPrice(thread.entry.zone[1])}`;
-  if (thread.entry.price) return fmtPrice(thread.entry.price);
-  return t('市价');
 }
 
 // ---------------------------------------------------------------------------
@@ -498,101 +504,6 @@ function BasisStrip({ basis }: { basis: BasisView | null | undefined }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// 中:策略线程列表
-
-function ThreadRow({
-  thread,
-  selected,
-  onSelect,
-  onClose,
-  onReview,
-  reviewPending,
-  closed = false,
-}: {
-  thread: StrategyThread;
-  selected: boolean;
-  onSelect: () => void;
-  onClose: () => void;
-  onReview: () => void;
-  reviewPending: boolean;
-  /** 已结束的线程:只读回看(不给复查/平仓),用来在没有进行中线程时填空 */
-  closed?: boolean;
-}) {
-  return (
-    <div
-      onClick={onSelect}
-      className={cn('cursor-pointer border-b px-2.5 py-2 text-[12px] transition-colors hover:bg-muted/40', selected && 'bg-muted/60', closed && 'opacity-70 hover:opacity-100')}
-    >
-      <div className="flex items-center gap-1.5">
-        <Badge variant="outline" className={cn('shrink-0', threadStatusBadgeClass(thread.status))}>
-          {THREAD_STATUS_LABEL[thread.status]}
-        </Badge>
-        <span className="num truncate font-semibold">{thread.symbol}</span>
-        {marketOf(thread) === 'spot' ? <Badge variant="outline" className="h-4 shrink-0 px-1 text-[9.5px] text-muted-foreground">{t('现货')}</Badge> : null}
-        <span className={cn('shrink-0 text-[11px] font-medium', directionText(thread.side))}>{marketOf(thread) === 'spot' ? t('持有') : directionLabel(thread.side)}</span>
-        <Badge variant="outline" className="ml-auto shrink-0 text-[10px] text-muted-foreground">
-          {THREAD_SOURCE_LABEL[thread.source]}
-        </Badge>
-      </div>
-      <div className="num mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
-        <span>{t('入场')} {entryText(thread)}</span>
-        <span>{relativeTime(thread.updated_at)}</span>
-      </div>
-      {thread.stop_price || thread.take_profits[0] ? (
-        <div className="num mt-0.5 flex items-center gap-2 text-[11px] text-muted-foreground">
-          {thread.stop_price ? <span>{t('止损')} {fmtPrice(thread.stop_price)}</span> : null}
-          {thread.take_profits[0] ? <span>{t('止盈')} {fmtPrice(thread.take_profits[0])}</span> : null}
-        </div>
-      ) : null}
-      <div className="mt-1.5 flex items-center gap-1.5">
-        {closed ? (
-          <a href="#history" className="text-[11px] text-muted-foreground hover:text-primary hover:underline" onClick={(e) => e.stopPropagation()}>
-            {t('复盘 →')}
-          </a>
-        ) : (
-          <>
-            <Button
-              size="xs"
-              variant="outline"
-              onClick={(e) => {
-                e.stopPropagation();
-                onReview();
-              }}
-              disabled={reviewPending}
-            >
-              {t('复查')}
-            </Button>
-            <Button
-              size="xs"
-              variant="destructive"
-              onClick={(e) => {
-                e.stopPropagation();
-                onClose();
-              }}
-            >
-              {thread.status === 'pending_entry' ? t('撤单') : t('平仓')}
-            </Button>
-          </>
-        )}
-        <Button
-          size="xs"
-          variant="ghost"
-          className="ml-auto text-muted-foreground"
-          title={t('问 agent 这笔为什么')}
-          onClick={(e) => {
-            e.stopPropagation();
-            askAgent(whyQuestion({ symbol: thread.symbol, at: thread.created_at, action: null, threadId: thread.id }));
-          }}
-        >
-          <CircleQuestionMark data-slot="icon" />
-          {t('问 agent')}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
 /** 图表标题旁的日线状态 / 时段徽章(GET /api/market/regime;老网关没有这个接口就不显示)。 */
 function RegimeBadge({ symbol }: { symbol: string }) {
   const regimeQ = useQuery({ queryKey: ['regime', symbol], queryFn: () => api.regime(symbol), enabled: !!symbol, retry: 0, staleTime: 60_000, refetchInterval: 120_000 });
@@ -639,7 +550,7 @@ function marginUsdt(p: PositionView): string {
   return Number.isFinite(n) ? (n / lev).toFixed(2) : '—';
 }
 
-function PositionsTable({ positions, threads, openOrders }: { positions: PositionView[]; threads: StrategyThread[]; openOrders: OpenOrderView[] }) {
+function PositionsTable({ positions, threads, openOrders, originOf }: { positions: PositionView[]; threads: StrategyThread[]; openOrders: OpenOrderView[]; originOf: (t: StrategyThread) => ThreadOrigin }) {
   const queryClient = useQueryClient();
   const [adopting, setAdopting] = useState<PositionView | null>(null);
   const [stopText, setStopText] = useState('');
@@ -726,13 +637,13 @@ function PositionsTable({ positions, threads, openOrders }: { positions: Positio
               <TableCell>
                 <div className="flex items-center gap-1.5">
                   {th ? (
-                    <Badge variant="outline" className="h-5 px-1.5 text-[10.5px]" title={t('线程 {id}', { id: th.id })}>
-                      {t('agent 在管')}{th.stop_price ? ` · ${t('止损')} ${th.stop_price}` : ''}
+                    <Badge variant="outline" className="h-5 max-w-56 px-1.5 text-[10.5px]" title={t('线程 {id}', { id: th.id })}>
+                      <span className="truncate">{t('{who} · agent 在管', { who: originOf(th).label })}{th.stop_price ? ` · ${t('止损')} ${fmtPrice(th.stop_price)}` : ''}</span>
                     </Badge>
                   ) : (
                     <>
                       <Badge variant="outline" className={cn('h-5 px-1.5 text-[10.5px]', marketOf(p) === 'spot' ? 'text-muted-foreground' : 'border-warn/40 text-warn')} title={marketOf(p) === 'spot' ? t('不属于任何线程;现货不强制止损,想让 agent 管就交给它') : t('不属于任何线程,agent 不会管它的离场')}>
-                        {t('无主')}{exStop ? ` · ${t('交易所止损 {price}', { price: exStop.stop_price })}` : marketOf(p) === 'spot' ? '' : ` · ${t('没有止损')}`}
+                        {t('外部持仓(不是本演示开的)')}{exStop ? ` · ${t('交易所止损 {price}', { price: exStop.stop_price })}` : marketOf(p) === 'spot' ? '' : ` · ${t('没有止损')}`}
                       </Badge>
                       <Button size="xs" variant="outline" onClick={() => openAdopt(p)}>
                         {t('交给 agent')}
@@ -796,53 +707,96 @@ function PositionsTable({ positions, threads, openOrders }: { positions: Positio
   );
 }
 
-function OpenOrdersTable({ orders }: { orders: OpenOrderView[] }) {
+/**
+ * 挂单 tab。上面单列「提交结果未知」的入场单(本地有线程、交易所没回执)——它们不是交易所上的挂单,
+ * 不能和下面的真实挂单混在一起;下面是交易所返回的挂单,标出属于哪条线程(入场腿 / 保护腿)。
+ */
+function OpenOrdersTable({ orders, threads, unknown, onSelectThread }: { orders: OpenOrderView[]; threads: StrategyThread[]; unknown: { thread: StrategyThread; health: ThreadHealth }[]; onSelectThread: (t: StrategyThread) => void }) {
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>{t('币种')}</TableHead>
-          <TableHead>{t('市场')}</TableHead>
-          <TableHead>{t('方向')}</TableHead>
-          <TableHead>{t('类型')}</TableHead>
-          <TableHead>{t('数量')}</TableHead>
-          <TableHead>{t('价格')}</TableHead>
-          <TableHead>{t('触发价')}</TableHead>
-          <TableHead>{t('只减仓')}</TableHead>
-          <TableHead>{t('状态')}</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {orders.length === 0 ? (
+    <>
+      {unknown.length ? (
+        <div className="border-b bg-down/[0.05]" data-testid="trade-unknown-entries">
+          <div className="flex items-center gap-1.5 px-3 pt-2 text-[11.5px] font-medium text-down">
+            <TriangleAlert className="size-3.5" />
+            {t('提交结果未知的入场单 {n} 笔', { n: unknown.length })}
+            <span className="font-normal text-muted-foreground">{t('本地有记录,交易所没回执;不在下面的交易所挂单里')}</span>
+          </div>
+          <Table>
+            <TableBody>
+              {unknown.map(({ thread, health }) => (
+                <TableRow key={thread.id} className="cursor-pointer hover:bg-down/[0.06]" onClick={() => onSelectThread(thread)}>
+                  <TableCell className="num w-28 font-medium">{thread.symbol}</TableCell>
+                  <TableCell className={cn('w-16 font-medium', directionText(thread.side))}>{marketOf(thread) === 'spot' ? t('买入') : directionLabel(thread.side)}</TableCell>
+                  <TableCell className="num">{thread.entry.type === 'market' ? t('市价') : fmtPrice(thread.entry.price)} · {fmtQty(thread.qty)}</TableCell>
+                  <TableCell className="num text-muted-foreground">{thread.entry_client_order_id ?? '—'}</TableCell>
+                  <TableCell className="text-down">{health.label}{health.stuckMs ? ` · ${t('已卡 {n} 分钟', { n: Math.round(health.stuckMs / 60_000) })}` : ''}</TableCell>
+                  <TableCell className="text-right text-[11px] text-primary">{t('看线程 →')}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      ) : null}
+      <Table>
+        <TableHeader>
           <TableRow>
-            <TableCell colSpan={9} className="py-6 text-center text-muted-foreground">
-              {t('暂无挂单')}
-            </TableCell>
+            <TableHead>{t('币种')}</TableHead>
+            <TableHead>{t('市场')}</TableHead>
+            <TableHead>{t('方向')}</TableHead>
+            <TableHead>{t('类型')}</TableHead>
+            <TableHead>{t('数量')}</TableHead>
+            <TableHead>{t('价格')}</TableHead>
+            <TableHead>{t('触发价')}</TableHead>
+            <TableHead>{t('只减仓')}</TableHead>
+            <TableHead>{t('归属')}</TableHead>
+            <TableHead>{t('状态')}</TableHead>
           </TableRow>
-        ) : (
-          orders.map((o) => (
-            <TableRow key={o.client_order_id}>
-              <TableCell className="num font-medium">{o.symbol}</TableCell>
-              <TableCell className="text-muted-foreground">{marketLabel(o.market)}</TableCell>
-              <TableCell className={cn('font-medium', o.side.toUpperCase() === 'BUY' ? 'text-up' : 'text-down')}>{o.side}</TableCell>
-              <TableCell>{o.type}</TableCell>
-              <TableCell className="num">{fmtQty(o.qty)}</TableCell>
-              <TableCell className="num">{o.price ? fmtPrice(o.price) : t('市价')}</TableCell>
-              <TableCell className="num">{o.stop_price ? fmtPrice(o.stop_price) : '—'}</TableCell>
-              <TableCell>{o.reduce_only ? t('是') : t('否')}</TableCell>
-              <TableCell className="text-muted-foreground">{o.status}</TableCell>
+        </TableHeader>
+        <TableBody>
+          {orders.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={10} className="py-6 text-center text-muted-foreground">
+                {t('交易所上没有挂单')}
+              </TableCell>
             </TableRow>
-          ))
-        )}
-      </TableBody>
-    </Table>
+          ) : (
+            orders.map((o) => {
+              const th = threadForOrder(o, threads);
+              const leg = th ? (th.entry_client_order_id === o.client_order_id ? t('入场') : t('保护')) : null;
+              return (
+                <TableRow key={o.client_order_id}>
+                  <TableCell className="num font-medium">{o.symbol}</TableCell>
+                  <TableCell className="text-muted-foreground">{marketLabel(o.market)}</TableCell>
+                  <TableCell className={cn('font-medium', o.side.toUpperCase() === 'BUY' ? 'text-up' : 'text-down')}>{o.side.toUpperCase() === 'BUY' ? t('买') : t('卖')}</TableCell>
+                  <TableCell>{o.type}</TableCell>
+                  <TableCell className="num">{fmtQty(o.qty)}</TableCell>
+                  <TableCell className="num">{o.price ? fmtPrice(o.price) : t('市价')}</TableCell>
+                  <TableCell className="num">{o.stop_price ? fmtPrice(o.stop_price) : '—'}</TableCell>
+                  <TableCell>{o.reduce_only ? t('是') : t('否')}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {th ? (
+                      <button type="button" className="hover:text-primary hover:underline" onClick={() => onSelectThread(th)}>
+                        {t('线程 · {leg}', { leg: leg! })}
+                      </button>
+                    ) : (
+                      t('无主')
+                    )}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">{o.status}</TableCell>
+                </TableRow>
+              );
+            })
+          )}
+        </TableBody>
+      </Table>
+    </>
   );
 }
 
 // ---------------------------------------------------------------------------
 // 主页面
 
-type TopTab = 'chart' | 'strategy' | 'agent';
+type TopTab = 'chart' | 'thread' | 'jev' | 'agent' | 'risk';
 type BottomTab = 'positions' | 'orders';
 
 export function TradePage() {
@@ -857,6 +811,19 @@ export function TradePage() {
   const allThreadsQ = useQuery({ queryKey: ['threads', 'all'], queryFn: () => api.threads('all'), staleTime: 30_000 });
   const positionsQ = useQuery({ queryKey: ['positions'], queryFn: api.positions });
   const openOrdersQ = useQuery({ queryKey: ['open-orders'], queryFn: api.openOrders });
+  // 三层:① 来源(§9.56 sources;降级用 §9.51 运行 + §9.54 当前策略)② 判断(每个来源各自)③ 风控与执行(§9.56 execution-policy)
+  const agentStrategyQ = useAgentStrategy();
+  const runsQ = useStrategyRuns();
+  const sourcesQ = useTradingSources();
+  const policyQ = useExecutionPolicy();
+  const judgeQ = useJudgeLive({ limit: 200 });
+  const writeLock = useTradeWriteLock();
+  // 「卡了多久」要随时间走,SSE 不来也得刷新:30 秒一拍
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   // ---- 下单面板状态 ----
   // 深链 #trade?symbol=BNBUSDT(楼层/判断记录跳过来直接选中该币;也方便复现某个币的渲染问题)
@@ -908,6 +875,10 @@ export function TradePage() {
     refetchInterval: 30_000,
   });
 
+  // ---- 右上 / 底部 tab ----
+  const [topTab, setTopTab] = useState<TopTab>('chart');
+  const [bottomTab, setBottomTab] = useState<BottomTab>('positions');
+
   // ---- 中间线程列表 / 选中线程 ----
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const threads = useMemo(() => threadsQ.data?.threads ?? [], [threadsQ.data]);
@@ -931,7 +902,7 @@ export function TradePage() {
       return null;
     }
   });
-  // 评审(trade-page-layout):只有「成功加载且进行中为 0」才自动收起,失败/加载中不收
+  // Codex(trade-page-layout):只有「成功加载且进行中为 0」才自动收起,失败/加载中不收
   const threadsPaneOpen = threadsPaneUser ?? !(threadsQ.isSuccess && threads.length === 0);
   const setThreadsPane = (open: boolean) => {
     setThreadsPaneUser(open);
@@ -942,11 +913,38 @@ export function TradePage() {
     }
   };
   const [showClosed, setShowClosed] = useState(false);
+  // 左栏底部「手动下单」展开区:默认收起(评审先看来源),手动定过记本机
+  const [manualOpen, setManualOpen] = useState<boolean>(() => {
+    try {
+      return window.localStorage.getItem('tg.trade.manual.open') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const setManualPanel = (open: boolean) => {
+    setManualOpen(open);
+    try {
+      window.localStorage.setItem('tg.trade.manual.open', open ? '1' : '0');
+    } catch {
+      /* 无 storage */
+    }
+  };
+  // 线程来源筛选:全部 / AI Scan / 手动 / 某一个运行(点左栏来源卡)
+  const [runFilter, setRunFilter] = useState<OriginFilter>(null);
+  const runs = runsQ.data?.runs;
+  const originOf = useCallback((th: StrategyThread) => threadOrigin(th, runs), [runs]);
+  const judgeItems = judgeQ.data?.items;
+  const positionsForHealth = positionsQ.isSuccess ? positionsQ.data : undefined;
+  const visibleThreads = useMemo(() => threads.filter((x) => matchesOriginFilter(x, runFilter)), [threads, runFilter]);
+  const counts = useMemo(() => originCounts(threads), [threads]);
+  const groups = useMemo(() => groupThreads(visibleThreads, now, positionsForHealth), [visibleThreads, now, positionsForHealth]);
+  const stuckEntries = useMemo(() => unknownEntries(threads, now, positionsForHealth), [threads, now, positionsForHealth]);
   const watchlist = overviewQ.data?.workflow.watchlist ?? [];
   const threadSymbols = useMemo(() => [...new Set(threads.map((t) => t.symbol))], [threads]);
 
   const selectThread = (t: StrategyThread) => {
     setSelectedThreadId(t.id);
+    setTopTab((cur) => (cur === 'chart' ? cur : 'thread'));
     setSelectedSymbol(t.symbol);
     setSide(t.side);
     if (marketOf(t) !== tradeMarket) changeTradeMarket(marketOf(t));
@@ -992,9 +990,6 @@ export function TradePage() {
     [threads],
   );
 
-  // ---- 右上 / 底部 tab ----
-  const [topTab, setTopTab] = useState<TopTab>('chart');
-  const [bottomTab, setBottomTab] = useState<BottomTab>('positions');
 
   // ---- 下单 mutation ----
   const placeOrderMut = useMutation({
@@ -1091,46 +1086,197 @@ export function TradePage() {
       }
     : undefined;
 
+  const selectedHealth = selectedThread ? threadHealth(selectedThread, now, positionsForHealth) : null;
+  const openCount = threads.length;
+  const actionCount = groups.action.length;
+
+  // ---- ① 来源卡 ----
+  const policy = policyQ.data;
+  const sourcesView = sourcesQ.data;
+  const halted = sourcesView?.shared.halted ?? overviewQ.data?.loop?.halted ?? false;
+  const paused = sourcesView?.shared.paused ?? overviewQ.data?.workflow.paused ?? false;
+  const cards = useMemo(
+    () =>
+      sourceCards({
+        sources: sourcesView,
+        runs,
+        agent: agentStrategyQ.data,
+        usage: overviewQ.data?.usage_today,
+        halted,
+        paused,
+        watchCount: watchlist.length,
+        threads,
+      }),
+    [sourcesView, runs, agentStrategyQ.data, overviewQ.data?.usage_today, halted, paused, watchlist.length, threads],
+  );
+  const filteredCard = runFilter ? cards.find((c) => sameOriginFilter(c.filter, runFilter)) ?? null : null;
+  const filteredRun = runFilter && typeof runFilter === 'object' ? runs?.find((r) => r.id === runFilter.runId) ?? null : null;
+  const filterLabel = runFilter === 'manual' ? t('手动') : filteredCard?.name ?? filteredRun?.strategy_name ?? null;
+  const pickFilter = (f: OriginFilter) => {
+    setRunFilter(f);
+    if (f) setThreadsPane(true);
+  };
+
+  // ---- ③ 风控与执行 ----
+  const channel = channelOf(policy ? { backend: policy.backend, live: policy.live, profile: policy.profile ?? null, label: policy.execution_label ?? null } : { backend: overviewQ.data?.account?.backend ?? overviewQ.data?.loop?.backend ?? null, live: executionQ.data?.exchange === 'okx' && executionQ.data?.okx?.demo === false });
+  const execLabel = channel.label !== '—' ? channel.label : `${backendLabel(overviewQ.data?.account?.backend)}${okxDemo ? ` · ${t('模拟盘')}` : ''}`;
+  const wf = overviewQ.data?.workflow;
+  const usageFallback = { open_threads: sourcesView?.shared.open_threads ?? openCount, opens_today: sourcesView?.shared.opens_today ?? null, daily_loss_hit: sourcesView?.shared.daily_loss_hit ?? false };
+  const riskLine = policy
+    ? riskSummary(policy.values, policy.usage)
+    : wf
+      ? riskSummary({ risk_pct: wf.risk_pct, sizing_agent: wf.sizing_agent, leverage: wf.leverage, max_open_threads: wf.max_open_threads, max_opens_per_day: wf.max_opens_per_day }, usageFallback)
+      : null;
+  const dailyLossHit = policy?.usage.daily_loss_hit ?? sourcesView?.shared.daily_loss_hit ?? false;
+  const activeSources = cards.filter((c) => c.status === 'running' || c.status === 'capped').length;
+
+  // ---- 来源卡动作:暂停/继续、改判断方式(PATCH strategy-runs/:id)----
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+  const patchRun = useMutation({
+    mutationFn: ({ id, body }: { id: string; body: StrategyRunPatch }) => strategyRunsApi.patch(id, body),
+    onMutate: ({ id }) => setBusyKey(id),
+    onSettled: () => setBusyKey(null),
+    onSuccess: (_res, { body }) => {
+      void queryClient.invalidateQueries({ queryKey: ['strategy-runs'] });
+      void queryClient.invalidateQueries({ queryKey: TRADING_SOURCES_KEY });
+      toast.success(body.mode ? t('判断方式已改为 {m}', { m: RUN_MODE_LABEL[body.mode] }) : body.status === 'paused' ? t('已暂停这个来源') : t('已继续运行'));
+    },
+    onError: (err) => {
+      if (writeLock.noteError(err)) toast.error(t('公网演示:访客只读,只有所有者能改'));
+      else toast.error(t('操作失败'), { description: errMsg(err) });
+    },
+  });
+
+  const patchAiScan = useMutation({
+    mutationFn: (paused: boolean) => tradingApi.patchAiScan(paused),
+    onMutate: () => setBusyKey('ai_scan'),
+    onSettled: () => setBusyKey(null),
+    onSuccess: (_res, paused) => {
+      void queryClient.invalidateQueries({ queryKey: TRADING_SOURCES_KEY });
+      toast.success(paused ? t('AI 扫盘已暂停,策略运行照常') : t('AI 扫盘已继续'));
+    },
+    onError: (err) => {
+      if (writeLock.noteError(err)) toast.error(t('公网演示:访客只读,只有所有者能改'));
+      else toast.error(t('操作失败'), { description: errMsg(err) });
+    },
+  });
+
+  // ---- 让 agent 调风控:新开会话 + 预填,切到 Agent tab ----
+  const [chatKey, setChatKey] = useState(0);
+  const askTune = async () => {
+    const prompt = tunePrompt(policy, cards, channel);
+    try {
+      const res = await api.createChatSession(t('风控调参'));
+      window.localStorage.setItem(SESSION_KEY, res.session.id);
+    } catch {
+      /* 访客 / 老网关建不了会话:就用当前会话 */
+    }
+    stageAgentQuestion(prompt);
+    setChatKey((k) => k + 1);
+    setTopTab('agent');
+  };
+
+  const rowFor = ({ thread, health }: { thread: StrategyThread; health: ThreadHealth }) => (
+    <ThreadRow
+      key={thread.id}
+      thread={thread}
+      health={health}
+      origin={originOf(thread)}
+      judge={judgeForThread(thread, judgeItems)}
+      selected={thread.id === selectedThreadId}
+      onSelect={() => selectThread(thread)}
+      onClose={() => setCloseTarget(thread)}
+      onReview={() => reviewThreadMut.mutate(thread.id)}
+      reviewPending={reviewThreadMut.isPending && reviewThreadMut.variables === thread.id}
+    />
+  );
+  const closedRow = (th: StrategyThread) => (
+    <ThreadRow key={th.id} thread={th} health={threadHealth(th, now)} origin={originOf(th)} judge={judgeForThread(th, judgeItems)} closed selected={th.id === selectedThreadId} onSelect={() => selectThread(th)} />
+  );
+  const closedVisible = useMemo(() => closedRecent.filter((x) => matchesOriginFilter(x, runFilter)), [closedRecent, runFilter]);
+  const section = (label: string, rows: { thread: StrategyThread; health: ThreadHealth }[], tone?: 'danger') =>
+    rows.length ? (
+      <div key={label}>
+        <div className={cn('kicker sticky top-0 z-10 flex items-center gap-1 border-b bg-card/95 px-3 py-1 text-[10px] backdrop-blur', tone === 'danger' ? 'text-down' : 'text-muted-foreground')}>
+          {tone === 'danger' ? <TriangleAlert className="size-3" /> : null}
+          {label}
+          <span className="num">{rows.length}</span>
+        </div>
+        {rows.map(rowFor)}
+      </div>
+    ) : null;
+
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3">
+    <div className="flex h-full min-h-0 flex-col gap-2">
+      <TradeContextBar
+        channel={channel}
+        state={{ halted, paused, dailyLossHit }}
+        activeSources={activeSources}
+        totalSources={cards.length}
+        riskSummary={riskLine}
+        riskActive={topTab === 'risk'}
+        onOpenRisk={() => setTopTab('risk')}
+      />
       <Workspace className="flex min-h-0 flex-1 flex-col">
         <div className="flex min-h-0 flex-1 divide-x overflow-hidden">
-          <Pane title={t('下单')} className="w-[280px] shrink-0" contentClassName="min-h-0 flex-1">
-            <OrderPanel
-              symbols={symbols}
-              selectedSymbol={selectedSymbol}
-              onSelectSymbol={selectSymbol}
-              watchlist={watchlist}
-              threadSymbols={threadSymbols}
-              market={market}
-              tradeMarket={tradeMarket}
-              onTradeMarket={changeTradeMarket}
-              marketsEnabled={marketsEnabled}
-              marketsSupported={marketsSupported}
-              okxSimpleMode={!!okxSimpleMode}
-              okxDemo={!!okxDemo}
-              basis={basisQ.data ?? null}
-              side={side}
-              onSide={setSide}
-              reduceOnly={reduceOnly}
-              onReduceOnly={setReduceOnly}
-              orderType={orderType}
-              onOrderType={setOrderType}
-              price={price}
-              onPrice={setPrice}
-              marginUsdt={marginUsdt}
-              onMarginUsdt={setMarginUsdt}
-              leverage={leverage}
-              onLeverage={setLeverage}
-              marginMode={marginMode}
-              onMarginMode={setMarginMode}
-              tp={tp}
-              onTp={setTp}
-              sl={sl}
-              onSl={setSl}
-              onSubmit={handleSubmit}
-              submitting={placeOrderMut.isPending}
-            />
+          <Pane
+            title={t('① 来源')}
+            hint={t('机会从哪来')}
+            className="w-[300px] shrink-0"
+            contentClassName="min-h-0 flex-1"
+          >
+            <SourcesColumn
+              cards={cards}
+              filter={runFilter}
+              onFilter={pickFilter}
+              counts={{ all: counts.all, manual: counts.manual }}
+              lock={writeLock.runReason}
+              busyKey={busyKey}
+              onToggleRun={(card) => card.runId && patchRun.mutate({ id: card.runId, body: { status: card.status === 'running' || card.status === 'capped' || card.status === 'halted' ? 'paused' : 'running' } })}
+              onToggleAiScan={(card) => patchAiScan.mutate(card.status === 'running' || card.status === 'capped')}
+              onModeRun={(card, mode) => card.runId && mode !== card.mode && patchRun.mutate({ id: card.runId, body: { mode } })}
+              now={now}
+              minStopAtr={policy?.values.min_stop_atr ?? null}
+              manualOpen={manualOpen}
+              onManualOpen={setManualPanel}
+              degraded={sourcesQ.data === null}
+            >
+              <OrderPanel
+                symbols={symbols}
+                selectedSymbol={selectedSymbol}
+                onSelectSymbol={selectSymbol}
+                watchlist={watchlist}
+                threadSymbols={threadSymbols}
+                market={market}
+                tradeMarket={tradeMarket}
+                onTradeMarket={changeTradeMarket}
+                marketsEnabled={marketsEnabled}
+                marketsSupported={marketsSupported}
+                okxSimpleMode={!!okxSimpleMode}
+                okxDemo={!!okxDemo}
+                basis={basisQ.data ?? null}
+                side={side}
+                onSide={setSide}
+                reduceOnly={reduceOnly}
+                onReduceOnly={setReduceOnly}
+                orderType={orderType}
+                onOrderType={setOrderType}
+                price={price}
+                onPrice={setPrice}
+                marginUsdt={marginUsdt}
+                onMarginUsdt={setMarginUsdt}
+                leverage={leverage}
+                onLeverage={setLeverage}
+                marginMode={marginMode}
+                onMarginMode={setMarginMode}
+                tp={tp}
+                onTp={setTp}
+                sl={sl}
+                onSl={setSl}
+                onSubmit={handleSubmit}
+                submitting={placeOrderMut.isPending}
+              />
+            </SourcesColumn>
           </Pane>
 
           {!threadsPaneOpen ? (
@@ -1141,13 +1287,13 @@ export function TradePage() {
               title={t('展开策略线程')}
             >
               <ChevronRight className="size-3.5" />
-              <span className="kicker [writing-mode:vertical-rl]">{t('策略线程')} · {threads.length}</span>
-              {closedCount ? <span className="num [writing-mode:vertical-rl]">{t('已结束 {n}', { n: closedCount })}</span> : null}
+              <span className="kicker [writing-mode:vertical-rl]">{t('策略线程')} · {openCount}</span>
+              {actionCount ? <span className="size-2 rounded-full bg-down" title={t('{n} 条需要处理', { n: actionCount })} /> : null}
             </button>
           ) : (
           <Pane
             title={t('策略线程')}
-            hint={threads.length ? t('{n} 条进行中', { n: threads.length }) : t('没有进行中的')}
+            hint={openCount ? t('{n} 条进行中', { n: openCount }) : t('没有进行中的')}
             className="w-[320px] shrink-0"
             contentClassName="flex min-h-0 flex-1 flex-col"
             actions={
@@ -1156,76 +1302,73 @@ export function TradePage() {
               </button>
             }
           >
+            {runFilter ? (
+              <div className="flex shrink-0 items-center gap-1.5 border-b bg-primary/[0.04] px-2.5 py-1 text-[11px]" data-testid="trade-origin-filter">
+                <span className="text-muted-foreground">{t('只看')}</span>
+                <span className="min-w-0 truncate font-medium text-primary">{filterLabel ?? '—'}</span>
+                <span className="num text-muted-foreground">{visibleThreads.length}</span>
+                <button type="button" onClick={() => setRunFilter(null)} className="ml-auto inline-flex items-center gap-0.5 rounded-sm px-1 text-muted-foreground hover:bg-muted hover:text-foreground">
+                  <X className="size-3" />
+                  {t('全部')}
+                </button>
+              </div>
+            ) : null}
             <div className="min-h-0 flex-1 overflow-y-auto">
               {threadsQ.isLoading ? (
                 <div className="p-4 text-[12px] text-muted-foreground">{t('加载中…')}</div>
               ) : threadsQ.isError ? (
                 <div className="p-4 text-[12px] text-down">{t('线程列表没读到,不代表没有线程。')}{errMsg(threadsQ.error)}</div>
-              ) : threads.length === 0 ? (
-                <>
-                  <div className="px-3 py-2 text-[11.5px] text-muted-foreground">{t('没有进行中的线程。扫描出结果、或者你手动下单之后,会出现在这里。')}</div>
-                  {closedRecent.length ? (
-                    <>
-                      <div className="kicker border-y bg-muted/30 px-3 py-1 text-[10px] text-muted-foreground">{t('最近结束')}</div>
-                      {closedRecent.map((t) => (
-                        <ThreadRow key={t.id} thread={t} closed selected={t.id === selectedThreadId} onSelect={() => selectThread(t)} onClose={() => {}} onReview={() => {}} reviewPending={false} />
-                      ))}
-                    </>
-                  ) : null}
-                </>
+              ) : visibleThreads.length === 0 ? (
+                <div className="px-3 py-3 text-[11.5px] text-muted-foreground">
+                  {runFilter ? t('这个来源现在没有进行中的线程。') : t('没有进行中的线程。来源出了候选、过了判断和风控之后,会出现在这里;手动下单也会。')}
+                </div>
               ) : (
                 <>
-                  {threads.map((t) => (
-                    <ThreadRow
-                      key={t.id}
-                      thread={t}
-                      selected={t.id === selectedThreadId}
-                      onSelect={() => selectThread(t)}
-                      onClose={() => setCloseTarget(t)}
-                      onReview={() => reviewThreadMut.mutate(t.id)}
-                      reviewPending={reviewThreadMut.isPending && reviewThreadMut.variables === t.id}
-                    />
-                  ))}
-                  {closedRecent.length ? (
-                    <>
-                      <button type="button" onClick={() => setShowClosed((v) => !v)} className="kicker flex w-full items-center gap-1 border-y bg-muted/30 px-3 py-1 text-left text-[10px] text-muted-foreground hover:text-foreground">
-                        {showClosed ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
-                        {t('最近结束')} {closedRecent.length}
-                      </button>
-                      {showClosed ? closedRecent.map((t) => <ThreadRow key={t.id} thread={t} closed selected={t.id === selectedThreadId} onSelect={() => selectThread(t)} onClose={() => {}} onReview={() => {}} reviewPending={false} />) : null}
-                    </>
-                  ) : null}
+                  {section(t('需要处理'), groups.action, 'danger')}
+                  {section(t('持仓中'), groups.holding)}
+                  {section(t('待入场'), groups.pending)}
                 </>
               )}
+              {closedVisible.length ? (
+                <>
+                  <button type="button" onClick={() => setShowClosed((v) => !v)} className="kicker flex w-full items-center gap-1 border-b bg-muted/30 px-3 py-1 text-left text-[10px] text-muted-foreground hover:text-foreground">
+                    {showClosed || visibleThreads.length === 0 ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+                    {t('最近结束')} <span className="num">{closedVisible.length}</span>
+                  </button>
+                  {showClosed || visibleThreads.length === 0 ? closedVisible.map(closedRow) : null}
+                </>
+              ) : null}
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                window.location.hash = 'history';
-              }}
-              className="flex shrink-0 items-center justify-between border-t bg-muted/30 px-3 py-1.5 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-            >
+            <a href="#history" className="flex shrink-0 items-center justify-between border-t bg-muted/30 px-3 py-1.5 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground">
               <span>
                 {t('已结束')} <span className="num font-semibold text-foreground">{closedCount}</span> {t('条')}
               </span>
               <span className="text-primary">{t('复盘 →')}</span>
-            </button>
+            </a>
           </Pane>
           )}
 
           <Pane
-            title={t('详情')}
+            title={topTab === 'chart' ? chartSymbol : topTab === 'thread' ? t('线程') : topTab === 'jev' ? t('Jev 实盘判断') : topTab === 'risk' ? t('风控与执行') : 'Agent'}
             className="min-w-0 flex-1"
             contentClassName="flex min-h-0 flex-1 flex-col"
             actions={
               <>
-                <RegimeBadge symbol={chartSymbol} />
+                {topTab === 'chart' ? <RegimeBadge symbol={chartSymbol} /> : null}
                 <Tabs value={topTab} onValueChange={(v) => setTopTab(v as TopTab)}>
-                <TabsList>
-                  <TabsTrigger value="chart">{t('图表')}</TabsTrigger>
-                  <TabsTrigger value="strategy">{t('策略')}</TabsTrigger>
-                  <TabsTrigger value="agent">Agent</TabsTrigger>
-                </TabsList>
+                  <TabsList>
+                    <TabsTrigger value="chart">{t('图表')}</TabsTrigger>
+                    <TabsTrigger value="thread">
+                      {t('线程')}
+                      {selectedHealth && selectedHealth.kind !== 'ok' && selectedHealth.kind !== 'submitting' ? <span className="ml-1 size-1.5 rounded-full bg-down" /> : null}
+                    </TabsTrigger>
+                    <TabsTrigger value="jev">Jev</TabsTrigger>
+                    <TabsTrigger value="agent">Agent</TabsTrigger>
+                    <TabsTrigger value="risk" data-testid="trade-tab-risk">
+                      {t('风控')}
+                      {dailyLossHit || halted ? <span className="ml-1 size-1.5 rounded-full bg-down" /> : null}
+                    </TabsTrigger>
+                  </TabsList>
                 </Tabs>
               </>
             }
@@ -1249,56 +1392,37 @@ export function TradePage() {
                 </div>
               </div>
             ) : null}
-            {topTab === 'strategy' ? (
-              selectedThread ? (
-                <div className="flex flex-col gap-2 overflow-y-auto p-3 text-[12.5px]">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className={threadStatusBadgeClass(selectedThread.status)}>
-                      {THREAD_STATUS_LABEL[selectedThread.status]}
-                    </Badge>
-                    <span className="num font-semibold">{selectedThread.symbol}</span>
-                    <span className={cn('text-[11px] font-medium', directionText(selectedThread.side))}>
-                      {directionLabel(selectedThread.side)}
-                    </span>
-                    <Badge variant="outline" className="ml-auto text-[10px] text-muted-foreground">
-                      {THREAD_SOURCE_LABEL[selectedThread.source]}
-                    </Badge>
-                  </div>
-                  <p className="text-muted-foreground">{selectedThread.thesis || '—'}</p>
-                  {selectedThread.holding_plan ? (
-                    <div className="rounded border p-2 text-[11px] text-muted-foreground">
-                      <div>持仓周期 {selectedThread.holding_plan.thesis_timeframe} · 确认 {selectedThread.holding_plan.confirm_timeframe} · {selectedThread.holding_plan.origin === 'entry' ? '入场计划已固定' : '旧仓计划快照'}</div>
-                      <div>止损尺度 {selectedThread.holding_plan.atr_timeframe} × {Number(selectedThread.holding_plan.atr_multiple).toFixed(2)} ATR · 成本后盈亏比 {selectedThread.holding_plan.net_rr ? Number(selectedThread.holding_plan.net_rr).toFixed(2) : '未知'}</div>
-                      <div>止盈：{selectedThread.holding_plan.target_mode === 'single' ? '首目标全平，其余目标仅供参考' : '分批执行'}</div>
-                      {selectedThread.last_policy_review ? <div>本次允许 {selectedThread.last_policy_review.allowed_actions.join(' / ')} · {selectedThread.last_policy_review.reason}</div> : null}
-                    </div>
-                  ) : <p className="text-[11px] text-muted-foreground">持仓计划将在下次复查建立；原保护单继续生效。</p>}
-                  {selectedThread.invalidation_text ? (
-                    <p className="text-[11px] text-warn">{t('失效条件')}:{selectedThread.invalidation_text}</p>
-                  ) : null}
-                  {selectedThread.watch_conditions.length > 0 ? (
-                    <ul className="list-disc space-y-0.5 pl-4 text-[11px] text-muted-foreground">
-                      {selectedThread.watch_conditions.map((w, i) => (
-                        <li key={i}>{w}</li>
-                      ))}
-                    </ul>
-                  ) : null}
-                  <Separator />
-                  <div className="num grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-                    <span>{t('入场')} {entryText(selectedThread)}</span>
-                    <span>{t('止损')} {selectedThread.stop_price ? fmtPrice(selectedThread.stop_price) : '—'}</span>
-                    <span>{t('数量')} {fmtQty(selectedThread.qty)}</span>
-                    <span>{marketOf(selectedThread) === 'spot' ? `${t('市场')} ${t('现货')}` : `${t('杠杆')} ${selectedThread.leverage}x`}</span>
-                  </div>
-                </div>
+            {topTab === 'thread' ? (
+              selectedThread && selectedHealth ? (
+                <ThreadDetail
+                  thread={selectedThread}
+                  health={selectedHealth}
+                  origin={originOf(selectedThread)}
+                  judge={judgeForThread(selectedThread, judgeItems)}
+                  onClose={selectedThread.status === 'pending_entry' || selectedThread.status === 'in_position' ? () => setCloseTarget(selectedThread) : null}
+                  onOpenJev={() => setTopTab('jev')}
+                />
               ) : (
                 <div className="p-6 text-center text-[12px] text-muted-foreground">{t('在左边「策略线程」里点一条看详情')}</div>
               )
             ) : null}
+            {topTab === 'jev' ? <JudgeLiveFeed runId={filteredRun?.id ?? null} className="min-h-0 flex-1 overflow-y-auto" /> : null}
             {topTab === 'agent' ? (
               <div className="min-h-0 flex-1">
-                <ChatPanel compact />
+                <ChatPanel key={chatKey} compact />
               </div>
+            ) : null}
+            {topTab === 'risk' ? (
+              <RiskPanel
+                policy={policy}
+                loading={policyQ.isLoading}
+                error={policyQ.isError ? errMsg(policyQ.error) : null}
+                workflow={wf}
+                usageFallback={usageFallback}
+                lock={writeLock.reason}
+                noteError={writeLock.noteError}
+                onAskAgent={() => void askTune()}
+              />
             ) : null}
           </Pane>
         </div>
@@ -1306,19 +1430,36 @@ export function TradePage() {
         <div className="flex min-h-[220px] shrink-0 flex-col border-t">
           <Pane
             title={t('账户')}
-            hint={`${backendLabel(overviewQ.data?.account?.backend)} · ${t('切执行通道就是切账户')}`}
+            hint={execLabel}
             className="min-h-0 flex-1"
             contentClassName="min-h-0 flex-1 overflow-y-auto"
             actions={
               <Tabs value={bottomTab} onValueChange={(v) => setBottomTab(v as BottomTab)}>
                 <TabsList>
-                  <TabsTrigger value="positions">{t('持仓')}</TabsTrigger>
-                  <TabsTrigger value="orders">{t('挂单')}</TabsTrigger>
+                  <TabsTrigger value="positions">
+                    {t('持仓')} <span className="num ml-1 text-muted-foreground">{positions.length}</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="orders">
+                    {t('挂单')} <span className="num ml-1 text-muted-foreground">{openOrders.length}</span>
+                    {stuckEntries.length ? <span className="num ml-1 rounded-sm bg-down/15 px-1 text-[10px] text-down">{t('未知 {n}', { n: stuckEntries.length })}</span> : null}
+                  </TabsTrigger>
                 </TabsList>
               </Tabs>
             }
           >
-            {bottomTab === 'positions' ? <PositionsTable positions={positions} threads={threads} openOrders={openOrders} /> : <OpenOrdersTable orders={openOrders} />}
+            {bottomTab === 'positions' ? (
+              <PositionsTable positions={positions} threads={threads} openOrders={openOrders} originOf={originOf} />
+            ) : (
+              <OpenOrdersTable
+                orders={openOrders}
+                threads={threads}
+                unknown={stuckEntries}
+                onSelectThread={(th) => {
+                  selectThread(th);
+                  setTopTab('thread');
+                }}
+              />
+            )}
           </Pane>
         </div>
       </Workspace>
@@ -1334,9 +1475,16 @@ export function TradePage() {
           if (closeTarget) closeThreadMut.mutate(closeTarget.id);
         }}
       >
-        <p>
-          {closeTarget ? `${closeTarget.symbol} · ${directionLabel(closeTarget.side)} · ${THREAD_STATUS_LABEL[closeTarget.status]}` : ''}
-        </p>
+        {closeTarget ? (
+          <div className="space-y-1.5">
+            <p>
+              {closeTarget.symbol} · {directionLabel(closeTarget.side)} · {THREAD_STATUS_LABEL[closeTarget.status]}
+            </p>
+            {threadHealth(closeTarget, now, positionsForHealth).kind === 'submit_unknown' ? (
+              <p className="text-[11.5px] text-muted-foreground">{t('这笔入场单提交结果未知。撤单会交给撤单链:按同一个订单号去交易所查,查到就撤、查不到也要等终态确认;在确认之前线程会显示「撤单结果未知」。')}</p>
+            ) : null}
+          </div>
+        ) : null}
       </ConfirmDialog>
     </div>
   );

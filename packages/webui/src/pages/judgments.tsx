@@ -48,7 +48,10 @@ import {
   useNow,
 } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { t, tmap } from '@/lib/i18n';
+import { t, tmap, listSep } from '@/lib/i18n';
+import { st } from '@/lib/server-text-en';
+import { friendlyError } from '@/lib/edition';
+import { episodeGateReason } from '@/lib/episode-gate';
 
 function distinctSymbols(episodes: EpisodeSummary[]): string[] {
   const set = new Set<string>();
@@ -168,7 +171,7 @@ function GraphOverview({ graph }: { graph: JudgmentGraph }) {
               <TableRow key={id}>
                 <TableCell className="num py-1.5 text-[11.5px] font-medium">{id}</TableCell>
                 <TableCell className="py-1.5 text-[11.5px] text-muted-foreground">
-                  {n.allowed_actions.map((a) => ACTION_LABEL[a] ?? a).join('、') || '—'}
+                  {n.allowed_actions.map((a) => ACTION_LABEL[a] ?? a).join(listSep()) || '—'}
                 </TableCell>
                 <TableCell className="py-1.5 text-[11.5px] text-muted-foreground">{n.description}</TableCell>
               </TableRow>
@@ -194,7 +197,7 @@ function GraphOverview({ graph }: { graph: JudgmentGraph }) {
                 <TableCell className="num py-1.5 text-[11.5px]">{e.from}</TableCell>
                 <TableCell className="py-1.5 text-[11.5px] font-medium">{ACTION_LABEL[e.action] ?? e.action}</TableCell>
                 <TableCell className="num py-1.5 text-[11.5px] text-muted-foreground">{e.effect}</TableCell>
-                <TableCell className="num py-1.5 text-[11.5px] text-muted-foreground" title={guardNames(graph, e.guards).join('、')}>
+                <TableCell className="num py-1.5 text-[11.5px] text-muted-foreground" title={guardNames(graph, e.guards).join(listSep())}>
                   {e.guards.length}
                 </TableCell>
                 <TableCell className="py-1.5 text-[11.5px] text-muted-foreground">{e.description}</TableCell>
@@ -588,7 +591,7 @@ function DecisionRecordBlock({ episodeId }: { episodeId: string }) {
             {dr.executed.intent_id ? <span className="num"> · {dr.executed.intent_id}</span> : null}
           </div>
           {dr.executed.blocked_by.length ? (
-            <div className="text-[10.5px] text-destructive">{t('被这几道闸拒绝')}:{dr.executed.blocked_by.join('、')}</div>
+            <div className="text-[10.5px] text-destructive">{t('被这几道闸拒绝')}:{dr.executed.blocked_by.join(listSep())}</div>
           ) : null}
           <Codes codes={dr.executed.codes} tone={gateOverruled ? 'border-destructive/50 text-destructive' : undefined} />
         </div>
@@ -662,6 +665,8 @@ function EpisodeCard({ summary, now, graph }: { summary: EpisodeSummary; now: nu
   const badgeLabel = summary.action ? actionLabel(summary.action, summary.direction) : t('判断失败');
   const badgeCls = summary.action ? actionBadgeClass(summary.action, summary.direction) : 'bg-muted text-muted-foreground border-transparent';
   const stateChanged = summary.from_state !== summary.to_state;
+  // 闸门拒绝(净 RR 不够 / 持仓计划建不起来…)是正常结果:显示成中性的「没下单 — 原因」,真正的异常才标出错
+  const gateReason = episodeGateReason(summary);
   const intent = summary.intent;
   const confidencePct = summary.confidence !== null ? Math.round(summary.confidence * 100) : null;
   // 折叠态就有 summary.graph(后端已补齐);展开后 detail.graph 是同一份数据,兜底优先用 summary。
@@ -673,7 +678,7 @@ function EpisodeCard({ summary, now, graph }: { summary: EpisodeSummary; now: nu
         <span className="num text-[11px] text-muted-foreground">
           {fmtClock(summary.at)} <span className="text-muted-foreground/70">· {relativeTime(summary.at, now)}</span>
         </span>
-        <Badge variant="outline" className="text-[11px] font-normal" title={summary.trigger.detail}>
+        <Badge variant="outline" className="text-[11px] font-normal" title={st(summary.trigger.detail)}>
           {triggerLabel(summary.trigger.kind)}
         </Badge>
         <Badge variant="outline" className={cn('text-[11px]', badgeCls)}>
@@ -733,13 +738,17 @@ function EpisodeCard({ summary, now, graph }: { summary: EpisodeSummary; now: nu
             {t('策略')}:{STATE_LABEL[summary.from_state]} → {summary.to_state ? STATE_LABEL[summary.to_state] : '—'}
           </p>
         ) : null}
-        {summary.reducer && !summary.reducer.accepted ? (
-          <p className="text-[11.5px] text-muted-foreground">{t('这次判断没改变策略状态')}:{summary.reducer.reason}</p>
+        {gateReason ? (
+          <p className="text-[11.5px] text-muted-foreground" data-testid="episode-not-taken">
+            {t('没下单')} — {st(gateReason)}
+          </p>
+        ) : summary.reducer && !summary.reducer.accepted ? (
+          <p className="text-[11.5px] text-muted-foreground">{t('这次判断没改变策略状态')}:{st(summary.reducer.reason)}</p>
         ) : null}
         {summary.schema_errors.length > 0 ? (
           <p className="text-[11.5px] text-warn">{t('模型输出没过校验,按不交易处理了')}:{summary.schema_errors.join('; ')}</p>
         ) : null}
-        {summary.error ? <p className="text-[11.5px] text-warn">{t('出错了')}:{summary.error}</p> : null}
+        {summary.error && !gateReason ? <p className="text-[11.5px] text-warn">{t('出错了')}:{friendlyError(summary.error)}</p> : null}
 
         {intent ? (
           <div className="num mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-sm bg-muted/40 px-2 py-1.5 text-[11.5px]">
@@ -814,9 +823,15 @@ function EpisodeCard({ summary, now, graph }: { summary: EpisodeSummary; now: nu
             )
           ) : null}
           {detail && openSection === 'context' ? (
-            <pre className="num max-h-80 overflow-auto whitespace-pre-wrap rounded-sm bg-muted/40 p-2 text-[11px] leading-relaxed">
-              {detail.context_text}
-            </pre>
+            detail.context_text == null ? (
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                {t('模型收到的完整上下文在公开演示版里不展示(约 {n} 字符)。', { n: detail.context_text_hidden?.length ?? '—' })}
+              </p>
+            ) : (
+              <pre className="num max-h-80 overflow-auto whitespace-pre-wrap rounded-sm bg-muted/40 p-2 text-[11px] leading-relaxed">
+                {detail.context_text}
+              </pre>
+            )
           ) : null}
           {detail && openSection === 'raw' ? (
             <pre className="num max-h-80 overflow-auto whitespace-pre-wrap rounded-sm bg-muted/40 p-2 text-[11px] leading-relaxed">

@@ -21,7 +21,7 @@ import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { fmtDateTime } from '@/lib/format';
-import { t, tmap } from '@/lib/i18n';
+import { t, tmap, listSep } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 // ---------------------------------------------------------------------------
@@ -693,7 +693,7 @@ export function PineCatalogPanel() {
                         <div className="flex flex-wrap gap-x-2 text-[10.5px] text-muted-foreground">
                           {s.outputs.length ? <span className="font-mono">{s.outputs.slice(0, 3).join(', ')}{s.outputs.length > 3 ? '…' : ''}</span> : null}
                           {sum ? <span>{t('预热 {n} 根', { n: sum.warmup_bars })}</span> : null}
-                          {sum && sum.failed.length ? <span className="text-down">{t('未过')}:{sum.failed.map((f) => CHECK_LABEL[f] ?? f).join('、')}</span> : null}
+                          {sum && sum.failed.length ? <span className="text-down">{t('未过')}:{sum.failed.map((f) => CHECK_LABEL[f] ?? f).join(listSep())}</span> : null}
                           {s.usage_count ? <span>{t('引用 {n}', { n: s.usage_count })}</span> : null}
                         </div>
                       </button>

@@ -9,7 +9,7 @@
 import { isValidElement, useMemo, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Activity, CircleAlert, Download, GitCompareArrows, Layers, Maximize2, Settings2, Share2, Tag, TriangleAlert, Workflow } from 'lucide-react';
-import type { BacktestAsset, BacktestReport } from '@trading-swarm/contracts';
+import type { BacktestAsset, BacktestReport } from '@trade-gate/contracts';
 import { researchApi } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';

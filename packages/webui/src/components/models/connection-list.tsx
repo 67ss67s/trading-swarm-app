@@ -10,9 +10,11 @@ import { toast } from 'sonner';
 import { api, ApiRequestError } from '@/api/client';
 import type { ModelConnection, ModelRole, ModelsView } from '@/api/types';
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { JudgeLock } from '@/components/judge-lock';
 import { Button } from '@/components/ui/button';
+import { friendlyError } from '@/lib/edition';
 import { relativeTime, useNow } from '@/lib/format';
-import { t, tmap } from '@/lib/i18n';
+import { t, tmap, listSep } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { applyTestResult } from './connection-dialog';
 import { KindIcon } from './kind-icon';
@@ -37,9 +39,9 @@ function ConnectionRow({ conn, view, now, onEdit }: { conn: ModelConnection; vie
     onSuccess: (res) => {
       qc.setQueryData<ModelsView>(MODELS_QUERY_KEY, (old) => applyTestResult(old, conn.id, res));
       if (res.ok) toast.success(t('{name} 测试通过', { name: connectionName(conn) }));
-      else toast.error(t('{name} 测试失败', { name: connectionName(conn) }), { description: res.detail });
+      else toast.error(t('{name} 测试失败', { name: connectionName(conn) }), { description: friendlyError(res.detail) });
     },
-    onError: (e: Error) => toast.error(t('{name} 测试失败', { name: connectionName(conn) }), { description: e.message }),
+    onError: (e: Error) => toast.error(t('{name} 测试失败', { name: connectionName(conn) }), { description: friendlyError(e.message) }),
     onSettled: () => void qc.invalidateQueries({ queryKey: MODELS_QUERY_KEY }),
   });
 
@@ -57,8 +59,8 @@ function ConnectionRow({ conn, view, now, onEdit }: { conn: ModelConnection; vie
       if (e instanceof ApiRequestError && e.code === 'connection_in_use') {
         const roles = inUseRoles(e.body);
         setBlockedBy(roles);
-        toast.error(t('删不了:还有角色绑着这个连接'), { description: roles.map((r) => MODEL_ROLE_LABEL[r]).join('、') || e.message });
-      } else toast.error(t('删除失败'), { description: e.message });
+        toast.error(t('删不了:还有角色绑着这个连接'), { description: roles.map((r) => MODEL_ROLE_LABEL[r]).join(listSep()) || e.message });
+      } else toast.error(t('删除失败'), { description: friendlyError(e.message) });
     },
   });
 
@@ -77,14 +79,14 @@ function ConnectionRow({ conn, view, now, onEdit }: { conn: ModelConnection; vie
           <div className="num mt-0.5 flex flex-wrap items-center gap-x-2 text-[10.5px] text-muted-foreground">
             {conn.kind === 'cli' ? <span>CLI · {conn.cli ?? '—'}</span> : <span>{conn.key_masked ?? t('没有 key')}</span>}
             {conn.base_url ? <span className="max-w-64 truncate" title={conn.base_url}>{conn.base_url}</span> : null}
-            {boundRoles.length > 0 ? <span>{t('绑定:{roles}', { roles: boundRoles.map((r) => MODEL_ROLE_LABEL[r]).join('、') })}</span> : null}
+            {boundRoles.length > 0 ? <span>{t('绑定:{roles}', { roles: boundRoles.map((r) => MODEL_ROLE_LABEL[r]).join(listSep()) })}</span> : null}
           </div>
           <div className="num mt-0.5 text-[10.5px] text-muted-foreground">
             {lt ? (
               <span className={cn(lt.ok ? '' : 'text-down')}>
                 {t('上次测试 {when}', { when: relativeTime(lt.at, now) })}
                 {lt.latency_ms != null ? ` · ${lt.latency_ms}ms` : ''}
-                {lt.detail ? <span className="ml-1 break-all text-muted-foreground">· {lt.detail}</span> : null}
+                {lt.detail ? <span className="ml-1 break-all text-muted-foreground">· {friendlyError(lt.detail)}</span> : null}
               </span>
             ) : (
               <span>{t('还没测过')}</span>
@@ -92,21 +94,27 @@ function ConnectionRow({ conn, view, now, onEdit }: { conn: ModelConnection; vie
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          <Button size="xs" variant="outline" disabled={test.isPending} onClick={() => test.mutate()} title={t('发一次最短往返;CLI 可能要一分多钟')}>
-            {test.isPending ? <Loader2 className="size-3 animate-spin" /> : <PlugZap />}
-            {test.isPending ? t('测试中…') : t('测试')}
-          </Button>
-          <Button size="icon-xs" variant="ghost" aria-label={t('编辑')} title={t('编辑')} onClick={() => onEdit(conn)}>
-            <Pencil />
-          </Button>
-          <Button size="icon-xs" variant="ghost" className="text-destructive hover:text-destructive" aria-label={t('删除')} title={t('删除')} onClick={() => setConfirmOpen(true)}>
-            <Trash2 />
-          </Button>
+          <JudgeLock feature="model_connection_edit">
+            <Button size="xs" variant="outline" disabled={test.isPending} onClick={() => test.mutate()} title={t('发一次最短往返;CLI 可能要一分多钟')}>
+              {test.isPending ? <Loader2 className="size-3 animate-spin" /> : <PlugZap />}
+              {test.isPending ? t('测试中…') : t('测试')}
+            </Button>
+          </JudgeLock>
+          <JudgeLock feature="model_connection_edit">
+            <Button size="icon-xs" variant="ghost" aria-label={t('编辑')} title={t('编辑')} onClick={() => onEdit(conn)}>
+              <Pencil />
+            </Button>
+          </JudgeLock>
+          <JudgeLock feature="model_connection_edit">
+            <Button size="icon-xs" variant="ghost" className="text-destructive hover:text-destructive" aria-label={t('删除')} title={t('删除')} onClick={() => setConfirmOpen(true)}>
+              <Trash2 />
+            </Button>
+          </JudgeLock>
         </div>
       </div>
       {blockedBy ? (
         <div className="mt-1.5 rounded-md border border-destructive/30 bg-destructive/10 px-2 py-1 text-[11px] text-destructive" data-testid="connection-in-use">
-          {t('还有这些 agent 绑着它,先在上面对应的 agent 卡里改掉再删:{roles}', { roles: blockedBy.map((r) => MODEL_ROLE_LABEL[r]).join('、') || '—' })}
+          {t('还有这些 agent 绑着它,先在上面对应的 agent 卡里改掉再删:{roles}', { roles: blockedBy.map((r) => MODEL_ROLE_LABEL[r]).join(listSep()) || '—' })}
         </div>
       ) : null}
       <ConfirmDialog

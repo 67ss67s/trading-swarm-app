@@ -6,7 +6,7 @@
 //!    测试里连 127.0.0.1 的假服务器时用 `no_proxy = true`,不依赖 env。
 //! 2. **UA**:`accounts.binance.com` 前面挂 AWS WAF,非浏览器 UA 会吃 challenge。
 //!    token endpoint 实测(2026-09-02)对普通 HTTP 客户端不 challenge,但 authorize
-//!    页面会;默认 UA 用一个正常的桌面浏览器字符串,可用 `TSWARM_MCP_USER_AGENT` 覆盖。
+//!    页面会;默认 UA 用一个正常的桌面浏览器字符串,可用 `TGATE_MCP_USER_AGENT` 覆盖。
 
 use std::time::Duration;
 
@@ -18,7 +18,7 @@ pub const DEFAULT_USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_
 AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
 
 /// UA 覆盖用的环境变量。
-pub const USER_AGENT_ENV: &str = "TSWARM_MCP_USER_AGENT";
+pub const USER_AGENT_ENV: &str = "TGATE_MCP_USER_AGENT";
 
 #[derive(Debug, Clone)]
 pub struct HttpConfig {

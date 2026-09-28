@@ -1,3 +1,4 @@
+import { demoContext } from './public-demo.js';
 // One brain call at a time (docs/demo/v2-agent-loop.md §1). Jobs are keyed so a burst of events for the
 // same thread/symbol collapses into one pending job; FIFO otherwise.
 
@@ -10,8 +11,11 @@ export interface Job {
   run: () => Promise<void>;
 }
 
+/** 同 key 已折叠,不同 key 的积压上限;超出直接丢弃(下一次 K 线收盘会再入队)。 */
+const MAX_PENDING = 200;
+
 export class BrainQueue {
-  private pending: Job[] = [];
+  private pending: (Job & { priority: boolean })[] = [];
   private running: Job | null = null;
   private onChange: (v: QueueView) => void;
 
@@ -35,13 +39,22 @@ export class BrainQueue {
 
   /**
    * Returns false if an identical key is already queued or running (deduped). `priority` puts the job
-   * at the head of the pending list (the user's chat turn should not wait behind six scans); the job
-   * currently running is never interrupted.
+   * ahead of ordinary jobs (the user's chat turn should not wait behind six scans). 同优先级仍按
+   * 入队顺序,连续对话不能倒序;正在运行的任务不受影响。
    */
   enqueue(job: Job, opts: { priority?: boolean } = {}): boolean {
     if (this.running?.key === job.key || this.pending.some((j) => j.key === job.key)) return false;
-    if (opts.priority) this.pending.unshift(job);
-    else this.pending.push(job);
+    if (this.pending.length >= MAX_PENDING) return false;
+    // 公网演示:排队任务沿用入队时的访客上下文,模型花费记到发起的访客头上。
+    const context = demoContext.getStore();
+    if (context) {
+      const run = job.run;
+      job = { ...job, run: () => demoContext.run(context, run) };
+    }
+    const next = { ...job, priority: opts.priority === true };
+    const ordinary = this.pending.findIndex((j) => !j.priority);
+    if (next.priority && ordinary >= 0) this.pending.splice(ordinary, 0, next);
+    else this.pending.push(next);
     this.onChange(this.view());
     void this.drain();
     return true;

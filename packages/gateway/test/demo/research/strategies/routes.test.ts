@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { Readable } from 'node:stream';
 import type http from 'node:http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { validate, type BacktestReport } from '@trading-swarm/contracts';
+import { validate, type BacktestReport } from '@trade-gate/contracts';
 import { openStateDb } from '../../../../src/state-db.js';
 import type { DemoRuntime } from '../../../../src/demo/runtime.js';
 import type { DemoStore } from '../../../../src/demo/store.js';

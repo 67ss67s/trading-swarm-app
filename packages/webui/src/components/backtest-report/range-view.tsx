@@ -3,7 +3,7 @@
  * 区间指标只从报告已有的逐点净值与逐笔交易派生(range.ts rangeStats),不重跑、不扣期初持仓;
  * 想要从空仓开始的真实区间结果,点「按此区间重跑」。
  */
-import type { BacktestAsset, BacktestReport } from '@trading-swarm/contracts';
+import type { BacktestAsset, BacktestReport } from '@trade-gate/contracts';
 import { Info, X } from 'lucide-react';
 import { useMemo } from 'react';
 import { Button } from '@/components/ui/button';

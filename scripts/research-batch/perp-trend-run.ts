@@ -8,7 +8,7 @@
  *   共 2 × 3 × 3 = 18 个配置。切段 = 批量研究 makeSegments(永续 4h:训练 2020-02→2023-05 / 验证 2023-05→2025-01 / 留出 2025-01→2026-09),每段独立跑。
  *   选择规则(只看训练段):训练段回撤(4h 收盘逐点)≤ 35% 且 ≥ 30 笔的配置里取训练段总收益最高;都不过则取回撤最小。
  *   验证段:18 个配置各看一次(含随机入场基线 20 次);留出段:只给选中的那一个配置跑一次(含它自己的随机入场基线)。
- * 结果写 ~/.trading-swarm-okx/research-batch/perp-trend/results.json(可断点续跑;留出段已存在则不再跑)。
+ * 结果写 ~/.trade-gate-okx/research-batch/perp-trend/results.json(可断点续跑;留出段已存在则不再跑)。
  * 用法:node --experimental-transform-types --no-warnings --import ./scripts/research-oracle/register.mjs scripts/research-batch/perp-trend-run.ts [--workers 2]
  */
 import { Worker } from 'node:worker_threads';

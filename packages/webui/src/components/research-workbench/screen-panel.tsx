@@ -1,5 +1,5 @@
 /**
- * 资产筛选面板(research round 2 §1):资产池 → 对市场因子做滚动回归剔 beta → 每个 symbol 的
+ * 资产筛选面板(round2-spec §1):资产池 → 对市场因子做滚动回归剔 beta → 每个 symbol 的
  * raw / residual 指标、alpha/beta 占比、趋势状态、名次。screen 只能用 as_of 之前的数据(后端保证)。
  * 排名是探索性排序,不是选股认证;insufficient 的行只显示样本数。
  */
@@ -151,7 +151,7 @@ export function UniverseScreenPanel({ onNewExperiment }: { onNewExperiment: (uni
             ))}
           </select>
         ) : (
-          <span className="text-muted-foreground">{backendMissing ? t('后端还没有资产池接口(后端交付中)') : universesQ.isLoading ? t('读取中…') : t('还没有资产池,先冻结一个。')}</span>
+          <span className="text-muted-foreground">{backendMissing ? t('后端还没有资产池接口(第二轮 astra 交付中)') : universesQ.isLoading ? t('读取中…') : t('还没有资产池,先冻结一个。')}</span>
         )}
         {universe ? (
           <>
@@ -205,7 +205,7 @@ export function UniverseScreenPanel({ onNewExperiment }: { onNewExperiment: (uni
                   </TableCell>
                   <TableCell>
                     {r.trend ? (
-                      <Badge variant="outline" className={cn('h-4 px-1.5 text-[10px]', r.trend.state === 'up' ? 'border-up/40 text-up' : r.trend.state === 'down' ? 'border-down/40 text-down' : 'text-muted-foreground')} title={`ADX ${num(r.trend.adx, 1)} · EMA 斜率 ${num(r.trend.ema_slope, 4)} · HTF ${r.trend.htf_state ?? '—'}`}>
+                      <Badge variant="outline" className={cn('h-4 px-1.5 text-[10px]', r.trend.state === 'up' ? 'border-up/40 text-up' : r.trend.state === 'down' ? 'border-down/40 text-down' : 'text-muted-foreground')} title={t('ADX {adx} · EMA 斜率 {slope} · HTF {htf}', { adx: num(r.trend.adx, 1), slope: num(r.trend.ema_slope, 4), htf: r.trend.htf_state ?? '—' })}>
                         {TREND_LABEL[r.trend.state] ?? r.trend.state}
                       </Badge>
                     ) : (

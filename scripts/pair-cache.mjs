@@ -4,7 +4,7 @@ import { homedir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { PAIR_STUDY, runPairStudy } from '../packages/gateway/src/demo/pair-study.ts';
 export async function run() {
-  const root = process.env.TG_PAIR_CACHE ?? `${homedir()}/.trading-swarm/research/pair-v1`;
+  const root = process.env.TG_PAIR_CACHE ?? `${homedir()}/.trade-gate/research/pair-v1`;
   mkdirSync(root, { recursive: true });
   const data = {}; const failures = {};
   async function download(path) {
@@ -17,7 +17,7 @@ export async function run() {
     try {
       let bars;
       try { bars = JSON.parse(readFileSync(`${root}/${symbol}-1h.json`)).bars; }
-      catch { try { bars = JSON.parse(readFileSync(`${homedir()}/.trading-swarm/demo/klines/${symbol}-1h.json`)).bars; } catch { bars = []; } }
+      catch { try { bars = JSON.parse(readFileSync(`${homedir()}/.trade-gate/demo/klines/${symbol}-1h.json`)).bars; } catch { bars = []; } }
       bars = bars.filter(b => b.open_time >= PAIR_STUDY.from && b.close_time < PAIR_STUDY.to);
       if (bars.length !== 4320 || bars.some((b, i) => b.open_time !== PAIR_STUDY.from + i * 3600000)) {
         bars = [];
@@ -46,8 +46,8 @@ export async function run() {
     } catch (e) { failures[symbol] = String(e); console.error(`${symbol}: 数据准备失败`); }
   }
   const result = { ...runPairStudy(data), cache_failures: failures };
-  mkdirSync('scratch', { recursive: true });
-  writeFileSync('scratch/pair-study-result.json', JSON.stringify(result, null, 2) + '\n');
+  mkdirSync('.codex-reports', { recursive: true });
+  writeFileSync('.codex-reports/pair-study-result.json', JSON.stringify(result, null, 2) + '\n');
   console.table(result.trials.map(t => ({ pair: t.symbols.join('/'), status: t.status, n: t.stats.raw_n, clusters: t.stats.effective_n, net: t.stats.net, doubled: t.stats.doubled_net, ci: t.stats.ci.lower, reasons: t.reasons.join(',') })));
-  console.log('结果: scratch/pair-study-result.json');
+  console.log('结果: .codex-reports/pair-study-result.json');
 }

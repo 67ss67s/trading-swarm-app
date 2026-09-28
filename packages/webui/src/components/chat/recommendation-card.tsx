@@ -1,6 +1,7 @@
 /**
  * 对话里的推荐卡(§9.53 A):资产 × 短/中/长,每格适不适合 + 方向 + 建议策略族,悬停看证据(全是代码算的数)。
- * 「去研究台验证」→ #matrix-study?from=<recommendation_id>,矩阵研究页据此预填(只带 eligible 的格子)。
+ * 「去策略研究」→ #strategy-research?step=assets&rec=<recommendation_id>:流程页第 1 步按这份推荐铺卡片墙(默认勾好适合的),再去海选。
+ * (旧的 #matrix-study?from= 深链仍可用。)
  */
 import { FlaskConical, TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -96,9 +97,9 @@ export function RecommendationCard({ id }: { id: string }) {
       ) : null}
       <div className="flex items-center justify-between gap-2 border-t px-2.5 py-1.5">
         <span className="text-[10px] text-muted-foreground">{t('推荐只说明值得研究,赚不赚要看回测')}</span>
-        <Button size="sm" className="h-7 gap-1 text-[12px]" disabled={!eligible} onClick={() => { window.location.hash = `matrix-study?from=${encodeURIComponent(r.id)}`; }}>
+        <Button size="sm" className="h-7 gap-1 text-[12px]" disabled={!eligible} onClick={() => { window.location.hash = `strategy-research?step=assets&rec=${encodeURIComponent(r.id)}`; }}>
           <FlaskConical className="size-3.5" />
-          {t('去研究台验证')}
+          {t('去策略研究')}
         </Button>
       </div>
     </div>

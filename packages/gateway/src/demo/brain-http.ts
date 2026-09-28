@@ -1,3 +1,5 @@
+import { reserveHttpModel, visitorContext } from './public-demo.js';
+import { assertRealModelsAllowed } from './model-guard.js';
 // §9.52 HTTP 大脑:用 API key 直连模型服务,实现和 CLI 大脑同一个 `Brain` 接口,调用方无感。
 // 两种线协议:OpenAI 兼容 `POST {base}/chat/completions`(openrouter/deepseek/zai/openai/openai_compatible)
 // 与 Anthropic `POST {base}/v1/messages`。出站沿用 OKX 那套全局代理(configureOkxProxy → Node 24 fetch 继承 HTTPS_PROXY)。
@@ -257,6 +259,9 @@ function errorDetail(body: string): string {
   return body.trim().slice(0, 300);
 }
 
+/** 公网演示访客发起的调用:输出 token 硬上限(也是演示花费预留的依据)。 */
+const VISITOR_MAX_OUTPUT_TOKENS = 4096;
+
 export function httpBrain(opts: HttpBrainOptions): Brain & { complete(system: string, user: string, o?: { timeoutMs?: number }): Promise<HttpBrainResult> } {
   const name = `${opts.kind}:${opts.model}`;
   const key = opts.api_key?.trim() || null;
@@ -272,12 +277,13 @@ export function httpBrain(opts: HttpBrainOptions): Brain & { complete(system: st
         init: {
           method: 'POST',
           headers: { 'content-type': 'application/json', 'anthropic-version': '2023-06-01', ...(key ? { 'x-api-key': key } : {}) },
-          body: JSON.stringify({ model: opts.model, max_tokens: 16_000, system, messages: [{ role: 'user', content: user }] }),
+          body: JSON.stringify({ model: opts.model, max_tokens: visitorContext() ? VISITOR_MAX_OUTPUT_TOKENS : 16_000, system, messages: [{ role: 'user', content: user }] }),
         },
       };
     }
     const body: Record<string, unknown> = { model: opts.model, messages: [{ role: 'system', content: system }, { role: 'user', content: user }], stream: false };
     // OpenRouter:显式要用量记账,响应里带 usage.cost(美元)。
+    if (visitorContext()) body['max_tokens'] = VISITOR_MAX_OUTPUT_TOKENS; // 公网演示访客:输出硬上限,花费预留按它算
     if (opts.kind === 'openrouter') body['usage'] = { include: true };
     return {
       url: `${trimSlash(opts.base_url)}/chat/completions`,
@@ -344,6 +350,8 @@ export function httpBrain(opts: HttpBrainOptions): Brain & { complete(system: st
             throw new HttpBrainError(redact(`出站地址被拒:${(e as Error).message}`), null, 'network');
           }
         }
+        assertRealModelsAllowed(`http ${name}`);
+        reserveHttpModel(name, system + user, VISITOR_MAX_OUTPUT_TOKENS);
         let res: Response | null = null;
         try {
           // 不跟随重定向:跟随会把 Authorization / x-api-key 带到新地址,而新地址没过 SSRF 校验。

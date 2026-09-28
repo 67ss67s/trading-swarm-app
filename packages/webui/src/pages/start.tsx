@@ -10,12 +10,14 @@ import { ArrowRight, ExternalLink, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/api/client';
 import { useAgentStrategy } from '@/api/agent-strategy';
+import { JudgeLock } from '@/components/judge-lock';
 import { Workspace } from '@/components/pane';
 import { Button } from '@/components/ui/button';
 import { START_OPTIONAL_STEPS, START_STEP_ORDER, type StartStepId, type StartStepState } from '@/components/start/logic';
 import { StepStateIcon, STEP_STATE_LABEL } from '@/components/start/step-state';
 import { setFreeJudgmentConfirmed, useStartFull } from '@/components/start/use-start';
 import { askAgent } from '@/lib/ask-agent';
+import { friendlyError, lockReason, type LockedFeature } from '@/lib/edition';
 import { exchangeInfo } from '@/lib/exchange';
 import { cn } from '@/lib/utils';
 import { t } from '@/lib/i18n';
@@ -27,7 +29,7 @@ const STEP_TITLE: Record<StartStepId, string> = {
   models: '接模型',
   market: '定交易市场与风险',
   watchlist: '选币(观察列表)',
-  matrix: '跑一次矩阵研究',
+  matrix: '跑一次批量验证',
   strategy: '设 agent 当前策略',
   protection: '验证保护单',
   agent: '让 agent 在模拟盘跑起来',
@@ -41,14 +43,24 @@ const STEP_DESC: Record<StartStepId, string> = {
   models: '至少一个模型连接测试通过(或本机 CLI 能起来),agent 才能判断。',
   market: '永续 / 现货、单笔风险、杠杆;默认值直接可用,其余去「风控与自动化」。',
   watchlist: '观察列表至少一个币。让 agent 推荐,或者去筛选(名单为空时用全市场扫)。',
-  matrix: '可选:从对话推荐卡「去研究台验证」进来会带着资产和周期;也可以直接开一个。',
+  matrix: '可选:从对话推荐卡「去批量验证」进来会带着资产和周期;也可以直接开一个。',
   strategy: '「自由判断」是合法选项,默认就是它;点一次确认,知道这个开关在哪。',
   protection: '只在实盘或要开永续时需要:在模拟盘按清单人工跑一遍,再标记。',
   agent: '顶栏「Agent 判断」打开;「自动交易」保持关闭,每笔要你批。',
   review: '可选:平过仓之后,去复盘看这笔赚没赚、这类判断值不值。',
 };
 
-function Action({ href, children, external }: { href: string; children: ReactNode; external?: boolean }) {
+function Action({ href, children, external, lock }: { href: string; children: ReactNode; external?: boolean; lock?: LockedFeature }) {
+  // 评审版:这一步要做的事被锁了(交易所凭证 / 模型 key / 保护单…)→ 条目照常显示,按钮置灰 + 悬停说原因
+  if (lock && lockReason(lock))
+    return (
+      <JudgeLock feature={lock}>
+        <button type="button" className="inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11.5px] text-muted-foreground opacity-60">
+          {children}
+          {external ? <ExternalLink className="size-3" /> : <ArrowRight className="size-3" />}
+        </button>
+      </JudgeLock>
+    );
   return (
     <a href={href} target={external ? '_blank' : undefined} rel={external ? 'noreferrer noopener' : undefined} className="inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11.5px] text-primary hover:bg-muted">
       {children}
@@ -69,20 +81,22 @@ export function StartPage() {
       void qc.invalidateQueries({ queryKey: ['overview'] });
       toast.success(t('已恢复 agent'));
     },
-    onError: (e) => toast.error(t('切换失败'), { description: e instanceof Error ? e.message : String(e) }),
+    onError: (e) => toast.error(t('切换失败'), { description: friendlyError(e instanceof Error ? e.message : String(e)) }),
   });
 
   const actions = (id: StartStepId, state: StartStepState): ReactNode => {
     switch (id) {
       case 'exchange':
       case 'account_mode':
-      case 'market':
+        return <Action href="#connect" lock="exchange_credentials">{t('去接入页')}</Action>;
       case 'protection':
+        return <Action href="#connect" lock="protection_verify">{t('去接入页')}</Action>;
+      case 'market':
         return <Action href="#connect">{t('去接入页')}</Action>;
       case 'funding':
-        return state === 'todo' ? <Action href={ex.depositUrl} external>{t('去入金')}</Action> : null;
+        return state === 'todo' ? <Action href={ex.depositUrl} external lock="exchange_credentials">{t('去入金')}</Action> : null;
       case 'models':
-        return <Action href="#models">{t('去模型连接')}</Action>;
+        return <Action href="#models" lock="model_connection_edit">{t('去模型连接')}</Action>;
       case 'watchlist':
         return (
           <>
@@ -94,7 +108,7 @@ export function StartPage() {
           </>
         );
       case 'matrix':
-        return <Action href="#matrix-study">{t('去矩阵研究')}</Action>;
+        return <Action href="#matrix-study">{t('去批量验证')}</Action>;
       case 'strategy':
         return (
           <>

@@ -1,6 +1,6 @@
 ---
 title: asp-agent
-description: Operate trading-swarm's OKX.AI ASP role (Signal Market) from any host agent — browse and subscribe to ASP signal services, watch the inbound ledger, register/publish an ASP identity, run the outbound publisher, claim income, handle after-sales — through the local gateway's HTTP API. Use for anything about OKX.AI signals, ASP, Signal Market, subscriptions to/from OKX.AI, or the asp_agent team role.
+description: Operate trade-gate's OKX.AI ASP role (Signal Market) from any host agent — browse and subscribe to ASP signal services, watch the inbound ledger, register/publish an ASP identity, run the outbound publisher, claim income, handle after-sales — through the local gateway's HTTP API. Use for anything about OKX.AI signals, ASP, Signal Market, subscriptions to/from OKX.AI, or the asp_agent team role.
 metadata:
   version: 0.1.0
   author: 67ss67s
@@ -9,13 +9,13 @@ license: MIT
 
 # asp-agent skill
 
-trading-swarm has a ninth team role, `asp_agent`, that owns **everything OKX.AI-related**: inbound
+trade-gate has a ninth team role, `asp_agent`, that owns **everything OKX.AI-related**: inbound
 signal relay, outbound signal publishing, ASP identity/service management, income claims and
 after-sales. It is code-first: relay, fan-out, dedupe and claims are deterministic; a model is
 only used to draft listing copy, to turn a judgment into a one-line `analysis` summary, and to
 draft a reply to a rejection.
 
-The gateway (default `http://127.0.0.1:18800`, started by `scripts/dev.sh`) wraps the
+The gateway (default `http://127.0.0.1:18800`, started with `npm run dev`, see `scripts/dev.sh`) wraps the
 `onchainos` / `okx-a2a` CLIs. **Always go through the gateway**, never call
 `onchainos agent deliver` / `create-subscribe` yourself: the gateway holds the idempotency
 tables and the ledgers, and a direct CLI call bypasses both.
@@ -28,7 +28,7 @@ UI: the "信号市场 / Signal Market" page (`#/market`), four tabs — Market /
 1. Never forward a purchased ASP signal to our own subscribers. Only our own thread events and
    agent judgments are published.
 2. Never pass any `--autotrade-*` flag when subscribing. Received signals go into the local
-   ledger and execute only behind trading-swarm's own gates (stop required, notional cap, daily cap,
+   ledger and execute only behind trade-gate's own gates (stop required, notional cap, daily cap,
    opposite exposure, freshness). `copy` mode is opt-in per subscription and only auto-executes
    `open`; management actions are always manual.
 3. Never publish a paper-backend thread as `order`; paper is `analysis` only, flagged `paper:true`,
@@ -112,7 +112,7 @@ direction → to-do), `copy` (open auto-executes behind all gates). Weight 0–1
 {"deliveryId":"tg_<event_id>","signal_type":"order","signalTime":1789890000000,
  "symbol":"BTC-USDT-SWAP","action":"LONG","price":"64120","stop_loss":"63400","take_profit":["65200","66100"],
  "leverage":null,"sz":null,"valid_until":1789890180000,"is_executable":true,
- "reason":"<one-line agent rationale>","source":"trading-swarm","thread_id":"…","realized_r":null,"backend":"okx","paper":false}
+ "reason":"<one-line agent rationale>","source":"trade-gate","thread_id":"…","realized_r":null,"backend":"okx","paper":false}
 ```
 
    `CLOSE` carries `realized_r` and `exit_reason`; `analysis` has `is_executable:false`, `can_enter:false`.
@@ -126,9 +126,7 @@ direction → to-do), `copy` (open auto-executes behind all gates). Weight 0–1
 
 ## Troubleshooting
 
-- `lights.a2a` off: run `okx-a2a daemon start`, then **re-apply the proxy** to its launchd plist
-  (`~/Desktop/okx-signal-lab/fix-daemon-proxy.sh`; `daemon start` regenerates the plist without
-  proxy vars and OKX API calls then time out). `daemon restart` does not reload the plist.
+- `lights.a2a` off: run `okx-a2a daemon start`, then **re-apply the proxy** to its launchd plist (`daemon start` regenerates the plist without proxy variables, and OKX API calls then time out). `daemon restart` does not reload the plist.
 - `lights.wallet` off: log in via the top-bar account menu (`onchainos wallet login`, browser social login).
 - Subscribed but nothing arrives: check `this_device_receives` on the subscription; the gateway's
   machine must be in the receiving set (`PATCH … {this_device_receives:true}`).
@@ -140,4 +138,4 @@ direction → to-do), `copy` (open auto-executes behind all gates). Weight 0–1
 
 Platform-native conversational flows (evaluator staking and voting, A2A task chat, generic task
 publishing, x402 per-call payments) stay with the official `okx-ai` skill in the host session.
-Buying and selling **trading signals** for trading-swarm goes through this skill and the gateway.
+Buying and selling **trading signals** for trade-gate goes through this skill and the gateway.

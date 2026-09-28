@@ -4,7 +4,7 @@
 而**现货在 acctLv=1 下就能交易**。顺势把「市场类型」做成一等维度:交易处可选 spot/perps,
 后期用 ASP 的套利信号做期现套利(spot 多 + perp 空)的地基。
 
-分工:后端(gateway)与前端(webui)分开实现。契约见 `docs/demo/v3-ui-contract.md` §9.40,先写契约再动手,两边只认契约。
+分工:后端(gateway)= Codex astra;前端(webui)= Claude。契约见 `docs/demo/v3-ui-contract.md` §9.40,先写契约再动手,两边只认契约。
 
 ## 0. 结论先行
 
@@ -67,7 +67,7 @@ clOrdId 规则不变。spot 与 perp 同一 symbol 的 KV 键前缀分开:`okx.a
 - 事件/告警文案带市场标签(`[spot]`)。
 - ASP 入站(`asp-agent/inbox.ts`):信号里出现 `arbitrage|basis|funding` 关键字或结构化 `kind:'arbitrage'` 的,归一成 `{kind:'arbitrage', symbol, spot_side:'long', perp_side:'short', basis_pct?, expected_apr?}` 落 `market_signals`,`reason: 'arbitrage_recorded_only'`,不进 book 模式;前端信号行显示「套利·仅记录」。
 
-## 5. 前端(webui)
+## 5. 前端(webui,Claude 做)
 
 - `api/types.ts`:`Market`、线程/持仓/挂单/工作流/手工单/执行视图新字段;`BASIS` 类型。
 - 交易页(`pages/trade.tsx`):表单顶部 **Perps / Spot** 分段开关(初始 `workflow.default_market`,不在 `workflow.markets` 里的项置灰并提示);spot 模式:四象限收成「买入 / 卖出」两键,隐藏杠杆与全逐仓,金额字段文案改「花费 USDT」,名义 = 花费,止损参考价改按百分比默认 −3%;提交带 `market`。持仓表加「市场」列,spot 行杠杆显示「现货」;线程详情显示市场徽标;挂单表同。
@@ -97,7 +97,7 @@ clOrdId 规则不变。spot 与 perp 同一 symbol 的 KV 键前缀分开:`okx.a
 
 ## 状态(2026-09-21 02:10)
 
-- 后端与前端都已落地;gateway vitest 99 文件 / 1884 项全绿(两方各跑一遍),webui `tsc --noEmit` + `vite build` 过。
+- 后端(Codex astra)与前端(Claude)都已落地,**未提交**;gateway vitest 99 文件 / 1884 项全绿(两方各跑一遍),webui `tsc --noEmit` + `vite build` 过。
 - 18811/5191 已重启到新代码。模拟盘实跑:`POST /api/execution/verify-protection {symbol:SOLUSDT, market:spot}` 全流程通过(买 0.010501 SOL @109.95 → 现货条件单止损 104.42 → 交易所查到 → 撤 → 市价卖回 → 确认无持仓),凭证 `(okx, SOLUSDT, spot)` 已签发 7 天。
 - `/api/execution` 回显 `acct_lv:1 / 简单模式 / markets_supported:['spot']`;demo 账户自带的 BTC 1 / OKB 100 / ETH 1 以 spot 持仓出现。
 - 开发实例的工作流已被改成 `markets:['perp','spot'], default_market:'spot'`(为了能在简单模式下交易)。
@@ -109,7 +109,7 @@ Owner 已确认：spot 不要求止损。无止损的现货线程、手工订单
 
 ## 02:45 追加:现货止损可选 + 永续不可用时的无缝切换
 
-- 现货不强制止损(Jacky 拍板):spot 从保护闸 / never_verified / 缺止损告警 / PROTECTION_MISSING 巡检全部豁免,带止损的现货线程照旧守;提案与手工单在 spot 下止损可空。后端由 外部评审落地(内部评审记录,1898 测绿);前端接管对话框对现货把止损改可选、无主现货不再标「没有止损」。
+- 现货不强制止损(Jacky 拍板):spot 从保护闸 / never_verified / 缺止损告警 / PROTECTION_MISSING 巡检全部豁免,带止损的现货线程照旧守;提案与手工单在 spot 下止损可空。后端由 Codex astra 落地(`.codex-reports/spot-no-stop.md`,1898 测绿);前端接管对话框对现货把止损改可选、无主现货不再标「没有止损」。
 - 永续在简单模式下的处理:交易页「永续」不是死按钮,点了弹框讲清 51010 原因 + 「去 OKX 切换」按钮(打开 OKX 交易页,右上角账户模式),同时每 5 秒 `POST /api/execution/okx/account-level/refresh`(网关重读 `account config` 的 acctLv,只读),模式一变永续自动亮起并切过去。CDP 实测:弹框出现、轮询按 5 秒打到网关。
 - 真正一键切换(网关自己打 `set-account-level`)取决于 OKX 是否允许 API 切:`scripts/okx-set-account-level.py` 由 Jacky 自己跑一次确认(工具层拦签名请求);允许则加 `POST /api/execution/okx/account-level {acctLv}`,前提是没有持仓/挂单/借币;首次切出简单模式很可能被要求先做 App 测评,那就只能走上面的链接+轮询路。
 - 18811/5191 已重启到含这些改动的代码;整包仍未提交。

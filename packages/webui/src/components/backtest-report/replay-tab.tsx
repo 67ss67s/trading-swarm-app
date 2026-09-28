@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, CircleAlert, RotateCcw } from 'lucide-react';
-import type { BacktestPlan, BacktestReplay, BacktestReport, BacktestTrade, SmcOverlay } from '@trading-swarm/contracts';
+import type { BacktestPlan, BacktestReplay, BacktestReport, BacktestTrade, SmcOverlay } from '@trade-gate/contracts';
 import { researchApi } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';

@@ -1,4 +1,4 @@
-//! 数据目录布局 `~/.trading-swarm/`(设计 §3):`exec.sqlite` 只有 execd 打开;`secrets/` 0700 只有 execd 读;
+//! 数据目录布局 `~/.trade-gate/`(设计 §3):`exec.sqlite` 只有 execd 打开;`secrets/` 0700 只有 execd 读;
 //! `run/execd.sock` 0600;`run/execd.lock` 单实例锁。
 
 use std::path::{Path, PathBuf};
@@ -31,15 +31,15 @@ impl DataDir {
         }
     }
 
-    /// 默认 `$TRADING_SWARM_HOME` 或 `~/.trading-swarm`。
+    /// 默认 `$TRADE_GATE_HOME` 或 `~/.trade-gate`。
     pub fn default_root() -> PathBuf {
-        if let Ok(v) = std::env::var("TRADING_SWARM_HOME")
+        if let Ok(v) = std::env::var("TRADE_GATE_HOME")
             && !v.trim().is_empty()
         {
             return PathBuf::from(v);
         }
         let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
-        PathBuf::from(home).join(".trading-swarm")
+        PathBuf::from(home).join(".trade-gate")
     }
 
     /// 建目录并收紧权限(root 0700,run/secrets 0700,logs 0700)。

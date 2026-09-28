@@ -193,7 +193,8 @@ export function pickSignal(text: string | null | undefined): Record<string, unkn
       // 半截 JSON:跳过,不影响同一段里其它对象。
     }
   }
-  if (!candidates.length) return /arbitrage|basis|funding|套利|基差/i.test(text) ? {kind:'arbitrage', text} : null;
+  // 套利只认结构化字段(isStructuredArbitrage);正文里出现 funding/basis 之类的词不再造一个套利对象(行情简报会被误判)。
+  if (!candidates.length) return null;
   for (const obj of candidates) if (obj['deliveryId']) return obj;
   for (const obj of candidates) {
     for (const v of Object.values(obj)) {
@@ -201,6 +202,17 @@ export function pickSignal(text: string | null | undefined): Record<string, unkn
     }
   }
   return candidates[0]!;
+}
+
+/**
+ * 套利对象只认**结构化字段**:`kind:'arbitrage'`、嵌套 `arbitrage:{…}`、或带 `basis_pct`/`expected_apr` 键。
+ * 自由文本关键字(funding/basis/套利…)不算 —— 「Funding rate extremes」「Basis (Breakout retest)」都是行情情报。
+ */
+export function isStructuredArbitrage(o: Record<string, unknown>): boolean {
+  if (o['kind'] === 'arbitrage') return true;
+  const nested = o['arbitrage'];
+  if (nested && typeof nested === 'object' && !Array.isArray(nested)) return true;
+  return ['basis_pct', 'expected_apr'].some((k) => o[k] !== undefined && o[k] !== null && o[k] !== '');
 }
 
 /**
@@ -290,7 +302,7 @@ export interface AspNormalizeCtx {
 export function normalizeAspSignal(objIn: unknown, ctx: AspNormalizeCtx): NormalizeResult {
   const input = objIn && typeof objIn === 'object' && !Array.isArray(objIn) ? objIn as Record<string,unknown> : {};
   const arbText = ctx.raw_text || JSON.stringify(input);
-  if (input['kind'] === 'arbitrage' || /arbitrage|basis|funding|套利|基差/i.test(arbText)) {
+  if (isStructuredArbitrage(input)) {
     const nested = input['arbitrage'] && typeof input['arbitrage'] === 'object' ? input['arbitrage'] as Record<string,unknown> : input;
     const symbol = instIdToSymbol(String(nested['symbol'] ?? input['symbol'] ?? input['instId'] ?? /[A-Z0-9]+(?:-USDT(?:-SWAP)?|USDT)/.exec(arbText)?.[0] ?? '').toUpperCase());
     const signal_id = `okxasp_${createHash('sha256').update(String(input['deliveryId'] ?? arbText)).digest('hex').slice(0,24)}`;
@@ -394,7 +406,8 @@ export function normalizeAspSignal(objIn: unknown, ctx: AspNormalizeCtx): Normal
     raw_text,
     ref_order: null,
     order_end_state: null,
-    market_type: 'perp',
+    // 现货行(【Spot】/【现货】)必须按现货走:当永续处理等于把「卖出持仓」变成开空。
+    market_type: String(obj['market'] ?? '').toLowerCase() === 'spot' ? 'spot' : 'perp',
     transport: OKX_ASP_TRANSPORT,
     subscription_job_id: ctx.job_id ?? 'unknown',
     // review_only 语义直接复用 backfill(resolveMode 里 backfill → review_only,永不自动开仓)。
@@ -801,29 +814,195 @@ export function parseFileDelivery(text: string): FileDelivery | null {
   if (!file_key || !digest || !salt || !nonce || !secret) return null;
   return { file_key, digest, salt, nonce, secret, filename: pick('filename')?.replace(/\.{3}」?$/, '') ?? null };
 }
+/** OKX.AI 官方订阅信号类型头(任何 ASP 都可能用,与 publisher.SIGNAL_HEADERS 同一组)。 */
+export const OKX_TYPE_HEADER_RE = /^【(Spot|Futures|Prediction|Options|DeFi|合约|现货|预测市场|期权)】/i;
+/** 老式行头(Alpha Engine #10521:【合约信号】…)。 */
+const LEGACY_SIGNAL_HEADER_RE = /^【?(合约|永续|现货)?信号】?/;
+/** 行里任何一段命中 = 明示「不可执行」(状态 / 情报 / 服务消息),必须早退,绝不产出信号对象。 */
+const NON_EXEC_SEGMENT_RE = /Info only|Status only|no order|Service message/i;
+const VENUE_RE = /^(OKX|Binance|Bybit|Bitget|OKX\.AI)$/i;
+
+/** 类型头行的分类结果:signal 才会进 normalizeAspSignal;其余只留痕。 */
+export type TypeHeaderLine =
+  | { kind: 'signal'; line: string; obj: Record<string, unknown> }
+  | { kind: 'intel' | 'status' | 'message' | 'invalid'; line: string; note: string };
+
 /**
- * 纯文本行式信号(Alpha Engine #10521 实测格式,09-22):
- * `【合约信号】ONE-PERP | LONG 1x | 入场 0.005365-0.005408 | SL 0.003476 | TP1 0.007292 | 仓位 5% | 4h 内有效`
- * 转成 normalizeAspSignal 吃的对象;认不全(没币种/没方向)就 null,让它按 notice/invalid 留痕。
- * 平台不规定 payload schema,每家 ASP 都可能是自己的文本样式,这里是第一家文本适配器;新样式加新分支,别放宽正则去「猜」。
+ * 找出投递里的**信号行**并分类。认得两种行头:
+ * - OKX 官方类型头 `【Spot|Futures|Prediction|Options|DeFi|合约|现货|预测市场|期权】…`,字段以 ` | ` 分隔;
+ * - 老式 `【合约信号】ONE-PERP | LONG 1x | 入场 … | SL … | TP1 … | 仓位 5% | 4h 内有效`(Alpha Engine #10521,09-22)。
+ * 规则(**不猜方向**):
+ * - 任何一段写了 Info only / Status only / no order / Service message → intel/status,早退;
+ * - 没有方向/动作也没有价格 → intel(状态、雷达这类);有价格却认不出动作 → invalid(真·没读懂);
+ * - CLOSE [LONG|SHORT] / REDUCE n% [LONG|SHORT] / SELL ALL / SELL n% 只在标的唯一时映射成 close/reduce;
+ * - 现货 SELL(没写 ALL / 百分比)分不清是平仓还是做空 → message;Prediction/Options/DeFi 没有执行通道 → message。
+ * 没有信号行返回 null。平台不规定 payload schema,新样式加新分支,别放宽正则去「猜」。
  */
-export function parseTextSignal(text: string, createdAt: string | number | null | undefined): Record<string, unknown> | null {
-  const line = text.split('\n').map((l) => l.trim()).find((l) => (/^【?(合约|永续|现货)?信号】?/.test(l) || /^【(Futures|合约)】/i.test(l)) && /\|/.test(l));
+export function classifyTypeHeaderLine(text: string, createdAt: string | number | null | undefined): TypeHeaderLine | null {
+  const lines = text.split('\n').map((l) => l.trim().replace(/^「\s*/, '').replace(/\s*」$/, '').trim());
+  const line = lines.find((l) => /\|/.test(l) && (OKX_TYPE_HEADER_RE.test(l) || LEGACY_SIGNAL_HEADER_RE.test(l)));
   if (!line) return null;
-  const parts = line.split('|').map((x) => x.trim());
-  const head = parts[0]!.replace(/^【[^】]*】\s*/, '');
-  const sym = head.match(/^([A-Z0-9]+)[-\/]?(PERP|USDT(?:-SWAP)?|USD)?/i); if (!sym) return null;
-  const symbol = `${sym[1]!.toUpperCase()}-USDT-SWAP`;
-  const dir = parts[1]?.match(/^(LONG|SHORT|BUY|SELL|多|空)\s*(\d+(?:\.\d+)?)?x?/i); if (!dir) return null;
-  const action = /^(LONG|BUY|多)/i.test(dir[1]!) ? 'LONG' : 'SHORT';
+  const parts = line.split('|').map((x) => x.trim()).filter((x) => x !== '');
+  if (parts.some((p) => NON_EXEC_SEGMENT_RE.test(p))) {
+    return /Status only|No active setup/i.test(line) ? { kind: 'status', line, note: '状态行(Status only),不是可执行信号' } : { kind: 'intel', line, note: '情报行(Info only / Service message),不是可执行信号' };
+  }
+  const header = parts[0]!.match(/^【([^】]*)】\s*(.*)$/);
+  const legacy = !OKX_TYPE_HEADER_RE.test(line);
+  const headName = header?.[1] ?? '';
+  const market: 'perp' | 'spot' | 'unsupported' = /Prediction|Options|DeFi|预测市场|期权/i.test(headName) ? 'unsupported' : /Spot|现货/i.test(headName) ? 'spot' : 'perp';
+  // 标的:行头后面那段;是空的或只是交易所名(【Spot】OKX | ETH-USDT | BUY …)就取下一段。
+  let instIdx = 0;
+  let inst = (header?.[2] ?? parts[0]!).trim();
+  if (!inst || VENUE_RE.test(inst)) { instIdx = 1; inst = parts[1] ?? ''; }
+  const sideSeg = parts[instIdx + 1] ?? '';
+
   const num = (label: RegExp) => { const p = parts.find((x) => label.test(x)); const m = p?.match(/(\d+(?:\.\d+)?)(?:\s*[-~–]\s*(\d+(?:\.\d+)?))?/); return m ? [m[1]!, ...(m[2] ? [m[2]] : [])] : []; };
   const entry = num(/^(入场|entry|reference price|order price)/i); const sl = num(/^(SL|止损|stop loss)/i); const tp = parts.filter((x) => /^(TP\d*|止盈|take profit)/i.test(x)).flatMap((x) => x.replace(/^(TP\d*|止盈\d*|take profit)\s*/i, '').match(/\d+(?:\.\d+)?/g) ?? []);
+  const hasPrice = entry.length > 0 || sl.length > 0 || tp.length > 0;
+
+  // ---- 动作:顺序要紧(SELL ALL / SELL 50% 必须先于裸 SELL)。
+  let action: 'LONG' | 'SHORT' | 'CLOSE' | 'REDUCE' | null = null;
+  let direction: 'long' | 'short' | null = null;
+  let leverage: string | undefined;
+  let reducePct: string | undefined;
+  let m: RegExpMatchArray | null;
+  if ((m = sideSeg.match(/^CLOSE(?:\s+(LONG|SHORT))?$/i))) { action = 'CLOSE'; direction = m[1] ? (m[1].toLowerCase() as 'long' | 'short') : null; }
+  else if ((m = sideSeg.match(/^(?:REDUCE|SELL)\s+(\d+(?:\.\d+)?)\s*%(?:\s+(LONG|SHORT))?$/i))) { action = 'REDUCE'; reducePct = m[1]; direction = m[2] ? (m[2].toLowerCase() as 'long' | 'short') : market === 'spot' ? 'long' : null; }
+  else if (/^SELL\s+ALL$/i.test(sideSeg)) { action = 'CLOSE'; direction = market === 'spot' ? 'long' : null; }
+  else if ((m = sideSeg.match(/^(LONG|SHORT|BUY|SELL|多|空)\s*(\d+(?:\.\d+)?)?x?/i))) {
+    const up = /^(LONG|BUY|多)/i.test(m[1]!);
+    if (market === 'spot' && !up) return { kind: 'message', line, note: '现货 SELL 没写 ALL / 百分比,分不清是平仓还是做空,不猜' };
+    action = up ? 'LONG' : 'SHORT';
+    leverage = m[2];
+  }
+  if (!action) return hasPrice ? { kind: 'invalid', line, note: '类型头信号行认不出方向/动作(不猜)' } : { kind: 'intel', line, note: '类型头行没有方向也没有价格,按情报留痕' };
+  if (market === 'unsupported') return { kind: 'message', line, note: `【${headName}】类信号暂无执行通道,只留痕` };
+  // 标的必须唯一:「BTC-USDT-SWAP, ETH-USDT-SWAP」这类多标的行不能当单一指令。
+  const sym = /[,，\s]/.test(inst) ? null : inst.toUpperCase().match(/^([A-Z0-9]+?)(?:[-/]?(?:USDT|USDC|USD)(?:-SWAP)?|-PERP|-SWAP)?$/);
+  if (!sym) return { kind: 'message', line, note: `标的不唯一或认不出(${inst.slice(0, 40)}),不猜` };
+  const symbol = market === 'spot' ? `${sym[1]!}-USDT` : `${sym[1]!}-USDT-SWAP`;
+
   const pct = parts.find((x) => /^(仓位|position)/i.test(x))?.match(/\d+(?:\.\d+)?/)?.[0];
   const validPart = parts.find((x) => /有效|valid/i.test(x)); const hours = validPart?.match(/(\d+)\s*h/i)?.[1] ?? (validPart?.match(/(\d+)\s*min/i) ? String(Number(validPart.match(/(\d+)\s*min/i)![1]) / 60) : undefined);
   const published = createdAt === null || createdAt === undefined ? NaN : typeof createdAt === 'number' ? createdAt : Date.parse(createdAt);
   // 同一条行式信号会到两次:XMTP 原件([Received])和守护里无头 Claude 的「信号送达」回执;幂等键按行内容哈希,两份合成一条。
-  const deliveryId = `line-${createHash('sha256').update(`${symbol}|${action}|${entry.join('-')}|${sl[0] ?? ''}|${tp.join('/')}`).digest('hex').slice(0, 16)}`;
-  return { deliveryId, signal_type: 'order', symbol, action, entry, stop_loss: sl[0] ?? null, take_profit: tp, ...(dir[2] ? { leverage: dir[2] } : {}), ...(pct ? { position_pct: pct } : {}), ...(hours && Number.isFinite(published) ? { valid_until: published + Number(hours) * 3600_000 } : {}), text_format: 'alpha_engine_line' };
+  // 开仓行的哈希输入与旧版逐字相同(历史去重键不变);平仓/减仓行没有价格时再拼 10 分钟时间桶,免得同币种不同时刻的两次平仓被当成重复。
+  const open = action === 'LONG' || action === 'SHORT';
+  const bucket = !open && entry.length === 0 && Number.isFinite(published) ? `|t${Math.floor(published / 600_000)}` : '';
+  const key = open ? `${symbol}|${action}|${entry.join('-')}|${sl[0] ?? ''}|${tp.join('/')}` : `${symbol}|${action}|${direction ?? ''}|${reducePct ?? ''}|${entry.join('-')}${bucket}`;
+  const deliveryId = `line-${createHash('sha256').update(key).digest('hex').slice(0, 16)}`;
+  return {
+    kind: 'signal', line,
+    obj: { deliveryId, signal_type: 'order', symbol, action, ...(direction ? { direction } : {}), entry, stop_loss: sl[0] ?? null, take_profit: tp, ...(leverage ? { leverage } : {}), ...(pct ? { position_pct: pct } : {}), ...(reducePct ? { reduce_pct: reducePct } : {}), ...(market === 'spot' ? { market: 'spot' } : {}), ...(hours && Number.isFinite(published) ? { valid_until: published + Number(hours) * 3600_000 } : {}), text_format: legacy ? 'alpha_engine_line' : 'okx_type_header' },
+  };
+}
+/** 行式信号 → normalizeAspSignal 吃的对象;不可执行 / 认不全 → null(兼容旧调用方)。 */
+export function parseTextSignal(text: string, createdAt: string | number | null | undefined): Record<string, unknown> | null {
+  const r = classifyTypeHeaderLine(text, createdAt);
+  return r?.kind === 'signal' ? r.obj : null;
+}
+
+// ---------------------------------------------------------------- 投递分类(非信号分流)
+
+/**
+ * 入站账本 `parse_status` 取值。只有 order/expired 带可跟的 signal_json;arbitrage 只记证据。
+ * report/intel/status/message/notice/system 都是「不可执行、只留痕」,invalid 只留给真正坏掉的行。
+ * 文件解密失败仍记 invalid(老行为),但 errors 里带 FETCH_FAILED_NOTE,计数时单独算「处理失败」。
+ */
+export type InboxParseStatus = 'order' | 'expired' | 'arbitrage' | 'analysis' | 'report' | 'intel' | 'status' | 'message' | 'notice' | 'system' | 'invalid';
+export const FETCH_FAILED_NOTE = '文件投递下载/解密失败,只留描述原文';
+/** 守护的「发送失败」回执(卖方侧发件失败,不是买方收到的内容)。 */
+const SEND_FAILED_RE = /^\s*A2A message send failed\b/i;
+/** 平台通知(试用/订阅/续订/取消/过期…):首行形如【试用已开始】或 [onchainos:task-terminal] 【已取消】。 */
+const PLATFORM_NOTICE_RE = /^(?:\[onchainos:[^\]]*\]\s*)?【[^】]*(试用|订阅|续订|取消|过期|扣款|退款|到期|评价|评分)[^】]*】/;
+const PLATFORM_NOTICE_EN_RE = /^(?:\[onchainos:[^\]]*\]\s*)?(?:free trial|your (?:free )?trial|subscription (?:has been |is )?(?:created|started|active|renewed|cancell?ed|expired))/i;
+const ENVELOPE_LINE_RE = /^\s*(?:📥|📤)\s*\[(?:Received|Sent)\]/m;
+const INTEL_TITLE_RE = /简报|情报|推荐|快讯|告警|预警|日报|Brief|Intel|Picks|Radar|Alert|News|Quiet[- ]Period|Snapshot/i;
+const REPORT_TITLE_RE = /报告|把关|判断|回测|分析|Report|Gate|Probability|Backtest|Analysis|Assessment/i;
+export const REPORT_MIN_CHARS = 300;
+
+/** 剥掉平台信封(📥/📤 [Received]/[Sent] … 「…」),拿到服务方真正写的正文;不是信封就原样。 */
+export function envelopeBody(text: string): string {
+  const t = text.replace(/\r/g, '');
+  if (!/^\s*(?:📥|📤)?\s*\[(?:Received|Sent)\]/.test(t)) return t.trim();
+  const a = t.indexOf('「'); const b = t.lastIndexOf('」');
+  const inner = a >= 0 ? t.slice(a + 1, b > a ? b : undefined) : t.split('\n').slice(1).join('\n');
+  return inner.split('\n')
+    .filter((l) => !/^\s*(jobId|deliverableType|fileKey|digest|salt|nonce|secret|filename|Job)\s*:/i.test(l) && !/^\s*-\s-\s-\s*$/.test(l) && !/^\s*\[intent:[^\]]*\]\s*$/.test(l) && !/^\s*─{3,}\s*$/.test(l))
+    .join('\n').trim();
+}
+
+export type InboxClass =
+  | { status: 'signal'; obj: Record<string, unknown> }
+  | { status: Exclude<InboxParseStatus, 'order' | 'expired' | 'arbitrage' | 'analysis'>; note: string };
+
+/** 一个 JSON 候选够不够格当「信号对象」:结构化套利 / 声明了 signal_type / 有标的且有方向或动作。 */
+function jsonSignalCandidate(o: Record<string, unknown>): boolean {
+  if (isStructuredArbitrage(o)) return true;
+  if (String(o['signal_type'] ?? o['signalType'] ?? '').trim()) return true;
+  const hasSymbol = ['symbol', 'instId'].some((k) => String(o[k] ?? '').trim() !== '');
+  const hasSide = ['action', 'raw_action', 'direction', 'side'].some((k) => String(o[k] ?? '').trim() !== '');
+  return hasSymbol && hasSide;
+}
+
+/**
+ * 一条投递(content / llm_content / payload_json,文件投递解密出的正文放最前)→ 分类。
+ * 顺序:解密失败 → 发送失败回执 → JSON 信号对象 → 类型头信号行 → 平台通知 → 服务消息 → 情报/报告 → message。
+ * 只有 `status:'signal'` 会进 normalizeAspSignal(再分 order/expired/analysis/arbitrage/invalid)。
+ */
+export function classifyInboxTexts(texts: readonly string[], opts: { created_at?: string | number | null; file_body?: boolean; fetch_failed?: boolean } = {}): InboxClass {
+  if (opts.fetch_failed) return { status: 'invalid', note: FETCH_FAILED_NOTE };
+  if (texts.some((t) => SEND_FAILED_RE.test(t))) return { status: 'system', note: '守护发送失败回执(卖方侧),不是收到的内容' };
+  for (const t of texts) {
+    const o = pickSignal(t);
+    if (o && jsonSignalCandidate(o)) return { status: 'signal', obj: o };
+  }
+  let lineResult: TypeHeaderLine | null = null;
+  for (const t of texts) { lineResult = classifyTypeHeaderLine(t, opts.created_at ?? null); if (lineResult) break; }
+  if (lineResult?.kind === 'signal') return { status: 'signal', obj: lineResult.obj };
+  if (lineResult) return { status: lineResult.kind, note: lineResult.note };
+  const body = envelopeBody(texts[0] ?? '');
+  const first = body.split('\n').map((l) => l.trim()).find(Boolean) ?? '';
+  if (PLATFORM_NOTICE_RE.test(first) || PLATFORM_NOTICE_EN_RE.test(first)) return { status: 'notice', note: '平台通知' };
+  if (/^Service message:/i.test(first)) return /No active (signal|setup)|Subscription active|订阅已开通/i.test(body) ? { status: 'status', note: '服务状态消息' } : { status: 'intel', note: '服务消息(不可执行)' };
+  const title = first.match(/^【([^】]*)】/)?.[1] ?? first.match(/^\[([^\]]*)\]/)?.[1] ?? first.split(/\s·\s/)[0]!;
+  if (INTEL_TITLE_RE.test(title) && !REPORT_TITLE_RE.test(title)) return { status: 'intel', note: '情报/简报(不可执行)' };
+  if (opts.file_body || [...body].length >= REPORT_MIN_CHARS || REPORT_TITLE_RE.test(title)) return { status: 'report', note: opts.file_body ? '文件报告(不可执行)' : '长文报告/分析(不可执行)' };
+  return { status: 'message', note: '未识别格式的消息,只留原文' };
+}
+
+/**
+ * 历史行按**新规则**重算展示口径(账本不可改,只在读的时候重算计数)。
+ * - 我们自己的卖方镜像 / 发送失败回执 → system;
+ * - 已入跟单的 order/expired、JSON 分析 analysis 保持原状;结构化套利保持 arbitrage;
+ * - 其余从 raw 重跑分类;重跑出的信号若同一 deliveryId 已有别的行 → duplicate。
+ */
+export function displayStatusOf(row: { rowid: number; delivery_id: string; received_at: number; raw: string; parse_status: string; signal_json: string | null; errors_json: string }, ctx: { selfAspIds: readonly string[]; deliveryTaken: (deliveryId: string, rowid: number) => boolean }): string {
+  const raw = row.raw ?? '';
+  const env = ENVELOPE_LINE_RE.exec(raw);
+  const envelope = env ? raw.slice(env.index).trimStart() : '';
+  if ((envelope && isSellerSideMirror(envelope, ctx.selfAspIds)) || SEND_FAILED_RE.test(raw)) return 'system';
+  const stored = row.parse_status;
+  if (stored === 'order' || stored === 'expired' || stored === 'analysis') return stored;
+  let errors: string[] = [];
+  try { errors = JSON.parse(row.errors_json) as string[]; } catch { /* 坏的 errors_json 当空 */ }
+  if (stored === 'invalid' && errors.includes(FETCH_FAILED_NOTE)) return 'fetch_failed';
+  if (stored === 'arbitrage' && row.signal_json) {
+    try { const sig = JSON.parse(row.signal_json) as TraderSignal; if (sig.arbitrage?.basis_pct || sig.arbitrage?.expected_apr) return 'arbitrage'; } catch { /* 按重算 */ }
+  }
+  // 文件投递:解密正文在信封前面;只有信封(描述行)= 当时没解出来。
+  const isFile = /deliverableType:\s*file/i.test(raw);
+  const fileBody = isFile && !!env && env.index > 0;
+  if (isFile && !fileBody && stored === 'invalid') return 'fetch_failed';
+  const texts = fileBody ? [raw.slice(0, env!.index), envelope] : [raw];
+  const cls = classifyInboxTexts(texts, { created_at: row.received_at, file_body: fileBody });
+  if (cls.status !== 'signal') return cls.status;
+  const r = normalizeAspSignal(cls.obj, { now: row.received_at, trader: 'ledger', raw_text: raw, created_at: new Date(row.received_at).toISOString(), job_id: null });
+  if (!r.signal) return r.errors.join(';').startsWith('analysis:') ? 'analysis' : 'invalid';
+  if (r.signal.kind === 'arbitrage') return 'arbitrage';
+  const id = String(cls.obj['deliveryId'] ?? cls.obj['delivery_id'] ?? '');
+  if (id && id !== row.delivery_id && ctx.deliveryTaken(id, row.rowid)) return 'duplicate';
+  return r.signal.invalid_validity || (r.signal.valid_until !== null && r.signal.valid_until < row.received_at) ? 'expired' : 'order';
 }
 /** 把密钥材料从要落账本的原文里抹掉(账本会展示给前端)。 */
 export function stripFileSecrets(text: string): string { return text.replace(/^(salt|nonce|secret):.*$/gim, '$1: [redacted]'); }
@@ -844,8 +1023,24 @@ export interface MarketInboxDeps {
   readQueue?: () => Promise<QueueRow[]>; watch?: WatchRunner; now?: () => number;
   traderOf?: (jobId: string) => string;
   signalEnabled?: () => boolean;
+  /** 本机作为 ASP(卖方)的 agentId:守护把卖方侧的「📥 收单通知」也写进同一张表,收件人是它的不是买方信号 */
+  selfAspIds?: () => string[];
   system: (event: Record<string, unknown>, eventId: string) => Promise<void>;
   emit: (event: string, payload: unknown) => void;
+}
+/**
+ * 守护把本机所有身份的消息都镜像进 user_attention:「📤 [Sent] …(you) → …」是我们自己发出的交付,
+ * 「📥 [Received] X → <本机 ASP>#id (you)」是别人给我们 ASP 下的单。两者都不是买方收到的信号,不入账。
+ * 同样不入账:守护的「A2A message send failed … Target: agentId=…」发件失败回执,
+ * 以及平台发给卖方的「A task has been created for your service」建单通知(本机 ASP 身份还没加载时也认得出)。
+ */
+export function isSellerSideMirror(content: string, selfAspIds: readonly string[]): boolean {
+  const head = content.trimStart().slice(0, 300);
+  if (/^📤\s*\[Sent\]/.test(head)) return true;
+  if (SEND_FAILED_RE.test(head)) return true;
+  if (/^📥\s*\[Received\][^\n]*\(you\)[\s\S]*A task has been created for your service/i.test(head)) return true;
+  const m = /^📥\s*\[Received\][^\n]*→[^\n]*#(\d+)\s*\(you\)/.exec(head);
+  return !!m && selfAspIds.includes(m[1]!);
 }
 export interface InboxRow { rowid: number; delivery_id: string; job_id: string; received_at: number; raw: string; parse_status: string; signal_id: string | null; signal_json: string | null; errors_json: string; signal_type: string | null; session: string | null; }
 /** Ledger rows are immutable; cursor advances only after capture in demo_trader_signal succeeds. */
@@ -881,17 +1076,20 @@ export class MarketInbox {
   }
   async accept(rows: QueueRow[]): Promise<{ scanned: number; duplicates: number }> {
     let scanned = 0; let duplicates = 0;
+    const selfAsp = this.deps.selfAspIds?.() ?? [];
     for (const incoming of rows) {
+      if (isSellerSideMirror(incoming.content ?? '', selfAsp)) continue;
       const row = redactDeep(incoming);
       const texts = [row.content, row.llm_content, row.payload_json].filter((x): x is string => !!x);
       // 文件投递:先按幂等键查账本(避免每轮都去下载),没见过才解密,解密出的正文放最前面参与挑信号。
       const fileDesc = [incoming.content, incoming.llm_content].filter((x): x is string => !!x).map(parseFileDelivery).find(Boolean) ?? null;
       const preKey = row.message_id ?? `row-${row.id}`;
       if (fileDesc && this.seenKey(preKey)) { duplicates++; continue; }
+      let fileBody = false; let fetchFailed = false;
       if (fileDesc && this.deps.fetchFile) {
         let body: string | null = null;
         try { body = await this.deps.fetchFile(fileDesc, row.job_id || 'unknown'); } catch (e) { this.deps.emit('market_delivery_error', { job_id: row.job_id, error: (e as Error).message }); }
-        if (body) texts.unshift(body);
+        if (body) { texts.unshift(body); fileBody = true; } else fetchFailed = true;
       }
       const raw = stripFileSecrets(texts.join('\n'));
       const envelope = texts.map((t) => this.systemEnvelope(t)).find(Boolean);
@@ -900,16 +1098,16 @@ export class MarketInbox {
         const eid = String(envelope['eventId'] ?? createHash('sha256').update(JSON.stringify(envelope)).digest('hex'));
         await this.deps.system(envelope, eid); continue;
       }
-      const obj = texts.map(pickSignal).find(Boolean) ?? texts.map((t) => parseTextSignal(t, row.created_at)).find(Boolean) ?? null;
+      const cls = classifyInboxTexts(texts, { created_at: row.created_at, file_body: fileBody, fetch_failed: fetchFailed });
+      const obj = cls.status === 'signal' ? cls.obj : null;
       const delivery = String(obj?.['deliveryId'] ?? obj?.['delivery_id'] ?? row.message_id ?? `row-${row.id}`);
       if (this.db.prepare('SELECT 1 FROM okx_market_delivery_in WHERE delivery_id=?').get(delivery)) { duplicates++; continue; }
       if (fileDesc) this.markSeen(preKey, delivery);
       const job = row.job_id || 'unknown';
-      const r = normalizeAspSignal(obj, { now: this.now(), raw_text: raw, trader: this.deps.traderOf?.(job) ?? `ASP ${job.slice(0, 8)}`, created_at: row.created_at, session: this.deps.session(), job_id: job });
+      // 只有分类成 signal 的才进 normalizeAspSignal;情报/状态/报告/通知/消息只留痕,绝不产出 signal_json(不会进 capture/跟单)。
+      const r = obj ? normalizeAspSignal(obj, { now: this.now(), raw_text: raw, trader: this.deps.traderOf?.(job) ?? `ASP ${job.slice(0, 8)}`, created_at: row.created_at, session: this.deps.session(), job_id: job }) : { signal: null, errors: [cls.status === 'signal' ? '' : cls.note] };
       if (r.signal && this.deps.signalEnabled?.() === false) r.signal.backfill = true;
-      // 平台文字通知(「试用已开始」「续订成功」这类,正文没有任何 JSON)不是坏信号,记 notice 而不是 invalid/DLQ。
-      const notice = !obj && !fileDesc && !raw.includes('{') && /【|订阅|试用|subscription|renew|trial/i.test(raw);
-      const status = r.signal?.kind === 'arbitrage' ? 'arbitrage' : r.signal ? (r.signal.invalid_validity || (r.signal.valid_until !== null && r.signal.valid_until < this.now()) ? 'expired' : 'order') : r.errors[0]?.startsWith('analysis:') ? 'analysis' : notice ? 'notice' : 'invalid';
+      const status: InboxParseStatus = cls.status !== 'signal' ? cls.status : r.signal?.kind === 'arbitrage' ? 'arbitrage' : r.signal ? (r.signal.invalid_validity || (r.signal.valid_until !== null && r.signal.valid_until < this.now()) ? 'expired' : 'order') : r.errors[0]?.startsWith('analysis:') ? 'analysis' : 'invalid';
       this.db.prepare('INSERT OR IGNORE INTO okx_market_delivery_in(delivery_id,job_id,received_at,raw,parse_status,signal_id,signal_json,errors_json,signal_type,session) VALUES (?,?,?,?,?,?,?,?,?,?)').run(delivery, job, this.now(), raw, status, r.signal?.signal_id ?? null, r.signal ? JSON.stringify(r.signal) : null, JSON.stringify(r.errors), r.signal?.kind === 'arbitrage' ? 'arbitrage' : obj ? String(obj['signal_type'] ?? 'order').toLowerCase() : null, this.deps.session());
       scanned++;
       this.deps.emit('market_delivery', { delivery_id: delivery, job_id: job, parse_status: status, signal_id: r.signal?.signal_id ?? null });
@@ -987,12 +1185,43 @@ export class MarketInbox {
     }
     return signals;
   }
-  rows(opts: { job_id?: string; status?: string; limit?: number } = {}): Omit<InboxRow, 'signal_json' | 'errors_json'>[] {
-    const rows = this.db.prepare('SELECT rowid,* FROM okx_market_delivery_in WHERE (? IS NULL OR job_id=?) AND (? IS NULL OR parse_status=?) ORDER BY rowid DESC LIMIT ?').all(opts.job_id ?? null, opts.job_id ?? null, opts.status ?? null, opts.status ?? null, opts.limit ?? 100) as unknown as InboxRow[];
-    return rows.map(({ signal_json, errors_json, ...r }) => ({ ...r, raw: r.raw.slice(0, 4000), signal: signal_json ? JSON.parse(signal_json) : null, errors: JSON.parse(errors_json) }));
+  rows(opts: { job_id?: string; status?: string; limit?: number } = {}): Omit<InboxRow, 'signal_json' | 'errors_json'>[] { return marketInboxRows(this.db, opts); }
+
+  /** 展示口径计数的增量缓存:账本只追加,算过的 rowid 不再重算;本机 ASP 身份变了就整体重算。 */
+  private display: { key: string; maxRowid: number; counts: Record<string, number> } = { key: '', maxRowid: 0, counts: {} };
+  /** 按新分类规则从 raw 重算的逐状态计数(历史行不改,只在读时重算)。 */
+  displayCounts(): Record<string, number> {
+    const self = this.deps.selfAspIds?.() ?? [];
+    const key = self.join(',');
+    if (this.display.key !== key) this.display = { key, maxRowid: 0, counts: {} };
+    const rows = this.db.prepare('SELECT rowid, delivery_id, received_at, raw, parse_status, signal_json, errors_json FROM okx_market_delivery_in WHERE rowid>? ORDER BY rowid').all(this.display.maxRowid) as unknown as Parameters<typeof displayStatusOf>[0][];
+    if (!rows.length) return this.display.counts;
+    const taken = this.db.prepare('SELECT 1 AS ok FROM okx_market_delivery_in WHERE delivery_id=? AND rowid<>?');
+    const counts = { ...this.display.counts };
+    for (const row of rows) {
+      const st = displayStatusOf(row, { selfAspIds: self, deliveryTaken: (id, rowid) => !!taken.get(id, rowid) });
+      counts[st] = (counts[st] ?? 0) + 1;
+    }
+    this.display = { key, maxRowid: Number(rows[rows.length - 1]!.rowid), counts };
+    return counts;
   }
+
   status() {
     const counts = this.db.prepare("SELECT COUNT(*) AS received, SUM(parse_status='invalid') AS dlq, SUM(parse_status='analysis') AS analysis FROM okx_market_delivery_in").get()!;
-    return { transport: this.deps.settings().transport, experimental: this.deps.settings().transport === 'watch', alive: this.deps.settings().enabled && (this.watchHandle !== null || (this.lastPoll !== null && this.lastError === null)), last_poll: this.lastPoll, last_error: this.lastError, cursor: Number(this.deps.store.kvGet('market.in_cursor') ?? 0), received: Number(counts['received']), dlq: Number(counts['dlq'] ?? 0), analysis: Number(counts['analysis'] ?? 0), duplicates: this.duplicates };
+    const stored_counts = Object.fromEntries((this.db.prepare('SELECT parse_status, COUNT(*) AS n FROM okx_market_delivery_in GROUP BY parse_status').all() as { parse_status: string; n: number }[]).map((r) => [r.parse_status, Number(r.n)]));
+    const c = this.displayCounts(); const n = (k: string) => c[k] ?? 0;
+    return { transport: this.deps.settings().transport, experimental: this.deps.settings().transport === 'watch', alive: this.deps.settings().enabled && (this.watchHandle !== null || (this.lastPoll !== null && this.lastError === null)), last_poll: this.lastPoll, last_error: this.lastError, cursor: Number(this.deps.store.kvGet('market.in_cursor') ?? 0), received: Number(counts['received']), dlq: Number(counts['dlq'] ?? 0), analysis: Number(counts['analysis'] ?? 0), duplicates: this.duplicates,
+      // ---- 以下为新增字段(旧字段语义不变):counts = 按新规则重算的展示口径,stored_counts = 账本原始 parse_status。
+      counts: { ...c }, stored_counts,
+      trade_signals: n('order') + n('expired'),
+      intel_analysis: n('analysis') + n('report') + n('intel') + n('status') + n('arbitrage'),
+      unreadable: n('invalid'),
+      fetch_failed: n('fetch_failed') };
   }
+}
+
+/** 只读账本,不轮询、不推进游标、不下载附件。 */
+export function marketInboxRows(db: DatabaseSync, opts: { job_id?: string; status?: string; limit?: number } = {}): Omit<InboxRow, 'signal_json' | 'errors_json'>[] {
+    const rows = db.prepare('SELECT rowid,* FROM okx_market_delivery_in WHERE (? IS NULL OR job_id=?) AND (? IS NULL OR parse_status=?) ORDER BY rowid DESC LIMIT ?').all(opts.job_id ?? null, opts.job_id ?? null, opts.status ?? null, opts.status ?? null, opts.limit ?? 100) as unknown as InboxRow[];
+    return rows.map(({ signal_json, errors_json, ...r }) => ({ ...r, raw: r.raw.slice(0, 4000), signal: signal_json ? JSON.parse(signal_json) : null, errors: JSON.parse(errors_json) }));
 }

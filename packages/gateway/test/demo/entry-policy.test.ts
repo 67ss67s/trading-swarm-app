@@ -55,6 +55,15 @@ describe('entry policy · 市价还是限价', () => {
     expect(Number(short[0])).toBeGreaterThanOrEqual(95);
   });
 
+  it('参考区靠近现价的一端严格在不利侧,取整不会把上沿抬到现价之上(09-27 SOL 121.09 → 121.1)', () => {
+    const long = entryStyleAdvice({ side: 'long', horizon: 'intraday', checklist: chk({ retest_confirmed: false }), base: base({ last_close: 121.09, ema20: 121.2, swing_high_20_prev: 121.3, atr14: 0.9 }), mark: 121.09, style: 'prefer_limit' });
+    expect(long.zone).not.toBeNull();
+    expect(Number(long.zone![1])).toBeLessThan(121.09);
+    const short = entryStyleAdvice({ side: 'short', horizon: 'intraday', checklist: chk({ retest_confirmed: false, trend_agree: 'short' }), base: base({ last_close: 121.01, ema20: 120.9, swing_low_20_prev: 120.8, atr14: 0.9 }), mark: 121.01, style: 'prefer_limit' });
+    expect(short.zone).not.toBeNull();
+    expect(Number(short.zone![0])).toBeGreaterThan(121.01);
+  });
+
   it('闸只拒市价单,限价、非开仓、free 模式一律放行', () => {
     const advice = entryStyleAdvice({ side: 'long', horizon: 'intraday', checklist: chk({ retest_confirmed: false }), base: base({ last_close: 110, swing_high_20_prev: 104 }), mark: 110, style: 'prefer_limit' });
     expect(entryStyleGate({ action: 'PROPOSE', proposal: { entry: 'market' } }, advice, 'prefer_limit').passed).toBe(false);
@@ -266,6 +275,37 @@ describe('entry policy · 限价枚举不是免检通道(P1-07)', () => {
     expect(finalEntryCheck({ ...far, entry: 'limit', limit_price: '101', entry_timing: 'failed' }).code).toBe('timing_failed');
     // 距离算不出来不拒单(证据缺失不是拒单理由)
     expect(finalEntryCheck({ ...far, entry: 'market', limit_price: null, breakout_level: null, atr: null })).toMatchObject({ passed: true, dist_atr: null });
+  });
+
+  // 09-28 现网误撤:做多时现价还在突破位下方,模型按提示挂在参考挂单区里,却被绝对距离判成「追单/挂太远」,线程建出来几秒就撤。
+  // 「追」只有一个方向:做多在突破位上方超上限、做空在突破位下方超上限。不利侧放行。
+  const live = { entry_timing: null, style: 'prefer_limit' as const };
+  it('回归 HYPE long:现价/限价都在突破位下方 → 不算追单,放行', () => {
+    const r = finalEntryCheck({ ...live, side: 'long', entry: 'limit', limit_price: '93.022', mark: 93.003, breakout_level: 93.547, atr: 0.3167 });
+    expect(r).toMatchObject({ passed: true, code: 'ok' });
+    expect(r.dist_atr!).toBeGreaterThan(1); // dist_atr 仍是绝对距离,数值含义不变
+    expect(r.reason).toContain('不算追单');
+  });
+  it('回归 ETH long:等待型限价挂在突破位下方 2.98 ATR → 放行', () => {
+    expect(finalEntryCheck({ ...live, side: 'long', entry: 'limit', limit_price: '2693.5', mark: 2702.48, breakout_level: 2706, atr: 4.2 })).toMatchObject({ passed: true, code: 'ok', kind: 'waiting_limit', dist_atr: 2.98 });
+  });
+  it('回归 DOGE long 市价:现价在突破位下方 1.14 ATR,不是追 → 放行', () => {
+    expect(finalEntryCheck({ ...live, side: 'long', entry: 'market', limit_price: null, mark: 0.09599, breakout_level: 0.09723, atr: 0.001086 })).toMatchObject({ passed: true, code: 'ok', kind: 'market', dist_atr: 1.14 });
+  });
+  it('有利侧超上限仍拒:做多在突破位上方、做空在突破位下方', () => {
+    const lv = { ...live, breakout_level: 100, atr: 2 };
+    expect(finalEntryCheck({ ...lv, side: 'long', entry: 'market', limit_price: null, mark: 103 })).toMatchObject({ passed: false, code: 'chase_too_far', dist_atr: 1.5 });
+    expect(finalEntryCheck({ ...lv, side: 'long', entry: 'limit', limit_price: '102.5', mark: 103 })).toMatchObject({ passed: false, code: 'waiting_limit_too_far', kind: 'waiting_limit' });
+    expect(finalEntryCheck({ ...lv, side: 'short', entry: 'market', limit_price: null, mark: 97 })).toMatchObject({ passed: false, code: 'chase_too_far', dist_atr: 1.5 });
+    // 做空在突破位上方同样距离 → 不利侧,放行
+    expect(finalEntryCheck({ ...lv, side: 'short', entry: 'market', limit_price: null, mark: 103 })).toMatchObject({ passed: true, code: 'ok' });
+  });
+  it('entryStyleAdvice 与最终检查同口径:做多价在突破位下方远处不拦市价,也不说追', () => {
+    const below = entryStyleAdvice({ side: 'long', horizon: 'intraday', checklist: chk({ retest_confirmed: false }), base: base({ last_close: 98, swing_high_20_prev: 104, atr14: 2 }), mark: 98, style: 'prefer_limit' });
+    expect(below.dist_to_break_atr).toBe(3);
+    expect(below.market_blocked).toBe(false);
+    expect(below.text).toContain('不算追单');
+    expect(below.reason).not.toContain('追单成本');
   });
 
   it('entryStyleGate:市价被闸拒时,立刻成交的限价同样被拒,等待型限价放行', () => {

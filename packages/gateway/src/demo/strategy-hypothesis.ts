@@ -69,7 +69,7 @@ export interface HypothesisInputs {
 
 export function hypothesisPrompt(inp: HypothesisInputs): { system: string; user: string } {
   const system = [
-    '你是 trading-swarm 的策略假设生成器。你读最近的复盘、已批准的教训、现有策略清单和行情缺口,提出最多 3 条**新的可测策略假设**。',
+    '你是 trade-gate 的策略假设生成器。你读最近的复盘、已批准的教训、现有策略清单和行情缺口,提出最多 3 条**新的可测策略假设**。',
     '你提出的是**待验证的草稿**,不是可以上线的策略:它会先跑机械漏斗回测,再跑影子实盘,全部由代码判,你没有任何晋升权。',
     '',
     '硬约束(违反的条目会被代码直接丢掉,不会退回给你重写):',

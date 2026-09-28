@@ -4,7 +4,7 @@
  * 老网关没有 /api/models:不画。
  */
 import { Cable } from 'lucide-react';
-import { t } from '@/lib/i18n';
+import { t, listSep } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { brokenRoles, MODEL_ROLE_LABEL, okConnectionCount } from './logic';
 import { useModels } from './use-models';
@@ -14,7 +14,7 @@ export function ModelsPill() {
   if (!q.data) return null;
   const n = okConnectionCount(q.data);
   const broken = brokenRoles(q.data);
-  const title = broken.length > 0 ? t('这些角色绑定的连接失效了:{roles}', { roles: broken.map((r) => MODEL_ROLE_LABEL[r]).join('、') }) : t('去「模型连接」管理 API key / 本机 CLI 和角色底层');
+  const title = broken.length > 0 ? t('这些角色绑定的连接失效了:{roles}', { roles: broken.map((r) => MODEL_ROLE_LABEL[r]).join(listSep()) }) : t('去「模型连接」管理 API key / 本机 CLI 和角色底层');
   return (
     <a
       href="#models"

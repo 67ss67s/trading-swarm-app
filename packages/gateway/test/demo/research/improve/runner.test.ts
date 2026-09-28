@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { validate } from '@trading-swarm/contracts';
+import { validate } from '@trade-gate/contracts';
 import { openStateDb } from '../../../../src/state-db.js';
 import { ResearchStore } from '../../../../src/demo/research/store.js';
 import { StrategyStore } from '../../../../src/demo/research/strategies/store.js';

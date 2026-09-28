@@ -1,4 +1,4 @@
-// Human confirmation with one-time nonces (2026-09-06, 设计稿 §C.3):
+// Human confirmation with one-time nonces (2026-09-06, Codex 派单设计稿 §C.3):
 // 「会话开关 + 模型一句话」不等于人批。要真的动钱 / 改高风险设置,必须由界面先取一张一次性 confirm token
 // (绑定目标 id + 内容指纹,120 秒过期),再带着它调 apply/approve。模型工具里没有 approve/reject。
 
@@ -59,7 +59,9 @@ export class ConfirmationStore {
  * 对话里的 set_workflow 分两档:
  * - 直接生效(不改交易范围、不花钱、只降不升的):narrate / info_every_ms / heartbeat_every_ms / review_every_close / scan_mode / fast_move_pct / paused=true
  * - 只能提议(改交易范围、叫醒循环、换模型、改判断规则):watchlist / watch_only / timeframe / playbook_text / paused=false / brain* / cheap_brain*
- * - 永远不能(风险/杠杆/上限/自动执行/执行通道/cli_commands):拒绝
+ * - 不走这里(风险/杠杆/上限/止损距离/净RR/日亏停/仓位倍率 = 执行层):拒绝并提示改用 set_execution_policy(§9.56,
+ *   模拟盘 agent_direct 区间内直接生效,否则生成同一种 WorkflowProposal 等人确认)
+ * - 永远不能(自动执行/执行通道/cli_commands/chat_requires_approval):拒绝
  */
 export const DIRECT_WORKFLOW_KEYS = ['narrate', 'info_every_ms', 'heartbeat_every_ms', 'review_every_close', 'scan_mode', 'fast_move_pct'] as const;
 export const PROPOSAL_WORKFLOW_KEYS = ['watchlist', 'watch_only', 'timeframe', 'playbook_text', 'brain', 'brain_model', 'cheap_brain', 'cheap_brain_model'] as const;
@@ -71,7 +73,8 @@ export function splitWorkflowPatch(patch: Record<string, unknown>): { direct: Re
   for (const [k, v] of Object.entries(patch ?? {})) {
     if ((DIRECT_WORKFLOW_KEYS as readonly string[]).includes(k)) direct[k] = v;
     else if ((PROPOSAL_WORKFLOW_KEYS as readonly string[]).includes(k)) proposal[k] = v;
-    else if (k === 'paused') {
+    else if (k === 'paused' || k === 'ai_scan_paused') {
+      // 停下来直接生效,恢复要人确认(恢复就会重新开始花钱和开仓)
       if (v === true) direct[k] = v;
       else proposal[k] = v;
     } else refused.push(k); // 含 chat_requires_approval:这个开关只能人改

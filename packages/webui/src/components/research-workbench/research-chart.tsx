@@ -8,8 +8,9 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Share } from 'lucide-react';
-import type { LoopChart, LoopChartSeries, LoopSeriesRole } from '@trading-swarm/contracts';
+import type { LoopChart, LoopChartSeries, LoopSeriesRole } from '@trade-gate/contracts';
 import { cn } from '@/lib/utils';
+import { t } from '@/lib/i18n';
 
 export type ResearchChartSpec = LoopChart;
 
@@ -165,7 +166,7 @@ export function ResearchChart({ chart, height = 320, framed = true, className }:
       const { hm } = model, cw = plotW / hm.x.length, ch = plotH / hm.y.length;
       const c = Math.floor((hover.px - pad.l) / cw), r = Math.floor((hover.py - pad.t) / ch);
       if (c < 0 || r < 0 || c >= hm.x.length || r >= hm.y.length) return null;
-      return { x: pad.l + (c + 0.5) * cw, header: `${hm.y[r]} ${hm.x[c]}`, rows: [{ color: null as string | null, name: '收益', value: formatChartValue(hm.z[r]?.[c] ?? null, unit), extra: null as string | null, mode: 'bar' as const }] };
+      return { x: pad.l + (c + 0.5) * cw, header: `${hm.y[r]} ${hm.x[c]}`, rows: [{ color: null as string | null, name: t('收益'), value: formatChartValue(hm.z[r]?.[c] ?? null, unit), extra: null as string | null, mode: 'bar' as const }] };
     }
     if (chart.type === 'scatter') {
       let best: { d: number; si: number; pi: number } | null = null;
@@ -211,9 +212,9 @@ export function ResearchChart({ chart, height = 320, framed = true, className }:
       const blob = await chartPng(svg, W, H, chart, legend.filter((l) => !hidden.has(l.i)).map((l) => ({ name: l.s.name, color: l.color })));
       const ok = await copyPng(blob);
       if (!ok) downloadPng(blob, chart.title);
-      setShareState(ok ? '已复制 PNG' : '已下载 PNG');
+      setShareState(ok ? t('已复制 PNG') : t('已下载 PNG'));
     } catch {
-      setShareState('导出失败');
+      setShareState(t('导出失败'));
     }
     setTimeout(() => setShareState(null), 1800);
   }
@@ -230,13 +231,13 @@ export function ResearchChart({ chart, height = 320, framed = true, className }:
     <figure className={cn('research-chart relative m-0', framed && 'rounded-2xl border border-white/10', className)} style={{ background: BG, color: INK }} data-template={chart.template}>
       <div className="flex items-start justify-end px-3 pt-3">
         {shareState ? <span className="mr-2 self-center text-[11px]" style={{ color: INK_2 }}>{shareState}</span> : null}
-        <button type="button" onClick={share} className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 px-2.5 py-1 text-[12px] hover:bg-white/5" style={{ color: INK }} title="复制图表 PNG(不支持时下载)">
+        <button type="button" onClick={share} className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 px-2.5 py-1 text-[12px] hover:bg-white/5" style={{ color: INK }} title={t('复制图表 PNG(不支持时下载)')}>
           Share <Share className="size-3.5" />
         </button>
       </div>
       <div ref={box} className="relative px-1">
         {!model ? (
-          <div className="flex min-h-40 items-center justify-center p-4 text-xs" style={{ color: INK_2 }}>{hidden.size ? '点击图例重新显示序列' : '这张图没有可绘制的数据'}</div>
+          <div className="flex min-h-40 items-center justify-center p-4 text-xs" style={{ color: INK_2 }}>{hidden.size ? t('点击图例重新显示序列') : t('这张图没有可绘制的数据')}</div>
         ) : (
           <svg ref={svgRef} role="img" aria-label={chart.title} viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ display: 'block', fontFamily: 'ui-sans-serif, system-ui, -apple-system, "PingFang SC", sans-serif' }} onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
             <title>{chart.title}</title>
@@ -287,7 +288,7 @@ export function ResearchChart({ chart, height = 320, framed = true, className }:
       {legend.length > 1 || polarity ? (
         <div className="flex flex-wrap justify-center gap-x-5 gap-y-1 px-3 pt-1 pb-1 text-[12.5px]">
           {polarity && legend.length <= 1
-            ? [['盈利', POS], ['亏损', NEG]].map(([n, c]) => <span key={n} className="inline-flex items-center gap-1.5" style={{ color: INK_2 }}><Swatch color={c!} mode={chart.type === 'scatter' ? 'scatter' : 'bar'} />{n}</span>)
+            ? [[t('盈利'), POS], [t('亏损'), NEG]].map(([n, c]) => <span key={n} className="inline-flex items-center gap-1.5" style={{ color: INK_2 }}><Swatch color={c!} mode={chart.type === 'scatter' ? 'scatter' : 'bar'} />{n}</span>)
             : legend.map((l) => (
               <button type="button" key={l.i} aria-pressed={!hidden.has(l.i)} onClick={() => setHidden((old) => { const n = new Set(old); if (n.has(l.i)) n.delete(l.i); else if (n.size < legend.length - 1) n.add(l.i); return n; })} className={cn('inline-flex items-center gap-1.5 py-0.5', hidden.has(l.i) && 'opacity-35')} style={{ color: INK }}>
                 <Swatch color={l.color} mode={l.s.mode} />{l.s.name}

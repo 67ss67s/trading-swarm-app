@@ -6,7 +6,7 @@
  *   parseDay / dayInput           <input type="date"> 与 UTC 毫秒互转
  * 时间一律 UTC。
  */
-import type { BacktestAsset, BacktestReport, StrategyIR } from '@trading-swarm/contracts';
+import type { BacktestAsset, BacktestReport, StrategyIR } from '@trade-gate/contracts';
 
 export interface TimeRange {
   from_ms: number;

@@ -453,7 +453,7 @@ impl FuturesApi<'_> {
         self.0.signed_delete(&self.base(), "/fapi/v1/order", &params).await
     }
 
-    /// `DELETE /fapi/v1/allOpenOrders`:撤某交易对全部挂单(tswarm-demo-exec `cancel_all`)。
+    /// `DELETE /fapi/v1/allOpenOrders`:撤某交易对全部挂单(tgate-demo-exec `cancel_all`)。
     pub async fn cancel_all_open_orders(&self, symbol: &str) -> Result<Value, BinanceError> {
         self.0
             .signed_delete(&self.base(), "/fapi/v1/allOpenOrders", &[("symbol".into(), exchange_symbol(symbol))])

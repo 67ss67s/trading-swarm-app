@@ -4,8 +4,8 @@ import {specText,checkIRSpec,hasSignalExit} from './strategy-spec.js';
 import {atr} from './primitives/registry.js';
 import {DEFAULT_ORDER_GATE,roundTripCostPct,stopFloorPct,isStructureGate,type OrderGateParams} from './order-gate.js';
 import {atrSeries} from './primitives/indicators.js';
-import type {ResearchDataset} from '@trading-swarm/contracts';
-import { schemas,validate,type StrategyIR,type ResearchPolicy,type ResearchRequest,type ResearchExecution,type StrategyCompileResult,type StrategyPrimitive } from '@trading-swarm/contracts';
+import type {ResearchDataset} from '@trade-gate/contracts';
+import { schemas,validate,type StrategyIR,type ResearchPolicy,type ResearchRequest,type ResearchExecution,type StrategyCompileResult,type StrategyPrimitive } from '@trade-gate/contracts';
 import type { Brain } from '../brain.js';
 import { extractJson } from '../schema.js';
 import { registry,listPrimitives } from './primitives/index.js';
@@ -307,8 +307,8 @@ export function irCandidate(ir:StrategyIR,ctx:PrimitiveContext,legacyTargetAncho
  const targets=ir.exit.filter(x=>x.primitive==='fixed_r_target').map(x=>Number(x.params.r)),structural=ir.exit.find(x=>x.primitive==='structure_target')??ir.exit.find(x=>x.primitive==='pivot_target'),target=targets.length?close+(close-stop)*Math.min(...targets):structural?(registry.get(structural.primitive)!.compute(ctx,structural.params).target??null):null;
  return {entry:{candidate_id:`candidate_${ctx.bars[ctx.i]!.close_time}`,stop:stop.toFixed(8),target:target?.toFixed(8)??null,...(targets.length&&!legacyTargetAnchor?{target_r:Math.min(...targets)}:{}),reason:'strategy_ir_signal'},reason:'strategy_ir_signal'};
 }
-export function irExit(ir:StrategyIR,ctx:PrimitiveContext,p:Position,legacy=false):{stop:bigint|null;reason:string|null;stop_reason?:import('@trading-swarm/contracts').ResearchTrade['reason']} {
- let stop:bigint|null=null,reason:string|null=null,stop_reason:import('@trading-swarm/contracts').ResearchTrade['reason']|undefined;
+export function irExit(ir:StrategyIR,ctx:PrimitiveContext,p:Position,legacy=false):{stop:bigint|null;reason:string|null;stop_reason?:import('@trade-gate/contracts').ResearchTrade['reason']} {
+ let stop:bigint|null=null,reason:string|null=null,stop_reason:import('@trade-gate/contracts').ResearchTrade['reason']|undefined;
  for(const x of ir.exit){if(['fixed_r_target','structure_target','pivot_target'].includes(x.primitive))continue;const v=legacy&&x.primitive==='swing_structure_stop'?{stop:ctx.position?Math.min(...ctx.bars.slice(-Number(x.params.lookback)).map(b=>Number(b.low))):undefined}:registry.get(x.primitive)!.compute(ctx,x.params);if(v.exit)reason??=!legacy&&x.primitive==='time_stop'?'time':x.primitive;if(v.stop!==undefined&&Number.isFinite(v.stop)&&v.stop>0){const value=q(v.stop.toFixed(8));if(value>p.stop&&(stop===null||value>stop)){stop=value;stop_reason=legacy?undefined:x.primitive==='chandelier_trail'?'trail':x.primitive==='breakeven_after_r'?'breakeven':'structure';}}}
  return {stop,reason,stop_reason};
 }

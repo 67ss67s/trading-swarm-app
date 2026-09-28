@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect } from 'vitest';
-import { validate, type ResearchBar } from '@trading-swarm/contracts';
+import { validate, type ResearchBar } from '@trade-gate/contracts';
 import { openStateDb } from '../../../src/state-db.js';
 import { ResearchStore } from '../../../src/demo/research/store.js';
 import { ResearchService } from '../../../src/demo/research/service.js';
@@ -27,7 +27,8 @@ const W = { from_ms: Date.UTC(2022, 0, 1), to_ms: Date.UTC(2025, 1, 8) };
 describe('全窗口多资产回测报告', { timeout: 120000 }, () => {
   it('全窗口 + 70/30 分段 + 三条序列(BTC / ETH / BTC+ETH),报告过契约校验并落库', async () => {
     const { store, service } = env();
-    const r = await runBacktestReport({ store, service, loader: loader() }, { strategy_ir: emaIR(), timeframe: '1d', ...W, meta });
+    // 2026-09-27 执行层:本用例验证窗口/分段/篮子记账,与执行层无关。合成日线 3×ATR 止损约 5.3–6.4%,超过执行层止损上限 5%,缺省阈值会把 22 个候选全挡(stop_too_wide,这是真实结论);这里传 null,不按执行层挡单
+    const r = await runBacktestReport({ store, service, loader: loader() }, { strategy_ir: emaIR(), timeframe: '1d', ...W, meta, execution_thresholds: null });
     expect(validate('research-backtest', r).ok).toBe(true);
     expect(r.engine_version).toBe('research-spot-ir-v5'); // 09-23 结构口径:报告缺省 order_gate 带 min_stop_atr
     expect(r.assets.map((a) => [a.key, a.kind, a.status])).toEqual([['BTCUSDT', 'single', 'completed'], ['ETHUSDT', 'single', 'completed'], ['BTC+ETH', 'basket', 'completed']]);
@@ -75,7 +76,8 @@ describe('全窗口多资产回测报告', { timeout: 120000 }, () => {
   });
   it('篮子净值 = 两腿(各半资金)之和,基准同为 50/50 持有', async () => {
     const { store, service } = env();
-    const r = await runBacktestReport({ store, service, loader: loader() }, { strategy_ir: emaIR(), timeframe: '1d', ...W, meta });
+    // 2026-09-27 执行层:本用例验证窗口/分段/篮子记账,与执行层无关。合成日线 3×ATR 止损约 5.3–6.4%,超过执行层止损上限 5%,缺省阈值会把 22 个候选全挡(stop_too_wide,这是真实结论);这里传 null,不按执行层挡单
+    const r = await runBacktestReport({ store, service, loader: loader() }, { strategy_ir: emaIR(), timeframe: '1d', ...W, meta, execution_thresholds: null });
     const basket = r.assets.find((a) => a.key === 'BTC+ETH')!;
     const legs = await Promise.all(['BTCUSDT', 'ETHUSDT'].map(async (sym) => {
       const asset = r.assets.find((a) => a.key === sym)!, d = store.dataset(asset.data!.dataset_id!);

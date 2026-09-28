@@ -32,7 +32,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { DAILY_REGIME_LABEL, dailyRegimeClass, fmtDate, fmtDateTime, relativeTime } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { t, tmap } from '@/lib/i18n';
+import { t, tmap, listSep } from '@/lib/i18n';
 
 /** 期望取自哪一档。`lab_expectancy_r` 是毛值——单独再挂一个「毛值」徽章。 */
 const EXPECTANCY_SOURCE_LABEL: Record<AllocatorExpectancySource, string> = tmap({
@@ -311,7 +311,7 @@ export function AllocatorCard({ all, active }: { all: StrategyView[]; active: st
         <p className="leading-relaxed">{t('一步把票池换回上一次的样子。回滚不受最短驻留 3 天与冷却 1 天的约束,同样会写进台账。')}</p>
         {view?.previous ? (
           <p className="num leading-relaxed text-muted-foreground">
-            {t('回滚到')}:{view.previous.map((id) => all.find((x) => x.id === id)?.name ?? id).join('、') || t('空票池')}
+            {t('回滚到')}:{view.previous.map((id) => all.find((x) => x.id === id)?.name ?? id).join(listSep()) || t('空票池')}
           </p>
         ) : null}
       </ConfirmDialog>

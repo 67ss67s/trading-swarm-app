@@ -6,7 +6,7 @@
  *   total_return / max_drawdown / win_rate 都是**小数**(0.074 = 7.4%),带 _pct 后缀的字段才是百分数。
  *   如果后端最后定成百分数,只改下面 ratioToPct 一处。
  */
-import type { ResearchStrategy, ResearchStrategyStatus, ResearchStrategySummary } from '@trading-swarm/contracts';
+import type { ResearchStrategy, ResearchStrategyStatus, ResearchStrategySummary } from '@trade-gate/contracts';
 import { t, tmap } from '@/lib/i18n';
 
 export type StrategyFilter = 'all' | 'live' | 'watchlist' | 'alerts';

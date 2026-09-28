@@ -5,7 +5,7 @@
  * 替换后必须过零模型编译检查(checkIR + 不引入新的策略规范 block),过不了的直接丢;止盈目标(fixed_r_target / structure_target)不参与替换。
  * 产出顺序:止损、信号、离场、方向门轮流各出一个,保证预算截断时各段都有代表。
  */
-import type { StrategyIR, StrategyPrimitive } from '@trading-swarm/contracts';
+import type { StrategyIR, StrategyPrimitive } from '@trade-gate/contracts';
 import { node, timeframeMillis } from '../../strategy.js';
 import { registry } from '../../primitives/index.js';
 import type { CandidateGenerator, GeneratorContext } from '../types.js';

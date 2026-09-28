@@ -1,6 +1,7 @@
 import {candidateGate as evaluateCandidate,fitCandidate,fixedTargetR} from './candidate-gate.js';
 import {htfStructure} from './primitives/structure.js';
 import { evaluateOrderGate, LEGACY_ORDER_GATE, isStructureGate } from './order-gate.js';
+import { ExecutionTally } from './execution-gate.js';
 import { atrSeries } from './primitives/indicators.js';
 import { checkProposalSpec } from './strategy-spec.js';
 import { diagnostics } from './diagnostics.js';
@@ -8,14 +9,14 @@ import { resolveRequest,irCandidate,irExit,irWarmup,strategyNodes } from './stra
 import { volTargetOf,volTargetWeight } from './primitives/sizing.js';
 import { createHash } from 'node:crypto';
 import { trendState } from './primitives/trend-state.js';
-import type {ResearchEntry, ResearchDataset, ResearchRequest, ResearchBar, ResearchDecision, ResearchArmResult, ResearchMetrics, ResearchScreenRow, ResearchTrend, ResearchPolicy, StrategyIR } from '@trading-swarm/contracts';
+import type {ResearchEntry, ResearchDataset, ResearchRequest, ResearchBar, ResearchDecision, ResearchArmResult, ResearchMetrics, ResearchScreenRow, ResearchTrend, ResearchPolicy, StrategyIR } from '@trade-gate/contracts';
 import { SpotLedger, type Entry } from './ledger.js';
 import { clone, hash, decimal, q, mul, ENGINE_VERSION } from './primitives.js';
 import { sharpe, bootstrapCI } from '../replay-stats.js';
-export type DecisionView = import('@trading-swarm/contracts').ResearchDecisionView;
-export type AgentAction = import('@trading-swarm/contracts').ResearchAgentAction;
+export type DecisionView = import('@trade-gate/contracts').ResearchDecisionView;
+export type AgentAction = import('@trade-gate/contracts').ResearchAgentAction;
 export type Decider=(v:DecisionView)=>Promise<AgentAction>;
-export type RecordedDecision = import('@trading-swarm/contracts').ResearchRecordedDecision;
+export type RecordedDecision = import('@trade-gate/contracts').ResearchRecordedDecision;
 export interface RunResult { evaluation?:ReturnType<typeof import('./evaluation.js').selectionEvaluation>; engine_version:string;status:'completed'|'cancelled'|'budget_exhausted'|'failed'; error:string|null; arms:ResearchArmResult[]; recordings:RecordedDecision[]; comparison:ReturnType<typeof compareArms>; }
 export class StopRun extends Error {constructor(readonly status:'cancelled'|'budget_exhausted',message:string){super(message);}}
 export async function safeDecision(decide:Decider,v:DecisionView):Promise<AgentAction> {
@@ -99,8 +100,11 @@ export async function runReplay(d:ResearchDataset,raw:ResearchRequest,decide:Dec
     const gateStats={evaluated:0,passed:0,adjusted:{stop_widened:0,target_fallback:0},blocked_by:{} as Record<string,number>};const trackGate=(gate:ReturnType<typeof evaluateOrderGate>)=>{gateStats.evaluated++;if(gate.ok)gateStats.passed++;for(const key of gate.blocked_by)gateStats.blocked_by[key]=(gateStats.blocked_by[key]??0)+1;return gate;};const trackFit=(e:ResearchEntry)=>{if(e.fit?.stop_source==='cost_floor')gateStats.adjusted.stop_widened++;if(e.fit?.target_source==='fallback_r')gateStats.adjusted.target_fallback++;return e;};
     // Fit (place-then-judge) only exists for requests whose frozen order_gate carries stop_floor; older manifests replay with the block-only gate they were recorded under.
     const fitEnabled=!!r.order_gate&&r.order_gate.stop_floor!==undefined,fixedR=fixedTargetR(ir,r.policy);
-    // 结构口径:决策时刻的 ATR(14,Wilder,整段数据一次算好;第 i 根只依赖 ≤ i 的 bar,因果不变)给「止损太近不做」用;旧口径不算
-    const atrAt=isStructureGate(r.order_gate)?(()=>{const s=atrSeries(d.bars,14);return (i:number)=>{const x=s[i];return x!==undefined&&Number.isFinite(x)?x:null;};})():null;
+    // 结构口径:决策时刻的 ATR(14,Wilder,整段数据一次算好;第 i 根只依赖 ≤ i 的 bar,因果不变)给「止损太近不做」用;
+    // 冻结了执行层阈值(execution_thresholds)时也算,给执行层的 ATR 止损下限用;两者都没有(旧口径)不算
+    const execTh=r.order_gate?.execution_thresholds??null,tally=execTh?new ExecutionTally(execTh):null;
+    const trackExec=(gate:ReturnType<typeof evaluateOrderGate>,at:number)=>{if(tally&&gate.execution)tally.add(d.symbol,at,gate.execution);return gate;};
+    const atrAt=isStructureGate(r.order_gate)||execTh?(()=>{const s=atrSeries(d.bars,14);return (i:number)=>{const x=s[i];return x!==undefined&&Number.isFinite(x)?x:null;};})():null;
     const l=new SpotLedger(r.execution,{symbol:d.symbol,diagnostics:opts.diagnostics,order_gate:r.order_gate,fit:fitEnabled,onGate:trackGate,...(fast?{bar_path:'adaptive' as const}:{})}),decisions:ResearchDecision[]=[];let summary:string|null=null;let failures=0;
     l.mark(first);
     try {
@@ -118,7 +122,7 @@ export async function runReplay(d:ResearchDataset,raw:ResearchRequest,decide:Dec
         const exit=ir&&p&&!ir.compatibility?(memo?.get(exitKey) as ReturnType<typeof irExit>|undefined)??(()=>{const x=irExit(ir,{...ictx,position:pctx!,fee_rate:Number(r.execution.fee_rate)},p,opts.legacy);memo?.set(exitKey,x);return x;})():null;
         if(exit?.stop){p!.stop=exit.stop;p!.stop_reason=exit.stop_reason;if(v.position)v.position.stop=decimal(exit.stop);}
         let action:AgentAction={action:'no_trade',reason:signal?.reason??'no_candidate',gate_errors:notices,evidence_refs:[]};
-        const candidateGate=candidate&&r.order_gate&&!p?trackGate(evaluateCandidate(candidate,b.close,v.account.cash,v.account.equity,r.execution,r.order_gate,false,...(atrAt?[atrAt(i)]:[]))):null;
+        const candidateGate=candidate&&r.order_gate&&!p?trackGate(trackExec(evaluateCandidate(candidate,b.close,v.account.cash,v.account.equity,r.execution,r.order_gate,false,...(atrAt?[atrAt(i)]:[])),b.close_time)):null;
         const last=i===end;
         if(last) action={...action,reason:'terminal_mark_no_new_decision'};
         else if(notices.some(x=>['min_rr','stop_too_tight','no_target','risk_cap','stop_side'].includes(x)))action={...action,action:'blocked',reason:'fill_order_gate',gate_errors:notices};
@@ -148,10 +152,10 @@ export async function runReplay(d:ResearchDataset,raw:ResearchRequest,decide:Dec
           if(l.position){action={...action,gate_errors:[...action.gate_errors,'position_capacity']};}
           else {
             let entry=arm.startsWith('c_filter')?candidate:action.entry;
-            if(entry){if(fitEnabled&&!entry.fit)entry=trackFit(fitCandidate(entry,b.close,r.execution,r.order_gate!));const gate=r.order_gate?trackGate(evaluateCandidate(entry,b.close,v.account.cash,v.account.equity,r.execution,r.order_gate,false,...(atrAt?[atrAt(i)]:[]))):null;if(gate&&!gate.ok)action={...action,action:'blocked',reason:'order_gate',gate_errors:gate.blocked_by};else l.pending={action:'enter',entry:clone(entry),...(vt?{size_weight:volTargetWeight(d.bars,i,d.timeframe_ms,vt).weight.toFixed(8)}:{})};}
+            if(entry){if(fitEnabled&&!entry.fit)entry=trackFit(fitCandidate(entry,b.close,r.execution,r.order_gate!));const gate=r.order_gate?trackGate(trackExec(evaluateCandidate(entry,b.close,v.account.cash,v.account.equity,r.execution,r.order_gate,false,...(atrAt?[atrAt(i)]:[])),b.close_time)):null;if(gate&&!gate.ok)action={...action,action:'blocked',reason:'order_gate',gate_errors:gate.blocked_by};else l.pending={action:'enter',entry:clone(entry),...(vt?{size_weight:volTargetWeight(d.bars,i,d.timeframe_ms,vt).weight.toFixed(8)}:{})};}
             else action={...action,action:'blocked',gate_errors:[...action.gate_errors,'missing_entry']};
           }
-        } else if((action.action==='exit'||action.action==='reduce') && l.position) l.pending={action:action.action,reason:exit?.reason?exit.reason as import('@trading-swarm/contracts').ResearchTrade['reason']:action.reason==='holding_horizon'?(r.execution.sizing_mode?'time':'horizon'):action.action==='reduce'?'agent_reduce':'agent_exit'};
+        } else if((action.action==='exit'||action.action==='reduce') && l.position) l.pending={action:action.action,reason:exit?.reason?exit.reason as import('@trade-gate/contracts').ResearchTrade['reason']:action.reason==='holding_horizon'?(r.execution.sizing_mode?'time':'horizon'):action.action==='reduce'?'agent_reduce':'agent_exit'};
         const row:ResearchDecision={id:`${arm}_${i}`,at:b.close_time,arm,candidate_id:candidate?.candidate_id??null,action:action.action,reason:action.reason,input_hash:inputHash,decision_hash:hash({...action,entry:action.entry??null}),evidence_refs:action.evidence_refs,gate_errors:action.gate_errors,...((action.entry??candidate)?.fit?{fit:(action.entry??candidate)!.fit}:{})};
         // 策略规范:B 臂 proposal(放置前的原始止损/止盈)违反了哪些条款;只对冻结了 spec_version 的 run 记录,旧 manifest 重放哈希不变。
         // 没冻结 order_gate 的只可能是旧 manifest(新 run 由 store 补缺省):按旧口径判,不随新缺省漂移。
@@ -164,7 +168,8 @@ export async function runReplay(d:ResearchDataset,raw:ResearchRequest,decide:Dec
         if((i-start)%(fast?500:50)===0||performance.now()-lastYield>20){await new Promise<void>(resolve=>setImmediate(resolve));lastYield=performance.now();}
       }
     }catch(e){status=e instanceof StopRun?e.status:'failed';error=e instanceof Error?e.message:String(e);}
-    const armResult={arm,metrics:metrics(l),decisions,trades:l.trades,equity:l.equity,pending_at_end:!!l.pending};
+    // 执行层统计只在冻结了阈值时出现(条件展开):旧 manifest 的臂结果与结果哈希不变
+    const armResult={arm,metrics:metrics(l),decisions,trades:l.trades,equity:l.equity,pending_at_end:!!l.pending,...(tally?{execution_gate:tally.stats()}:{})};
     arms.push(opts.diagnostics?{...armResult,diagnostics:diagnostics(armResult,[d],undefined,l.slippage,r.order_gate?gateStats:undefined)}:armResult);
     if(status!=='completed')break;
   }

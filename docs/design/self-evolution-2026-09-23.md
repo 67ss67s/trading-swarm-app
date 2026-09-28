@@ -1,6 +1,6 @@
 # 自进化架构:记忆分域 + 受正则约束的 harness 进化(2026-09-23)
 
-> 起因:Jacky 要给模型组件加「一定程度的 self-evolving / self-learning」。现状只有一个 universal 记忆,没有哪个 agent 有隔离记忆。本文是架构设计,落地派 主线(effort 别太高)。参考论文 RRSI(arXiv 2609.24972,Google Cloud AI Research,2026-09-22)。
+> 起因:Jacky 要给模型组件加「一定程度的 self-evolving / self-learning」。现状只有一个 universal 记忆,没有哪个 agent 有隔离记忆。本文是架构设计,落地派 Opus 5.5(effort 别太高)。参考论文 RRSI(arXiv 2609.24972,Google Cloud AI Research,2026-09-22)。
 > 硬约束不变:模型只提议;风控代码只能否决/收紧;executor 唯一持 exchange.write;任何改行为的东西都要有 eval 前后对照。
 
 ## 0. 先说结论
@@ -13,7 +13,7 @@
 
 记忆:`demo_memory` 单表,`scope={symbol,timeframe,regime}`,kind ∈ lesson/preference/fact/calibration,status proposed→active。写入方:平仓模板事实(system)、Reviewer 批次教训(agent,≤2 条/批,人批)、归因(agent,永不 apply)、用户 remember(直接 active)。读取方:判断前 `runtime.ts recallFor()`(≤5 条/600 字,作为 `E#[记忆]` 证据注入)、对话 recall 工具、UI 搜索。**没有 role / strategy_id 字段;没有「这条记忆被引用后的判断结果如何」的回写**(只有 use_count)。
 
-反馈回路(自动 vs 人批,详表见工作线盘点,摘要):
+反馈回路(自动 vs 人批,详表见子代理盘点,摘要):
 
 | 回路 | 自动到哪一步 | 隔离域 |
 |---|---|---|
@@ -47,7 +47,7 @@
 
 RRSI 的核心一步:**用不改任何东西的 H0 重复跑 k 次 evolve set,得到经验噪声带 δ**。交易里等价于:同一批冻结 case(eval-a 的 case + 研究台冻结数据集上的 B 臂重放),同 prompt 同模型跑 k=3 次,量 `judgment_alpha` / `regret_exit` 的方差。**没有 δ 之前,禁止任何自动接受。** 这个数字要存进 `harness_eval_baseline` 表,和每次评估一起存。
 
-**复审的保留意见(照收)**:同一 case 重跑 k 次只量到模型采样噪声,量不到市场抽样、regime、策略选择和时间相关性;18 笔交易的有效独立簇远小于行数;触发节奏一改,旧 case 的决策分布也变了,离线评分不再是可靠反事实。所以 δ 之前还有更前置的一步:**定义 estimand、独立簇(按线程/候选机会聚类)、as-of 数据、walk-forward / evolve / pristine-holdout 三分法**,再建生产 harness 的配对回放。RRSI 论文自己也把「held-out/OOD 迁移」当核心证据,只在 evolve set 上超过噪声不算数。
+**Codex 复审的保留意见(照收)**:同一 case 重跑 k 次只量到模型采样噪声,量不到市场抽样、regime、策略选择和时间相关性;18 笔交易的有效独立簇远小于行数;触发节奏一改,旧 case 的决策分布也变了,离线评分不再是可靠反事实。所以 δ 之前还有更前置的一步:**定义 estimand、独立簇(按线程/候选机会聚类)、as-of 数据、walk-forward / evolve / pristine-holdout 三分法**,再建生产 harness 的配对回放。RRSI 论文自己也把「held-out/OOD 迁移」当核心证据,只在 evolve set 上超过噪声不算数。
 
 ### 2.4 每决策成本
 
@@ -97,7 +97,7 @@ RRSI 的组件词表 K = {prompt, control_flow, config, output_plumbing, context
 
 - 噪声地板:`S(H') ≥ S* − δ`;
 - 成本规则:`ΔS > δ` 时要求 `ΔC ≤ β0 + β1·ΔS`(β0=10% token 宽容,β1 按「每 +0.1R 允许 +25% token」起步);`ΔS ≤ δ` 时用带内规则:只有降成本或触到从没动过的结构组件才准进;
-- 域守卫:`evidence_valid` / `schema_valid` 下降 > 3 个点直接拒(对应 RRSI 的 valid-output guard);**不用 PROPOSE 率做守卫**——更少但更好的提案可能恰是改进(外部评审);评分按「每个候选机会」配对,skip 记 0R;
+- 域守卫:`evidence_valid` / `schema_valid` 下降 > 3 个点直接拒(对应 RRSI 的 valid-output guard);**不用 PROPOSE 率做守卫**——更少但更好的提案可能恰是改进(Codex);评分按「每个候选机会」配对,skip 记 0R;
 - 剪枝:连续 n_prune=4 轮无正增益的组件,下一轮提案必须包含删除它的候选(证据字段没人引用、触发器 14 天 0 次 PROPOSE、记忆 cited 后 regret 更高 → 全是剪枝对象)。
 
 ### 4.5 部署侧(和策略一样走状态机)
@@ -123,7 +123,7 @@ RRSI 的组件词表 K = {prompt, control_flow, config, output_plumbing, context
 
 ### 5.2 域(namespace)与读写矩阵
 
-`scope` 扩为 `{layer: 'global'|'role'|'strategy'|'symbol'|'thread', role?, strategy_id?, symbol?, timeframe?, regime?}`。**复审(照收,P0-2 落地后下一版改)**:`layer` 把「谁能读」(audience ACL)和「适用于什么」(applicability:strategy × symbol × regime 可以同时成立)混成一个互斥枚举;应拆成 ACL 字段 + 适用维度字段。另两条:用户在对话里口述的记忆直接 active 且可落 global,是一个持久化 prompt-injection 面,global 层的用户写入也该过一次确认;「被引用后的 R/regret」不是因果归因(被召回的记忆本来就在更难的情景出现),只能做剪枝候选标记,且要配同层未引用基线。
+`scope` 扩为 `{layer: 'global'|'role'|'strategy'|'symbol'|'thread', role?, strategy_id?, symbol?, timeframe?, regime?}`。**Codex 复审(照收,P0-2 落地后下一版改)**:`layer` 把「谁能读」(audience ACL)和「适用于什么」(applicability:strategy × symbol × regime 可以同时成立)混成一个互斥枚举;应拆成 ACL 字段 + 适用维度字段。另两条:用户在对话里口述的记忆直接 active 且可落 global,是一个持久化 prompt-injection 面,global 层的用户写入也该过一次确认;「被引用后的 R/regret」不是因果归因(被召回的记忆本来就在更难的情景出现),只能做剪枝候选标记,且要配同层未引用基线。
 
 | 角色 | 可读 | 可写(提案) |
 |---|---|---|
@@ -148,7 +148,7 @@ RRSI 的组件词表 K = {prompt, control_flow, config, output_plumbing, context
 - **角色级 self-eval**:Reviewer 提的教训在 holdout 上 `lesson_regret_delta` 是否为负(团队角色文档 §4 早已写了 `lesson_transfer`,一直没做)。
 - **策略级「什么时候不要叫模型」**:C 臂 alpha ≤ 0 的策略直接 mechanical 模式,这本身就是进化(减法)。
 
-## 6. 落地顺序(给 主线 的工单边界)
+## 6. 落地顺序(给 Opus 5.5 的工单边界)
 
 P0(本周,纯代码,零模型调用,先做):
 1. 判断账本 v2:持仓期 HOLD/EXIT 反事实三条腿 + `regret_exit`,按 strategy×tf×trigger×prompt_version 分层(judgment-ledger.ts、runtime.ts 记录点、routes-judgment.ts 展示)。
@@ -156,6 +156,6 @@ P0(本周,纯代码,零模型调用,先做):
 3. `episode.harness_version_id`:先把 {prompt_version, holding_policy_version, trigger_policy_version} 打成哈希记上,账本按它分层。
 
 P1(下周):harness_component / harness_edit 表与 seed;评估器接研究台 B 臂;δ 校准脚本。
-P2:Proposer + Critic + Selector 的第一轮(目标只做剪枝)——**外部评审 判定现阶段是幻想,不启动**;样本、holdout 与因果识别都不够,先把 P0/P1 的度量与 estimand 做出来。
+P2:Proposer + Critic + Selector 的第一轮(目标只做剪枝)——**Codex 判定现阶段是幻想,不启动**;样本、holdout 与因果识别都不够,先把 P0/P1 的度量与 estimand 做出来。
 
 不做:让任何 agent 在线改 prompt;让记忆改数字;跳过 δ 直接接受;按 memory cited regret 自动剪枝。

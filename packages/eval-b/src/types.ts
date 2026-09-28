@@ -1,4 +1,4 @@
-import { demo } from '@trading-swarm/gateway';
+import { demo } from '@trade-gate/gateway';
 
 export interface EvalCase {
   id: string;
@@ -80,7 +80,7 @@ export interface EvalEpisode {
 
 export interface RunManifest {
   version: 1;
-  harness: '@trading-swarm/eval-b';
+  harness: '@trade-gate/eval-b';
   cases_dir: string;
   brain: string;
   prompt_version: string;
@@ -101,7 +101,7 @@ export interface Metric {
 
 export interface EvalReport {
   version: 1;
-  harness: '@trading-swarm/eval-b';
+  harness: '@trade-gate/eval-b';
   run_dir: string;
   brain: string;
   episode_count: number;

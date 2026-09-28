@@ -3,7 +3,7 @@
  * 只做 SQL 读写和行↔契约对象的转换;状态机和挂链规则在 service.ts。
  */
 import type { DatabaseSync } from 'node:sqlite';
-import type { BacktestReportSummary, ResearchStrategy, ResearchStrategyEvent, ResearchStrategyEventKind, ResearchStrategyOrigin, ResearchStrategyStatus, ResearchStrategySummary, ResearchStrategyVersion, StrategyIR } from '@trading-swarm/contracts';
+import type { BacktestReportSummary, ResearchStrategy, ResearchStrategyEvent, ResearchStrategyEventKind, ResearchStrategyOrigin, ResearchStrategyStatus, ResearchStrategySummary, ResearchStrategyVersion, StrategyIR } from '@trade-gate/contracts';
 
 export type StrategyFilter = 'all' | 'live' | 'watchlist' | 'alerts' | 'archived';
 export type StrategySort = 'updated' | 'return' | 'sharpe' | 'name';

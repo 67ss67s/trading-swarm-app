@@ -1,6 +1,6 @@
 /**
  * 批量研究主进程:worker_threads 池跑全部变体(零模型,不进 18811 网关进程)→ 汇总排行榜/Deflated Sharpe/门槛/每族冠军
- * → 随机入场基线(验证段前 N + 每族冠军)→ 每族冠军跑一次留出段。结果写 ~/.trading-swarm-okx/research-batch/results.json(可断点续跑)。
+ * → 随机入场基线(验证段前 N + 每族冠军)→ 每族冠军跑一次留出段。结果写 ~/.trade-gate-okx/research-batch/results.json(可断点续跑)。
  * 用法:node --experimental-transform-types --no-warnings --import ./scripts/research-oracle/register.mjs scripts/research-batch/run.ts [--workers 5] [--tf 1d,4h] [--only-eval]
  */
 import { Worker } from 'node:worker_threads';

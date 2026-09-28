@@ -15,6 +15,14 @@ export function askAgent(question: string): void {
   window.dispatchEvent(new CustomEvent(EVENT));
 }
 
+/**
+ * 只把问题放进信箱,不跳页、不发事件——交易页「让 agent 调参」新开会话后重挂 ChatPanel,挂载时读走。
+ * (发事件会让当前挂着的旧会话面板先把它读走。)
+ */
+export function stageAgentQuestion(question: string): void {
+  pending = question;
+}
+
 export function takePendingQuestion(): string | null {
   const q = pending;
   pending = null;

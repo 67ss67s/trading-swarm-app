@@ -1,5 +1,5 @@
 /** 订单周期执行核入口(WP-F)。第二阶段由全窗口回测在 IR 带 order 块时调用 runOrderPath;不带 order 块时沿用旧执行路径。 */
-import type { ResearchBar, StrategyIR, OrderGateParams, BacktestSegmentName } from '@trading-swarm/contracts';
+import type { ResearchBar, StrategyIR, OrderGateParams, BacktestSegmentName } from '@trade-gate/contracts';
 import { judgeWithBars } from '../judge/index.js';
 import { intentSnapshot } from '../judge/candidate.js';
 import { simulateOrders, simulateOrdersAsync } from './simulate.js';
@@ -33,7 +33,7 @@ function pathSetup(x: OrderPathInput) {
   const perpDefault = x.ir.order?.market === 'perp';
   const taker = x.fee_rate ?? (perpDefault ? '0.0005' : '0.001'), maker = x.maker_fee_rate ?? (perpDefault ? '0.0002' : taker), slip = x.slippage_bps ?? '5';
   const opts = { fee_rate: taker, slippage_bps: slip, gate: x.gate ?? null, from_index: x.from_index, to_index: x.to_index, ...(x.view_bars ? { view: x.view_bars } : {}), ...(x.memo ? { memo: x.memo } : {}) };
-  const params = (order: ReturnType<typeof orderExecOverrides>) => ({ symbol: x.symbol, timeframe_ms: x.timeframe_ms, initial_cash: x.initial_cash, taker_fee_rate: Number(taker), maker_fee_rate: Number(maker), slippage_bps: Number(slip), ...order, funding: x.funding ?? null, ...(x.mark ? { mark: x.mark.slice(x.from_index, x.to_index + 1) } : {}), ...(x.maintenance_margin !== undefined ? { maintenance_margin: x.maintenance_margin } : {}), ...(x.segment_of ? { segment_of: x.segment_of } : {}), ...(x.id_prefix ? { id_prefix: x.id_prefix } : {}), ...(x.margin_fraction !== undefined ? { margin_fraction: x.margin_fraction } : {}), ...(isStructureGate(x.gate) ? { structure: true } : {}) });
+  const params = (order: ReturnType<typeof orderExecOverrides>) => ({ symbol: x.symbol, timeframe_ms: x.timeframe_ms, initial_cash: x.initial_cash, taker_fee_rate: Number(taker), maker_fee_rate: Number(maker), slippage_bps: Number(slip), ...order, funding: x.funding ?? null, ...(x.mark ? { mark: x.mark.slice(x.from_index, x.to_index + 1) } : {}), ...(x.maintenance_margin !== undefined ? { maintenance_margin: x.maintenance_margin } : {}), ...(x.segment_of ? { segment_of: x.segment_of } : {}), ...(x.id_prefix ? { id_prefix: x.id_prefix } : {}), ...(x.margin_fraction !== undefined ? { margin_fraction: x.margin_fraction } : {}), ...(isStructureGate(x.gate) ? { structure: true } : {}), ...(x.gate?.execution_thresholds ? { execution_thresholds: x.gate.execution_thresholds } : {}) });
   const manager = () => orderManager(x.ir, x.bars, x.timeframe_ms, { fee_rate: taker, offset: x.from_index, ...(x.view_bars ? { view: x.view_bars } : {}) });
   return { opts, params, manager, window: () => x.bars.slice(x.from_index, x.to_index + 1).map(toOrderBar) };
 }

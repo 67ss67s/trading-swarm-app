@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://trading-swarm.local/schema/research-loop.json",
+  "$id": "https://trade-gate.local/schema/research-loop.json",
   "title": "ResearchLoop",
   "anyOf": [
     {

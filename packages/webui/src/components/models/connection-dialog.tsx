@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { friendlyError } from '@/lib/edition';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { KindIcon } from './kind-icon';
@@ -38,8 +39,8 @@ const ERROR_HINT: Record<string, string> = {
 export function saveErrorText(e: Error): string {
   const code = (e as Error & { code?: string }).code;
   const hint = code ? ERROR_HINT[code] : undefined;
-  if (!hint) return e.message;
-  return code === 'base_url_blocked' || code === 'base_url_unresolvable' ? `${t(hint)}:${e.message}` : t(hint);
+  if (!hint) return friendlyError(e.message);
+  return code === 'base_url_blocked' || code === 'base_url_unresolvable' ? `${t(hint)}:${friendlyError(e.message)}` : t(hint);
 }
 
 /** 连接建好 / 改好 / 测完都要落进 ['models'] 缓存;SSE models.changed 也会来,这里先乐观写一份 */
@@ -87,7 +88,7 @@ export function ConnectionDialog({ open, onOpenChange, editing, cliDetected }: {
       setTest(res);
       qc.setQueryData<ModelsView>(MODELS_QUERY_KEY, (old) => applyTestResult(old, id, res));
     } catch (e) {
-      setTest({ at: Date.now(), ok: false, latency_ms: null, detail: e instanceof Error ? e.message : String(e) });
+      setTest({ at: Date.now(), ok: false, latency_ms: null, detail: friendlyError(e instanceof Error ? e.message : String(e)) });
     } finally {
       setPhase('done');
       void qc.invalidateQueries({ queryKey: MODELS_QUERY_KEY });
@@ -253,7 +254,7 @@ export function ConnectionDialog({ open, onOpenChange, editing, cliDetected }: {
                   </Badge>
                   {test.latency_ms != null ? <span className="num">{test.latency_ms}ms</span> : null}
                 </div>
-                <div className="num break-words text-[11px] text-muted-foreground">{test.detail}</div>
+                <div className="num break-words text-[11px] text-muted-foreground">{friendlyError(test.detail)}</div>
                 {!test.ok ? <div className="text-[11px] text-muted-foreground">{t('连接已经存下了,可以关掉后在列表里「编辑」改 key 再测。')}</div> : null}
               </div>
             ) : null}

@@ -1,4 +1,4 @@
-import type { BacktestReport } from "@trading-swarm/contracts";
+import type { BacktestReport } from "@trade-gate/contracts";
 
 // 回测报告落库后的广播点:回测引擎(loop/backtest.ts)只管 emit,策略对象服务(strategies/)订阅后
 // 把报告挂到「策略 → 版本 → 报告」链上。两边互不 import,避免回测引擎依赖策略生命周期。

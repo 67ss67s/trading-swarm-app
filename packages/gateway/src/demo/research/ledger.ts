@@ -1,7 +1,7 @@
 import { evaluateOrderGate, fitOrderGate, riskCapApplies, type OrderGateParams } from './order-gate.js';
-import type { ResearchBar, ResearchEquity, ResearchExecution, ResearchTrade } from '@trading-swarm/contracts';
+import type { ResearchBar, ResearchEquity, ResearchExecution, ResearchTrade } from '@trade-gate/contracts';
 import { q, decimal, mul, div, min, SCALE } from './primitives.js';
-export type Entry = import('@trading-swarm/contracts').ResearchEntry;
+export type Entry = import('@trade-gate/contracts').ResearchEntry;
 export interface Position { capped?:boolean;fit?:ResearchTrade['fit'];stop_reason?:ResearchTrade['reason']; id:string; candidate_id:string; entry_at:number; entry_price:bigint; qty:bigint; stop:bigint; target:bigint|null; entry_fee:bigint; entry_notional:bigint; initial_risk:bigint; bars_held:number; high_water?:bigint; initial_distance?:bigint;mae_r?:number;mfe_r?:number;entry_slippage?:bigint }
 /** size_weight:波动率目标仓位(IR risk.sizing=vol_target)的 w,十进制字符串 (0,1];入场名义额度上限再 × w。不用 vol_target 的请求不带,账本算式不变。 */
 export type Pending = { action:'enter'; entry:Entry; size_weight?:string } | { action:'exit'|'reduce'; reason:ResearchTrade['reason'] };

@@ -90,10 +90,10 @@ export function derivePresence(profile: BotProfile, inp: PresenceInputs): BotPre
     }
     case 'strategy_lab': {
       if (inp.backtests?.running) return { state: 'working', action: t('回测跑批中'), since: null, next_at: null };
-      return profile.enabled ? idle(null) : off(profile.note);
+      return profile.enabled ? idle(null) : off(profile.note ? t(profile.note) : null);
     }
     default:
-      return profile.enabled ? idle(null) : off(profile.note);
+      return profile.enabled ? idle(null) : off(profile.note ? t(profile.note) : null);
   }
 }
 

@@ -10,9 +10,9 @@
  */
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Activity, Bot, ChevronDown, Hand, Loader2, Pause, Play, Radar, Radio, RefreshCw, Rocket, Settings2, Square, TriangleAlert, X, Zap } from 'lucide-react';
+import { Activity, Bot, ChevronDown, Hand, Loader2, Pause, Play, Radar, Radio, RefreshCw, Rocket, Scale, Settings2, Square, TriangleAlert, X, Zap } from 'lucide-react';
 import { toast } from 'sonner';
-import type { ResearchStrategy } from '@trading-swarm/contracts';
+import type { ResearchStrategy } from '@trade-gate/contracts';
 import { strategyRunsApi, useLiveEvents } from '@/api/client';
 import type { StrategyRun, StrategyRunEvent, StrategyRunMode, StrategyRunPreflight } from '@/api/types';
 import { ConfirmDialog } from '@/components/confirm-dialog';
@@ -26,15 +26,17 @@ import { t, tmap } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { errText, go, invalidateMyStrategies } from './use-strategy-actions';
 
-export const RUN_MODE_LABEL: Record<StrategyRunMode, string> = tmap({ auto: '自动下单', agent: 'Agent 把关', confirm: '每笔我确认', signal_only: '只发信号' });
+// 判断层:直接做 / Jev 判断 / LLM 判断 / 只发信号。confirm(每笔我确认)已下线,标签只留给老运行显示,不再可选。
+export const RUN_MODE_LABEL: Record<StrategyRunMode, string> = tmap({ auto: '直接做', jev: 'Jev 判断', agent: 'LLM 判断', confirm: '每笔我确认(旧)', signal_only: '只发信号' });
 const RUN_MODE_HINT: Record<StrategyRunMode, string> = tmap({
   auto: '策略命中就按代码算好的止损止盈下单,不问模型。',
-  agent: '命中后让 Agent 判断做不做;价格仍由策略定,Agent 改不了。',
+  jev: '命中后由 Jev 判断跟不跟,判不跟就不下;价格仍由策略定。',
+  agent: '命中后让 LLM 判断做不做;价格仍由策略定,模型改不了。',
   confirm: '命中后生成待批订单,你点确认才下。',
   signal_only: '不下单,只把规范化信号发到 ASP 给订阅者。',
 });
-const RUN_MODE_ICON: Record<StrategyRunMode, typeof Zap> = { auto: Zap, agent: Bot, confirm: Hand, signal_only: Radio };
-const MODES: StrategyRunMode[] = ['auto', 'agent', 'confirm', 'signal_only'];
+const RUN_MODE_ICON: Record<StrategyRunMode, typeof Zap> = { auto: Zap, jev: Scale, agent: Bot, confirm: Hand, signal_only: Radio };
+const MODES: StrategyRunMode[] = ['auto', 'jev', 'agent', 'signal_only'];
 const STATUS_LABEL = tmap({ running: '运行中', paused: '已暂停', stopped: '已停止', error: '出错停下' });
 const MAX_SYMBOLS = 30;
 
@@ -200,10 +202,15 @@ interface FormState {
   confirm: string;
 }
 
+/** 老运行是 confirm 的,打开设置时落到「直接做」(confirm 不再可选) */
+function selectableMode(m: StrategyRunMode): StrategyRunMode {
+  return m === 'confirm' ? 'auto' : m;
+}
+
 function initialForm(p: StrategyRunPreflight): FormState {
   const r = p.existing_run;
   return {
-    mode: r?.mode ?? p.defaults.mode,
+    mode: selectableMode(r?.mode ?? p.defaults.mode),
     market: r?.market ?? p.defaults.market,
     symbols: r?.symbols ?? p.defaults.symbols,
     risk_pct: String(r?.risk_pct ?? p.defaults.risk_pct),

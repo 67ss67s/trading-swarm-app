@@ -1,22 +1,23 @@
 /**
  * 策略详情的「部署」页签(docs/research/strategy-merge-plan-2026-09-23.md,契约 §9.47):
  *   1. 部署状态(只读):是否已下发到实盘(lab_strategy_id)、部署模式、是否在票池、实盘/影子成绩,
- *      读 GET /api/strategies 与 /api/strategies/allocator;操作一律深链到实盘部署台(#strategies?id=)。
+ *      读 GET /api/strategies 与 /api/strategies/allocator。09-25:实盘部署台(#strategies)退出导航(§9.54 旧库不能开仓),
+ *      卡片上的操作改成「设为 agent 当前策略」(SetAgentStrategyButton),不再深链旧库。
  *   2. 规则拆分预览:GET /api/research/strategies/:id/binding 把这版 IR 编译成 StrategyBinding,按六个角色切片,
  *      每条规则标明执行者(代码 / 模型);编译不支持的语义列在 unmapped。
  * 本页签不写任何实盘接口。react-query key:['research','my-strategy-binding',id,version] / ['strategies'] / ['allocator']。
  */
 import { useQuery } from '@tanstack/react-query';
-import { ArrowUpRight, Bot, Cpu, TriangleAlert } from 'lucide-react';
-import type { BindingRoleSlice, BindingUnmapped, ResearchStrategy, StrategyBinding } from '@trading-swarm/contracts';
+import { Bot, Cpu, TriangleAlert } from 'lucide-react';
+import type { BindingRoleSlice, BindingUnmapped, ResearchStrategy, StrategyBinding } from '@trade-gate/contracts';
 import { researchApi } from '@/api/client';
-import { Button } from '@/components/ui/button';
+import { SetAgentStrategyButton } from '@/components/agent-strategy/current-strategy';
 import { Skeleton } from '@/components/ui/skeleton';
 import { t, tmap } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import { DEPLOY_MODE_LABEL, deployDeskHash, isLiveDeployed, type Deployment } from './deploy-model';
+import { DEPLOY_MODE_LABEL, isLiveDeployed, type Deployment } from './deploy-model';
 import { runOf, useStrategyRuns } from './run-panel';
-import { errText, go } from './use-strategy-actions';
+import { errText } from './use-strategy-actions';
 
 const ROLE_ORDER: BindingRoleSlice['role'][] = ['radar', 'judge', 'geometry', 'risk', 'holding', 'execution'];
 const EXECUTOR_LABEL = tmap({ code: '代码', model: '模型' });
@@ -99,16 +100,12 @@ function Stat({ label, value, hint }: { label: string; value: React.ReactNode; h
 }
 
 /** 部署状态卡(只读)。独立导出给测试。 */
-export function DeployStatusCard({ strategy, deployment, registryError }: { strategy: Pick<ResearchStrategy, 'lab_strategy_id' | 'origin'>; deployment: Deployment | null; registryError?: string | null }) {
-  const lab = deployment?.lab_id ?? null;
+export function DeployStatusCard({ strategy, deployment, registryError }: { strategy: Pick<ResearchStrategy, 'lab_strategy_id' | 'origin'> & Partial<Pick<ResearchStrategy, 'id' | 'current_version' | 'status'>>; deployment: Deployment | null; registryError?: string | null }) {
   return (
     <section data-deployed={deployment?.found ? 'yes' : 'no'} className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="kicker text-muted-foreground">{t('部署状态')}</h3>
-        <Button size="sm" variant="outline" onClick={() => go(deployDeskHash(lab))}>
-          <ArrowUpRight />
-          {t('去实盘部署台操作')}
-        </Button>
+        {strategy.id ? <SetAgentStrategyButton strategyId={strategy.id} version={strategy.current_version ?? 0} disabled={strategy.status === 'archived'} /> : null}
       </div>
       {registryError ? <p className="text-[12px] text-destructive">{t('实盘注册表读取失败')}:{registryError}</p> : null}
       {!strategy.lab_strategy_id ? (
@@ -127,7 +124,7 @@ export function DeployStatusCard({ strategy, deployment, registryError }: { stra
           </div>
           {strategy.origin.source === 'import' ? (
             <p className="rounded-md border border-warn/30 bg-warn/5 px-3 py-2 text-[11.5px] text-muted-foreground">
-              {t('这条是内置策略的研究台译文。实盘现在跑的仍是旧的文本规则版本(实盘部署台里的那条),不是下面编译出的绑定;改由绑定驱动要等实盘侧接 apply。')}
+              {t('这条是内置策略的研究台译文。旧策略库里那条文本规则版本已经不再开仓;要让 agent 按它交易,点上面「设为 agent 当前策略」,运行的是下面编译出的这套规则。')}
             </p>
           ) : null}
         </>
@@ -201,7 +198,7 @@ export function DeployPanel({ strategy, version }: { strategy: ResearchStrategy;
       )}
       <div className="flex flex-col gap-1">
         <h2 className="text-[15px] font-semibold">{t('它会怎么跑')}</h2>
-        <p className="text-[12px] text-muted-foreground">{t('这版规则(IR)编译后,每个角色拿到哪几条规则、由代码还是模型执行。「Agent 把关」模式下模型只决定做不做;其余模式全程代码。')}</p>
+        <p className="text-[12px] text-muted-foreground">{t('这版规则(IR)编译后,每个角色拿到哪几条规则、由代码还是模型执行。「Jev 判断」「LLM 判断」模式下模型只决定做不做;其余模式全程代码。')}</p>
       </div>
       {bindingQ.isPending ? (
         <Skeleton className="h-[320px] rounded-xl" />

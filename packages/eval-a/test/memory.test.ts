@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { demo } from '@trading-swarm/gateway';
+import { demo } from '@trade-gate/gateway';
 import type { EpisodeRecord, Evidence, EvalCase, Judgment } from '../src/index.js';
 import { analyzeRow, citedMemoryIds, computeMetrics, deriveMemoryCases, evalStubBrain, hallucinatedNumbers, memoriesFor, memoryOnlyNumbers, memoryRole, runEpisode } from '../src/index.js';
 import { synthCases } from './helpers/synthetic.js';

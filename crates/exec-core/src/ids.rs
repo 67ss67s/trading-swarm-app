@@ -132,7 +132,7 @@ pub enum IdError {
     AttemptTooLarge(u32),
 }
 
-/// 这个 `clientOrderId` 是本仓库(trading-swarm)产生的吗?
+/// 这个 `clientOrderId` 是本仓库(trade-gate)产生的吗?
 pub fn is_local(id: &str) -> bool {
     id.starts_with(LOCAL_PREFIX)
 }

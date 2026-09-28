@@ -225,7 +225,7 @@ impl CallbackServer {
                 "text/html; charset=utf-8",
                 &page(
                     "授权完成",
-                    "Trading Swarm 已经拿到授权码,可以关掉这个窗口回终端了。",
+                    "Trade Gate 已经拿到授权码,可以关掉这个窗口回终端了。",
                 ),
             )
             .await;
@@ -386,7 +386,7 @@ impl TokenEndpoint {
     /// - `invalid_client` → CIMD 文档不可达/不匹配(client_id 还没生效)
     /// - `invalid_grant` → client_id 被接受了,只是 code 是假的(= CIMD 通了)
     pub async fn probe_client(&self) -> ClientProbe {
-        let bogus = Secret::new(format!("tswarm-probe-{}", random_token(9)));
+        let bogus = Secret::new(format!("tgate-probe-{}", random_token(9)));
         let verifier = generate_pkce().verifier;
         match self
             .exchange_code(&bogus, "http://127.0.0.1:18801/oauth/callback", &verifier)

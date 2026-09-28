@@ -5,7 +5,7 @@
  * 以前「A 策略 + B 策略各排一组回测」只靠提示词约束,模型漏一组就静默退化成单策略;
  * 现在由 splitStrategies + validate_multi 模板保证,模型给的计划如果不满足模式不变量会被丢回模板。
  */
-import type { LoopPlan, LoopPlanStep, LoopTaskKind, LoopContext } from "@trading-swarm/contracts";
+import type { LoopPlan, LoopPlanStep, LoopTaskKind, LoopContext } from "@trade-gate/contracts";
 import { matchLexicon } from "./lexicon.js";
 import { registry as primitives } from "../primitives/index.js";
 import { resolveConcepts, usableTargets, type ConceptResolution } from "./concepts.js";
@@ -72,6 +72,7 @@ export const PATTERN_DEFAULTS: Record<string, Record<string, unknown>> = {
   volume_surge: { lookback: 20, multiple: 2 },
   rsi_threshold: { period: 14, threshold: 70, operator: "above" },
   higher_low_sequence: { count: 3 },
+  candle_streak: { count: 3 },
   structure_bos: { swing_length: 3 },
   trend_break: { ema_period: 50, htf: "1d" },
   // 形态与通用原语(2026-09-22 指标库落地后补;参数取各原语 schema 范围内的常用值)

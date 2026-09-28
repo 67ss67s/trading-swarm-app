@@ -12,14 +12,14 @@
 import { randomUUID } from 'node:crypto';
 import { Ajv2020 } from 'ajv/dist/2020.js';
 import type { ValidateFunction } from 'ajv';
-import { schemas, type BacktestReport, type BacktestReportSummary, type ResearchStrategy, type ResearchStrategyBacktestRequest, type ResearchStrategyCreate, type ResearchStrategyDetail, type ResearchStrategyList, type ResearchStrategyPatch, type ResearchStrategyStatus, type ResearchStrategySummary, type ResearchStrategyTransition, type ResearchStrategyAttachSession, type StrategyIR } from '@trading-swarm/contracts';
+import { schemas, type BacktestReport, type BacktestReportSummary, type ResearchStrategy, type ResearchStrategyBacktestRequest, type ResearchStrategyCreate, type ResearchStrategyDetail, type ResearchStrategyList, type ResearchStrategyPatch, type ResearchStrategyStatus, type ResearchStrategySummary, type ResearchStrategyTransition, type ResearchStrategyAttachSession, type StrategyIR } from '@trade-gate/contracts';
 import { hash } from '../primitives.js';
 import type { ResearchStore } from '../store.js';
 import type { ResearchService } from '../service.js';
 import type { BacktestReportMeta } from '../hooks.js';
 import { getBacktestReport, runBacktestReport } from '../backtest-report.js';
 import { StrategyStore, type StrategyFilter, type StrategySort } from './store.js';
-import type { BuiltinImportItem, BuiltinImportResult, StrategyBindingResponse } from '@trading-swarm/contracts';
+import type { BuiltinImportItem, BuiltinImportResult, StrategyBindingResponse } from '@trade-gate/contracts';
 import { compileBinding } from './compile-binding.js';
 import { BUILTIN_IMPORTS, builtinImportSpec } from './import-builtin.js';
 

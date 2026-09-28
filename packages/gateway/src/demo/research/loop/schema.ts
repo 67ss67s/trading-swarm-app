@@ -1,6 +1,6 @@
 import { Ajv2020 } from "ajv/dist/2020.js";
 import type { AnySchema, ValidateFunction } from "ajv";
-import { schemas } from "@trading-swarm/contracts";
+import { schemas } from "@trade-gate/contracts";
 const root = schemas["research-loop"];
 const ajv = new Ajv2020({ allErrors: true, strict: false });
 ajv.addSchema(root);

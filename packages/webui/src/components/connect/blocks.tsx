@@ -16,10 +16,12 @@ import { toast } from 'sonner';
 import { api } from '@/api/client';
 import type { ExecutionView, Market, NetCheckResult, Workflow } from '@/api/types';
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { JudgeLock } from '@/components/judge-lock';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { friendlyError, lockReason } from '@/lib/edition';
 import { acctLvLabel } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { t } from '@/lib/i18n';
@@ -68,14 +70,16 @@ export function AccountModeSelect({ view, size = 'sm' }: { view: ExecutionView; 
       setTarget(null);
       toast.success(t('OKX 账户模式已切到「{m}」', { m: acctLvLabel(res.acct_lv) }));
     },
-    onError: (err: Error & { status?: number; code?: string }) => toast.error(t('切换账户模式失败'), { description: err.message }),
+    onError: (err: Error & { status?: number; code?: string }) => toast.error(t('切换账户模式失败'), { description: friendlyError(err.message) }),
   });
   const opt = ACCT_LV_OPTIONS.find((o) => o.lv === target) ?? null;
+  // 评审版:切账户模式要用私有 OKX key 直打交易所,锁住
+  const lock = lockReason('exchange_credentials');
   return (
     <>
-      <span className="flex items-center gap-1" title={t('OKX 账户模式(acctLv);简单模式下永续不可用(51010),现货照常')}>
+      <span className="flex items-center gap-1" title={lock ?? t('OKX 账户模式(acctLv);简单模式下永续不可用(51010),现货照常')}>
         {size === 'sm' ? <span className="text-[10.5px] text-muted-foreground">{t('账户模式')}</span> : null}
-        <Select value={cur ? String(cur) : ''} onValueChange={(v) => setTarget(Number(v) as 1 | 2 | 3 | 4)}>
+        <Select value={cur ? String(cur) : ''} disabled={!!lock} onValueChange={(v) => setTarget(Number(v) as 1 | 2 | 3 | 4)}>
           <SelectTrigger size="sm" className={cn(size === 'sm' ? 'h-6 w-[132px] text-[10.5px]' : 'h-7 w-44 text-[12px]', cur === 1 && 'border-warn/40 text-warn')}>
             <SelectValue placeholder={acctLvLabel(cur, okx?.acct_lv_label)} />
           </SelectTrigger>
@@ -116,7 +120,7 @@ export function RefreshAccountModeButton() {
       queryClient.setQueryData(['execution'], view);
       toast.success(t('已重新读取账户模式:{m}', { m: acctLvLabel(view.okx?.acct_lv, view.okx?.acct_lv_label) }));
     },
-    onError: (e: Error) => toast.error(t('读取失败'), { description: e.message }),
+    onError: (e: Error) => toast.error(t('读取失败'), { description: friendlyError(e.message) }),
   });
   return (
     <Button size="xs" variant="ghost" disabled={refresh.isPending} onClick={() => refresh.mutate()}>
@@ -165,7 +169,7 @@ export function ProtectionVerifyBlock({ view }: { view: ExecutionView }) {
       setAsk(false);
       toast.success(t('保护单标记为已验证'));
     },
-    onError: (err: Error & { status?: number }) => toast.error(t('标记失败'), { description: err.message }),
+    onError: (err: Error & { status?: number }) => toast.error(t('标记失败'), { description: friendlyError(err.message) }),
   });
   return (
     <div className="flex flex-col gap-1.5 text-[11.5px]">
@@ -174,10 +178,12 @@ export function ProtectionVerifyBlock({ view }: { view: ExecutionView }) {
           {verified ? t('已验证') : verifying ? t('验证中') : t('还没验证:闸门不放开新开仓')}
         </span>
         {!verified && !verifying ? (
-          <Button size="xs" variant="outline" disabled={mark.isPending} onClick={() => setAsk(true)} title={t('先按验证清单在模拟盘上人工跑一遍,再标记;标记后闸门才放开新开仓')}>
-            {mark.isPending ? <Loader2 className="size-3 animate-spin" /> : <ShieldCheck data-slot="icon" />}
-            {t('标记保护单已验证')}
-          </Button>
+          <JudgeLock feature="protection_verify">
+            <Button size="xs" variant="outline" disabled={mark.isPending} onClick={() => setAsk(true)} title={t('先按验证清单在模拟盘上人工跑一遍,再标记;标记后闸门才放开新开仓')}>
+              {mark.isPending ? <Loader2 className="size-3 animate-spin" /> : <ShieldCheck data-slot="icon" />}
+              {t('标记保护单已验证')}
+            </Button>
+          </JudgeLock>
         ) : null}
       </div>
       {!verified ? (
@@ -218,9 +224,9 @@ export function NetCheckRow() {
     mutationFn: () => api.netCheck(5),
     onSuccess: (res) => {
       setResult(res.result);
-      (res.result.transport_errors ? toast.warning : toast.success)(t('网络自检:{ok}/{total} 通', { ok: res.result.ok, total: res.result.runs.length }), { description: res.result.verdict });
+      (res.result.transport_errors ? toast.warning : toast.success)(t('网络自检:{ok}/{total} 通', { ok: res.result.ok, total: res.result.runs.length }), { description: friendlyError(res.result.verdict) });
     },
-    onError: (e: Error & { status?: number }) => toast.error(e.status === 409 ? t('正在跑,别重复点') : t('自检没跑起来'), { description: e.message }),
+    onError: (e: Error & { status?: number }) => toast.error(e.status === 409 ? t('正在跑,别重复点') : t('自检没跑起来'), { description: friendlyError(e.message) }),
   });
   return (
     <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px]">
@@ -229,8 +235,8 @@ export function NetCheckRow() {
         {run.isPending ? t('自检中,约 2 分钟…') : t('网络自检')}
       </Button>
       {result ? (
-        <span className={cn('num min-w-0 flex-1', result.transport_errors ? 'text-warn' : 'text-muted-foreground')} title={result.runs.map((r, i) => `#${i + 1} ${r.ok ? 'ok' : r.transport_error ? t('掉线') : t('错误')} ${r.ms} ms${r.error ? ` ${r.error}` : ''}`).join('\n')}>
-          {result.verdict}
+        <span className={cn('num min-w-0 flex-1', result.transport_errors ? 'text-warn' : 'text-muted-foreground')} title={result.runs.map((r, i) => `#${i + 1} ${r.ok ? 'ok' : r.transport_error ? t('掉线') : t('错误')} ${r.ms} ms${r.error ? ` ${friendlyError(r.error)}` : ''}`).join('\n')}>
+          {friendlyError(result.verdict)}
         </span>
       ) : null}
     </div>
@@ -243,7 +249,7 @@ export function TransportLine({ view }: { view: ExecutionView }) {
   return (
     <div
       className={cn('num text-[11px]', view.transport.transport_errors > 0 ? 'text-warn' : 'text-muted-foreground')}
-      title={view.transport.last_error ? t('最近一次:{detail}', { detail: view.transport.last_error }) : t('最近 30 分钟没出现连接被掐或超时')}
+      title={view.transport.last_error ? t('最近一次:{detail}', { detail: friendlyError(view.transport.last_error) }) : t('最近 30 分钟没出现连接被掐或超时')}
     >
       {t('网络:最近 {min} 分钟 {runs} 次调用,{bad} 次连接被掐或超时', { min: Math.round(view.transport.window_ms / 60_000), runs: view.transport.runs, bad: view.transport.transport_errors })}
     </div>
@@ -282,7 +288,7 @@ export function MarketRiskBlock({ view }: { view: ExecutionView | null | undefin
       if ((res.errors ?? []).length > 0) toast.warning(t('{n} 项没保存', { n: res.errors.length }), { description: res.errors.join('; ') });
       else toast.success(t('已保存'));
     },
-    onError: (err) => toast.error(t('保存失败'), { description: err instanceof Error ? err.message : String(err) }),
+    onError: (err) => toast.error(t('保存失败'), { description: friendlyError(err instanceof Error ? err.message : String(err)) }),
   });
   if (!draft || !server) return <div className="text-[11px] text-muted-foreground">{workflowQ.isError ? t('读不到工作流') : t('加载中…')}</div>;
 

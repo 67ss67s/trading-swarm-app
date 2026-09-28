@@ -1,6 +1,6 @@
-//! exec-core —— trading-swarm 执行核心的 **REST/主账户** 半边(工作包 A1)。
+//! exec-core —— trade-gate 执行核心的 **REST/主账户** 半边(工作包 A1)。
 //!
-//! 代码来源:从 8794(`~/Desktop/trade-switch-dev-8793`,实盘基线)的
+//! 代码来源:从 8794(`<separate console repo>`,实盘基线)的
 //! `console-core/src/exchanges/binance.rs`、`console-api/src/{account_stream,network,market}.rs`
 //! **复制**后剥离 `console_types` / `TradingCore` 依赖独立演进(不引用、不回改那边)。
 //! 逐条来源与删改清单见 `README.md`。

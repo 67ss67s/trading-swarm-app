@@ -5,10 +5,10 @@ import { pathToFileURL, fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-const OUTPUT = process.env.TG_HOLDING_AB_OUT ?? '~/Documents/ChatGPT/trading-swarm-bot/research/trade-horizon/deployment/real-ab';
-const CANDIDATE = process.env.TG_HOLDING_AB_CANDIDATE ?? '/private/tmp/trading-swarm-real-ab-candidate';
-const BASELINE = process.env.TG_HOLDING_AB_BASELINE ?? '/private/tmp/trading-swarm-real-ab-baseline';
-const CACHE = process.env.TG_HOLDING_KLINE_CACHE ?? '~/.trading-swarm/demo/klines';
+const OUTPUT = process.env.TG_HOLDING_AB_OUT ?? '/Users/demo/Documents/ChatGPT/trade-gate-bot/research/trade-horizon/deployment/real-ab';
+const CANDIDATE = process.env.TG_HOLDING_AB_CANDIDATE ?? '/private/tmp/trade-gate-real-ab-candidate';
+const BASELINE = process.env.TG_HOLDING_AB_BASELINE ?? '/private/tmp/trade-gate-real-ab-baseline';
+const CACHE = process.env.TG_HOLDING_KLINE_CACHE ?? '/Users/demo/.trade-gate/demo/klines';
 const CUT = Date.parse('2026-09-07T08:00:00Z'), START = CUT - 30*86400000, SPLIT = START + 15*86400000;
 const M15 = 900000, TF = { '15m': M15, '1h': 4*M15, '4h': 16*M15, '1d':96*M15 };
 const SYMBOLS = ['BTCUSDT','ETHUSDT','SOLUSDT','HYPEUSDT'];

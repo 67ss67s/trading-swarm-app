@@ -1,5 +1,5 @@
 import { describe,it,expect,vi } from 'vitest';
-import { validate } from '@trading-swarm/contracts';
+import { validate } from '@trade-gate/contracts';
 import { fixture,params,study } from './fixtures.js';
 import { runPortfolio } from '../../../src/demo/research/portfolio.js';
 import { runReplay, StopRun, type AgentAction } from '../../../src/demo/research/engine.js';

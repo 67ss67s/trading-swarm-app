@@ -17,7 +17,7 @@ import {
   type Logical,
   type UTCTimestamp,
 } from 'lightweight-charts';
-import type { BacktestSegment } from '@trading-swarm/contracts';
+import type { BacktestSegment } from '@trade-gate/contracts';
 import { CHART_COLORS } from '@/lib/chart-colors';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';

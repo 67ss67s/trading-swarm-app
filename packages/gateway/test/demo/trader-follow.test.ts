@@ -58,22 +58,22 @@ function payload(over: Record<string, unknown> = {}, meta: Record<string, unknow
     stop_loss: { price: 59000 },
     take_profit: [{ price: 62000 }, { price: 64000 }],
     created_at: new Date(NOW).toISOString(),
-    metadata: { trader: '交易员A', action_type: 'open', rationale: '突破回踩' },
+    metadata: { trader: 'TraderB', action_type: 'open', rationale: '突破回踩' },
     ...over,
-    ...(Object.keys(meta).length ? { metadata: { trader: '交易员A', action_type: 'open', rationale: '突破回踩', ...meta } } : {}),
+    ...(Object.keys(meta).length ? { metadata: { trader: 'TraderB', action_type: 'open', rationale: '突破回踩', ...meta } } : {}),
   };
 }
 
 function sig(over: Partial<TraderSignal> = {}): TraderSignal {
   const r = normalizeBridgeSignal(payload(), { now: NOW });
-  return { ...r.signal!, subscription_job_id: 'job-trader-a', ...over };
+  return { ...r.signal!, subscription_job_id: 'job-trader_b', ...over };
 }
 
 function settings(over: Partial<FollowSettings> = {}, traderOver: Partial<FollowSettings['subscriptions'][string]> = {}): FollowSettings {
   return {
     ...DEFAULT_FOLLOW_SETTINGS,
     enabled: true,
-    subscriptions: { 'job-trader-a': { mode: 'book', weight: 1, enabled: true, ...traderOver } },
+    subscriptions: { 'job-trader_b': { mode: 'book', weight: 1, enabled: true, ...traderOver } },
     ...over,
   };
 }
@@ -99,7 +99,7 @@ function traderThread(over: Partial<StrategyThread> = {}): StrategyThread {
       margin_mode: 'cross',
       now: NOW,
     }),
-    origin: 'trader:job-trader-a',
+    origin: 'trader:job-trader_b',
     trader_signal_id: 'sig_1',
     ...over,
   };
@@ -112,7 +112,7 @@ describe('normalizeBridgeSignal', () => {
     const r = normalizeBridgeSignal(payload(), { now: NOW });
     expect(r.errors).toEqual([]);
     const s = r.signal!;
-    expect(s).toMatchObject({ signal_id: 'sig_1', trader: '交易员A', symbol: 'BTCUSDT', side: 'long', action: 'open', entry_kind: 'limit', stop: '59000', status: 'new', transport: 'telegram' });
+    expect(s).toMatchObject({ signal_id: 'sig_1', trader: 'TraderB', symbol: 'BTCUSDT', side: 'long', action: 'open', entry_kind: 'limit', stop: '59000', status: 'new', transport: 'telegram' });
     expect(s.entry_prices).toEqual(['60000']);
     expect(s.tps).toEqual([{ price: '62000', pct: null }, { price: '64000', pct: null }]);
     expect(s.published_at).toBe(NOW);
@@ -360,11 +360,11 @@ describe('重复开仓与反向敞口', () => {
 
   it('同名 ASP 的不同 jobId 不串联管理动作，也不误判本订阅重复开仓', () => {
     const otherJob = traderThread({ id: 'thr_other_job', origin: 'trader:job-other', status: 'in_position', opened_at: NOW });
-    const mine = sig({ trader: '同名 ASP', subscription_job_id: 'job-trader-a' });
+    const mine = sig({ trader: '同名 ASP', subscription_job_id: 'job-trader_b' });
     expect(duplicateCheck({ signal: mine, live_threads: [otherJob] }).verdict).toBe('new');
     expect(linkThread({ ...mine, action: 'close' }, [otherJob]).thread).toBeNull();
     expect(linkThread({ ...mine, action: 'close', ref_order: otherJob.id }, [otherJob]).thread).toBeNull();
-    const ownJob = traderThread({ id: 'thr_own_job', origin: 'trader:job-trader-a', status: 'in_position', opened_at: NOW });
+    const ownJob = traderThread({ id: 'thr_own_job', origin: 'trader:job-trader_b', status: 'in_position', opened_at: NOW });
     expect(duplicateCheck({ signal: mine, live_threads: [otherJob, ownJob] }).thread?.id).toBe(ownJob.id);
     expect(linkThread({ ...mine, action: 'close' }, [otherJob, ownJob]).thread?.id).toBe(ownJob.id);
     expect(reverseCheck({ ...mine, side: 'short' }, [otherJob]).blocked).toBe(true);
@@ -372,13 +372,13 @@ describe('重复开仓与反向敞口', () => {
 
   it('没有 jobId 的旧信号仍仅关联同名 legacy origin', () => {
     const legacy = sig({ subscription_job_id: null });
-    const oldThread = traderThread({ origin: 'trader:交易员A', status: 'in_position', opened_at: NOW });
+    const oldThread = traderThread({ origin: 'trader:TraderB', status: 'in_position', opened_at: NOW });
     expect(linkThread({ ...legacy, action: 'close' }, [oldThread]).thread?.id).toBe(oldThread.id);
     expect(duplicateCheck({ signal: legacy, live_threads: [oldThread] }).verdict).toBe('duplicate_open');
   });
 
   it('别人的线程不算重复(按 origin 分)', () => {
-    const other = traderThread({ origin: 'trader:交易员B', status: 'in_position', opened_at: NOW });
+    const other = traderThread({ origin: 'trader:TraderA', status: 'in_position', opened_at: NOW });
     expect(duplicateCheck({ signal: sig(), live_threads: [other] }).verdict).toBe('new');
   });
 
@@ -516,26 +516,26 @@ describe('权重(8794 统计)', () => {
   });
 
   it('weight = manual_weight × auto_mult', () => {
-    const w = weightFor('交易员A', 0.8, snap([{ trader: '交易员A', resolved: 30, win_rate: 60, max_drawdown_pct: 10 }]), DEFAULT_WEIGHT_THRESHOLDS, NOW);
+    const w = weightFor('TraderB', 0.8, snap([{ trader: 'TraderB', resolved: 30, win_rate: 60, max_drawdown_pct: 10 }]), DEFAULT_WEIGHT_THRESHOLDS, NOW);
     expect(w.weight).toBe(0.8);
     expect(w.stale).toBe(false);
   });
 
   it('统计不可用 → 权重压到 min(manual, 0.5),绝不因为故障而放大仓位', () => {
     // manual=1 + 统计缺失:第一版会给 1.0(比有统计时的 0.5 还大 —— 故障让风险翻倍)
-    const missing = weightFor('交易员A', 1, null, DEFAULT_WEIGHT_THRESHOLDS, NOW);
+    const missing = weightFor('TraderB', 1, null, DEFAULT_WEIGHT_THRESHOLDS, NOW);
     expect(missing).toMatchObject({ weight: 0.5, stale: true, stale_capped: true, auto_mult: null });
     // manual 本来就比上限小 → 不变,也不标 capped
-    expect(weightFor('交易员A', 0.3, null, DEFAULT_WEIGHT_THRESHOLDS, NOW)).toMatchObject({ weight: 0.3, stale: true, stale_capped: false });
+    expect(weightFor('TraderB', 0.3, null, DEFAULT_WEIGHT_THRESHOLDS, NOW)).toMatchObject({ weight: 0.3, stale: true, stale_capped: false });
     const old: TraderStatsSnapshot = { rows: [], fetched_at: NOW - 10 * 3_600_000, error: null };
-    expect(weightFor('交易员A', 1, old, DEFAULT_WEIGHT_THRESHOLDS, NOW).weight).toBe(0.5);
+    expect(weightFor('TraderB', 1, old, DEFAULT_WEIGHT_THRESHOLDS, NOW).weight).toBe(0.5);
     // 一次 HTTP 失败:权重只能变小,不能从 0.5 弹回 1
-    const good: TraderStatsSnapshot = { rows: parseTraderStats({ by_source: { 交易员A: { resolved: 40, win_rate: 60, max_drawdown_pct: 40 } } }, NOW), fetched_at: NOW, error: null };
-    expect(weightFor('交易员A', 1, good, DEFAULT_WEIGHT_THRESHOLDS, NOW).weight).toBe(0.5);
+    const good: TraderStatsSnapshot = { rows: parseTraderStats({ by_source: { TraderB: { resolved: 40, win_rate: 60, max_drawdown_pct: 40 } } }, NOW), fetched_at: NOW, error: null };
+    expect(weightFor('TraderB', 1, good, DEFAULT_WEIGHT_THRESHOLDS, NOW).weight).toBe(0.5);
     const failed: TraderStatsSnapshot = { ...good, error: 'HTTP 500' };
-    expect(weightFor('交易员A', 1, failed, DEFAULT_WEIGHT_THRESHOLDS, NOW).weight).toBeLessThanOrEqual(0.5);
+    expect(weightFor('TraderB', 1, failed, DEFAULT_WEIGHT_THRESHOLDS, NOW).weight).toBeLessThanOrEqual(0.5);
     // manual_weight 本身也钳在 1 以内(它是折扣不是杠杆)
-    expect(weightFor('交易员A', 5, good, DEFAULT_WEIGHT_THRESHOLDS, NOW).manual_weight).toBe(1);
+    expect(weightFor('TraderB', 5, good, DEFAULT_WEIGHT_THRESHOLDS, NOW).manual_weight).toBe(1);
   });
 
   it('统计校验:缺失≠0、负回撤取绝对值、样本不足不给权重、mult 永远 ≤1', () => {
@@ -556,8 +556,8 @@ describe('权重(8794 统计)', () => {
   });
 
   it('leaderboard 形状(traders[].source)也吃', () => {
-    const rows = parseTraderStats({ traders: [{ source: '交易员B', resolved: 12, win_rate: 58.2, max_drawdown_pct: 12.5, total_return_pct: 80 }] }, NOW);
-    expect(rows[0]).toMatchObject({ trader: '交易员B', resolved: 12, win_rate: 58.2, sharpe: null });
+    const rows = parseTraderStats({ traders: [{ source: 'TraderA', resolved: 12, win_rate: 58.2, max_drawdown_pct: 12.5, total_return_pct: 80 }] }, NOW);
+    expect(rows[0]).toMatchObject({ trader: 'TraderA', resolved: 12, win_rate: 58.2, sharpe: null });
   });
 
   it('仓位 = risk_pct × weight,权重 0 → 0', () => {
@@ -645,7 +645,7 @@ describe('TraderFeed 游标、退避与 DLQ', () => {
     await feed.pullOnce({ waitSeconds: 0 });
     expect(headers['X-API-Key']).toBe('sbk_test');
     expect(headers['X-Secret-Token']).toBe('sbs_test');
-    expect(headers['User-Agent']).toBe('trading-swarm-follow/0.1');
+    expect(headers['User-Agent']).toBe('trade-gate-follow/0.1');
   });
 
   it('失败不抛:记 error、推退避,ready() 变 false', async () => {
@@ -784,10 +784,10 @@ describe('状态机与设置', () => {
   });
 
   it('follow 设置 fail-closed:手改坏的模式回 evidence、越界权重钳住、enabled 必须显式 true', () => {
-    const f = normalizeFollowSettings({ enabled: 'yes', freshness_s: -5, subscriptions: { 'job-trader-a': { mode: 'copy!!', weight: 9, enabled: 1 } } });
+    const f = normalizeFollowSettings({ enabled: 'yes', freshness_s: -5, subscriptions: { 'job-trader_b': { mode: 'copy!!', weight: 9, enabled: 1 } } });
     expect(f.enabled).toBe(false);
     expect(f.freshness_s).toBe(180);
-    expect(f.subscriptions['job-trader-a']).toEqual({ mode: 'evidence', weight: 0, enabled: false, approval: 'manual' });
+    expect(f.subscriptions['job-trader_b']).toEqual({ mode: 'evidence', weight: 0, enabled: false, approval: 'manual' });
     expect(normalizeFollowSettings(null).subscriptions).toEqual({});
     expect(normalizeFollowSettings({ transport: 'invalid' }).transport).toBe('queue');
   });
@@ -868,7 +868,7 @@ describe('TraderFollow 编排', () => {
     const h = harness({ follow: current });
     try {
       const deps = (h.follow as unknown as { deps: FollowDeps }).deps;
-      deps.markOf = async () => { current.subscriptions['job-trader-a']!.mode = 'gated'; return 60000; };
+      deps.markOf = async () => { current.subscriptions['job-trader_b']!.mode = 'gated'; return 60000; };
       const result = await h.follow.ingest(sig());
       expect(result.signal.status).not.toBe('applied');
       expect(h.calls).not.toContain('open');
@@ -883,7 +883,7 @@ describe('TraderFollow 编排', () => {
     try {
       const deps = (h.follow as unknown as { deps: FollowDeps }).deps;
       deps.openFromSignal = async (_signal, _plan, ctx) => {
-        current.subscriptions['job-trader-a']!.mode = 'gated';
+        current.subscriptions['job-trader_b']!.mode = 'gated';
         const authorized = ctx.authorize!();
         expect(authorized.ok).toBe(false);
         if (authorized.ok) sends++;
@@ -1160,12 +1160,12 @@ describe('TraderSignalStore', () => {
       expect(store.traderSignals.find('sig_1')!.id).toBe(a.id);
       store.traderSignals.capture(sig({ signal_id: 'sig_2', id: 'tsig_2', status: 'evidence' }));
       expect(store.traderSignals.list({ status: 'evidence' }).map((s) => s.signal_id)).toEqual(['sig_2']);
-      expect(store.traderSignals.perTrader()[0]).toMatchObject({ trader: '交易员A', signals: 2, applied: 1, evidence: 1 });
+      expect(store.traderSignals.perTrader()[0]).toMatchObject({ trader: 'TraderB', signals: 2, applied: 1, evidence: 1 });
       // 触发数 = 进过判定链路的(mode_applied 有值且不是 new);这两条夹具都没有 mode_applied
-      expect(store.traderSignals.openingsSince('交易员A', NOW - 3_600_000)).toBe(0);
+      expect(store.traderSignals.openingsSince('TraderB', NOW - 3_600_000)).toBe(0);
       store.traderSignals.save({ ...a, status: 'review_only', mode_applied: 'gated' });
-      expect(store.traderSignals.openingsSince('交易员A', NOW - 3_600_000)).toBe(1);
-      expect(store.traderSignals.lastOpening('交易员A', 'BTCUSDT')!.trader).toBe('交易员A');
+      expect(store.traderSignals.openingsSince('TraderB', NOW - 3_600_000)).toBe(1);
+      expect(store.traderSignals.lastOpening('TraderB', 'BTCUSDT')!.trader).toBe('TraderB');
     } finally {
       state.close();
       rmSync(dir, { recursive: true, force: true });

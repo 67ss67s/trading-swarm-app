@@ -359,8 +359,8 @@ export interface ResearchChatTurn {
 }
 
 // ---------------------------------------------------------------------------
-// 第二轮(research round 2):资产池与 screen、策略 IR、诊断与归因。
-// 后端按同一份契约实现;这里所有新字段都按「可能还没有」处理(可选)。
+// 第二轮(docs/research/round2-spec-2026-09-21.md):资产池与 screen、策略 IR、诊断与归因。
+// 后端由 astra 按同一份契约实现;这里所有新字段都按「可能还没有」处理(可选)。
 
 export interface ResearchFactorMetrics {
   total_return: number;
@@ -550,8 +550,8 @@ export interface ResearchAttributionResponse {
 }
 
 // ---------------------------------------------------------------------------
-// 第三轮(research round 3):研究沙箱与 artifacts、任务树、策略体检、
-// unit_notional 收益口径、order-gate。后端按同一份契约实现;字段都按可能还没有处理。
+// 第三轮(docs/research/round3-spec-2026-09-21.md):研究沙箱与 artifacts、任务树、策略体检、
+// unit_notional 收益口径、order-gate。后端由 astra 按同一份契约实现;字段都按可能还没有处理。
 
 export type ResearchArtifactKind = 'chart' | 'markdown' | 'table' | 'file';
 
@@ -682,7 +682,7 @@ export interface ResearchFit {
 // Inquiry ≠ 回测 run(ResearchRunSummary)≠ 策略版本:validate 类提问在某一步创建普通回测 run,
 // step 里只引用它的 id,回测结果仍走 §9.41 的接口。
 //
-// 后端按同一份契约实现;这里所有字段都按「可能还没有」处理(可选 + 空态)。
+// 后端由 astra 按同一份契约实现;这里所有字段都按「可能还没有」处理(可选 + 空态)。
 
 export type ResearchTaskKind = 'market' | 'compare' | 'validate' | 'diagnose';
 
@@ -822,7 +822,7 @@ export interface ResearchInquiry {
   updated_at: number;
   steps?: ResearchStep[];
   /** 后端 LoopCheckpoint;前端只读 concepts(报告「概念覆盖」段) */
-  checkpoint?: { concepts?: import('@trading-swarm/contracts').LoopConcept[] } | null;
+  checkpoint?: { concepts?: import('@trade-gate/contracts').LoopConcept[] } | null;
 }
 
 /** 恢复历史唯一来源:GET /api/research/sessions/:id */

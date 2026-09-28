@@ -1,5 +1,5 @@
 /**
- * 研究 loop 的 skill 加载器(2026-09-23)。skill 是仓库根 `skills/<name>/SKILL.md`(与 trading-swarm / asp-agent 同格式:
+ * 研究 loop 的 skill 加载器(2026-09-23)。skill 是仓库根 `skills/<name>/SKILL.md`(与 trade-gate / asp-agent 同格式:
  * YAML 头 + 正文),正文用 `<!-- section:<id> -->` 分段。compose_answer 按问题类型只取相关段落拼进系统提示,
  * 不整份塞给模型(弱模型长提示更容易跑偏,也更慢)。
  *

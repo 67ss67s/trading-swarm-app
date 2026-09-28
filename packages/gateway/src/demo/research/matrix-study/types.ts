@@ -3,7 +3,7 @@
  * 与旧 ResearchStudy / research_studies(预注册单次研究)不是同一个对象,名字刻意区分。
  * 金额一律十进制字符串,时间 unix 毫秒,统计量(收益/夏普/概率)用 number。
  */
-import type { StrategyIR, StrategyJudge } from '@trading-swarm/contracts';
+import type { StrategyIR, StrategyJudge } from '@trade-gate/contracts';
 import type { FamilyKey } from '../batch/families.js';
 import type { SlimScore } from '../batch/study.js';
 import type { FrozenModelProfile } from '../judge/types.js';
@@ -76,6 +76,12 @@ export interface MatrixStudySpec {
   /** 每个组合单独计试验，只在训练段选择，再冻结进入 selection/holdout。 */
   judge_templates?: StrategyJudge[];
   model_profile: FrozenModelProfile | null;
+  /**
+   * Jev 两段式(docs/design/batch-validation-v2-2026-09-25.md §8):'all' = 每格两臂一起跑(缺省,旧研究没有这个字段也按 all);
+   * 'candidates' = 先只跑纯代码臂,封存前只对「候补 / 接近 / 通过」的格子按评分取前 judge_stage_max_cells 格补跑 code_judge。
+   */
+  judge_stage?: JudgeStageMode;
+  judge_stage_max_cells?: number;
   /** 各周期的窗口天数(缺省 15m 180 / 4h 730 / 1d 1460) */
   window_days: Partial<Record<MatrixTimeframe, number>>;
   /** 窗口终点(缺省 = 创建时 UTC 当日 0 点 − 1ms,已收盘) */
@@ -91,8 +97,24 @@ export interface MatrixStudySpec {
   /** 留出段账户级回放:每笔风险(百分比,缺省 0.5 = 0.5%)与同时最多持仓 */
   portfolio: { risk_pct: number; max_open: number };
   /** 发起方(透传给完成回调,runtime 用来往对话推消息) */
-  origin: { chat_session_id: string | null };
+  origin: { chat_session_id: string | null; batch?: { id: string; index: number; total: number } };
 }
+export type JudgeStageMode = 'all' | 'candidates';
+/** manifest 冻结的两段式规则(只在 candidates 下出现;写库后不可改) */
+export interface JudgeStageRule {
+  version: 'judge_stage_v1'; mode: 'candidates'; max_cells: number;
+  /** 入选条件:code 格 verdict ∈ pass/near,或三档(未封存口径)∈ pending/paper_candidate */
+  eligible: 'code_cell_verdict_pass_near_or_tier_pending_paper_candidate';
+  /** 排序:评分卡分数降序 → 档位 → 选择段夏普降序 → cell_id */
+  rank: 'scorecard_desc_tier_sharpe_cell_id';
+  /** 补跑的变体:该 code_judge 格 manifest 里与代表性第 0 代 code 试验同 param 的变体(模板组则为该 param 全部模板) */
+  variants: 'manifest_variants_same_param_as_generation0_code_trial';
+  /** 时点:纯代码臂搜索(矩阵 + 迭代)结束后、封存 finalist 与留出段释放之前;同一开发视图数据锁 */
+  timing: 'after_code_search_before_seal';
+}
+export interface JudgeStageSelection { cell_id: string; code_cell_id: string; code_trial_id: string; param: string; score: number | null; tier: MatrixTier; verdict: 'pass' | 'near' | 'fail' }
+/** 两段式运行状态:入选名单一次算定(status 从 pending 变 selected 时写入),resume 复用、不重算 */
+export interface JudgeStageState { mode: 'candidates'; max_cells: number; status: 'pending' | 'selected' | 'done'; eligible: number; selected: JudgeStageSelection[] }
 
 export type MatrixHorizon = 'short' | 'mid' | 'long';
 export const HORIZON_OF: Record<MatrixTimeframe, MatrixHorizon> = { '3m': 'short', '5m': 'short', '15m': 'short', '4h': 'mid', '1d': 'long' };
@@ -111,6 +133,8 @@ export interface MatrixCell {
 export interface MatrixManifest {
   version: 'matrix_manifest_v1';
   spec: MatrixStudySpec;
+  /** Jev 两段式规则(spec.judge_stage = candidates 时冻结;旧 manifest / all 模式没有) */
+  judge_stage?: JudgeStageRule;
   /** spec.strategies 解析出的快照(旧 manifest 没有这个字段) */
   my_strategies?: MyStrategySnapshot[];
   segments: Partial<Record<MatrixTimeframe, TimeframeSegments>>;
@@ -131,6 +155,8 @@ export interface DevResult {
   selection_returns: number[]; selection_days: number[];
   /** 选择段手续费(报价币)与毛收益估计 = 净收益 + 手续费 / 资金 */
   selection_fees: number; selection_gross: number | null;
+  /** 选择段 / 训练段盈亏因子(段内成熟交易单笔收益:盈利合计 / |亏损合计|;没有亏损时 null)。09-25 v2 起记录,旧评估没有 */
+  selection_profit_factor?: number | null; train_profit_factor?: number | null;
   diagnosis: { key: string; severity: string; text: string }[];
   judge: { candidates: number; follow: number; skip: number; error: number; uncertain: number } | null;
   warnings: string[]; engine: string;
@@ -142,13 +168,62 @@ export interface TrialView {
   dev: DevResult | null;
   gates: GateRow[]; dsr: number | null; verdict: 'pass' | 'near' | 'fail'; cause: FailureCause | null;
 }
+/**
+ * 批量验证 v2 三档(docs/design/batch-validation-v2-2026-09-25.md):
+ *   pass = 原门槛全过且最终验收通过;paper_candidate = 候补 · 可纸面观察(只差样本数 / 显著性);fail = 其余;
+ *   pending = 选择段全过、进了最终验收名单但还没验收;ineligible = 不适用 / 仅研究。候补本身不算通过。
+ */
+export type MatrixTier = 'pass' | 'paper_candidate' | 'pending' | 'fail' | 'ineligible';
+export const MATRIX_TIERS: readonly MatrixTier[] = ['pass', 'paper_candidate', 'pending', 'fail', 'ineligible'];
+/** 运气折扣:这一格 / 本研究 / 全谱系的试验数都记账;优先 DSR,DSR 不可用时按全谱系试验数做 Bonferroni */
+export interface LuckDiscount {
+  method: 'dsr' | 'bonferroni' | 'unavailable';
+  cell_trials: number; study_trials: number; program_trials: number;
+  /** 按全谱系试验数的 Deflated Sharpe(与正式门槛同口径) */
+  dsr: number | null;
+  /** 只按本格试验数折算的 DSR(敏感性) */
+  dsr_cell: number | null;
+  /** 选择段日收益均值 > 0 的单侧 t 检验 p(未校正) */
+  p_value: number | null;
+  p_bonferroni: number | null;
+  /** 「是运气」的可能:1 − dsr,或 Bonferroni 校正后的 p */
+  luck_probability: number | null;
+  text: string;
+}
+/** 每格评分卡(只读训练段 + 选择段;留出段一律不进) */
+export interface MatrixScorecard {
+  version: 'matrix_scorecard_v1';
+  trial_id: string;
+  /** research/analyzer.ts score() 的结果(研究台 / 我的策略同一函数与 score_label) */
+  score: import('@trade-gate/contracts').BacktestScore;
+  metrics: {
+    total_return: number; max_drawdown: number; sharpe: number | null; win_rate: number | null; trades: number;
+    profit_factor: number | null; expectancy: number | null; cagr: number | null; days: number;
+    hold_return: number | null; exposure_matched_hold: number | null; excess_vs_hold: number | null; excess_vs_matched_hold: number | null;
+    stressed_return: number | null;
+    /** 手续费 / 毛收益(毛收益 ≤ 0 时 null) */
+    fee_share: number | null; fees_pct: number | null;
+  };
+  train: { total_return: number; sharpe: number | null; trades: number; max_drawdown: number; cagr: number | null } | null;
+  luck: LuckDiscount;
+  segments: ['train', 'selection'];
+  notes: string[];
+}
 export interface CellResult {
   cell_id: string; verdict: 'pass' | 'near' | 'fail' | 'ineligible'; cause: FailureCause | null;
+  /** v2 三档(读视图补;旧行没有) */
+  tier?: MatrixTier;
+  /** 决定这一档的试验(候补时 = 本格评分最高的候补试验,可能不是 best_trial_id) */
+  tier_trial_id?: string | null;
+  tier_reasons?: string[];
+  scorecard?: MatrixScorecard | null;
   best_trial_id: string | null; selection: SlimScore | null; train: SlimScore | null; gates: GateRow[]; dsr: number | null;
   evaluated: number;
   /** code_judge 臂相对同格 code 臂(同一变体参数)的选择段配对差:日收益差均值与块 bootstrap 95% 区间 */
   /** error_ratio = (error + uncertain) / 候选;all_skipped = 一笔没跟(此时增量只说明「全部不做」相对亏损基线,不算判断增量) */
   judge_delta: { mean_daily: number | null; ci95: [number, number] | null; kept_ratio: number | null; error_ratio?: number | null; all_skipped?: boolean } | null;
+  /** 两段式下 code_judge 格:pending = 第一阶段还没结束;not_candidate = 没入选、没补跑(verdict 记 ineligible,不算不适用);rerun = 补跑过 */
+  judge_stage?: 'pending' | 'not_candidate' | 'rerun';
 }
 export interface MatrixGeneration {
   n: number; cell_id: string; parent_trial_id: string;
@@ -177,10 +252,17 @@ export interface TrialLedger {
   dsr_sensitivity: { trials: number; dsr: number | null }[];
 }
 export interface MatrixConclusion {
+  /** 不变(向后兼容):有候补但没通过时仍是 no_candidate,候补看 paper_candidates */
   kind: 'passed' | 'no_candidate';
   finalist_ids: string[];
+  /** v2:候补 · 可纸面观察的组数与试验(旧结论没有) */
+  paper_candidates?: number;
+  paper_candidate_trial_ids?: string[];
+  tiers?: Record<MatrixTier, number>;
   causes: Record<FailureCause, number>;
   not_applicable: number; research_only: number;
+  /** 两段式:只对候补补跑了 Jev(结论与 Jev 效果只统计补跑过的格子) */
+  judge_stage?: { mode: 'candidates'; rerun_cells: number; eligible: number; skipped_cells: number };
   text: string;
 }
 export interface MatrixUsage { judge_calls: number; judge_usd: string; judge_reserved_usd: string; judge_unknown_cost_calls: number; llm_calls: number; llm_usd: string; wall_ms: number }
@@ -201,6 +283,8 @@ export interface MatrixState {
   sharpe_variance: number | null;
   usage: MatrixUsage;
   stop_reason: string | null;
+  /** Jev 两段式运行状态(只在 candidates 研究里有) */
+  judge_stage?: JudgeStageState;
   notes: string[];
   error: string | null;
   started_at: number | null;
@@ -215,7 +299,7 @@ export interface MatrixStudyRow {
 export interface MatrixEvent {
   seq: number; study_id: string; at: number; stage: MatrixStage; status: MatrixStudyStatus;
   kind: 'status' | 'progress' | 'cell' | 'generation' | 'finalist' | 'conclusion' | 'adopted';
-  progress: MatrixProgress; cell?: CellResult; generation?: MatrixGeneration; finalist?: MatrixFinalist; conclusion?: MatrixConclusion; adopted?: { finalist_id: string; strategy_id: string; version: number };
+  progress: MatrixProgress; cell?: CellResult; generation?: MatrixGeneration; finalist?: MatrixFinalist; conclusion?: MatrixConclusion; adopted?: { finalist_id: string; strategy_id: string; version: number; kind?: 'finalist' | 'paper_candidate'; trial_id?: string };
 }
 export const MATRIX_EVENT = 'research.matrix_study';
 export const MATRIX_RUNNER_VERSION = 'matrix-runner/v1';

@@ -3,7 +3,7 @@
 # 现货总名义不超过权益(满仓后新信号跳过),复利;按时间顺序开平仓(同一时刻按事件 id)。每段行情分开算(两段不连续)。
 # TS 版在 src/demo/research/judgment-replay/account.ts,判断回放 report 里直接出这张表;两边数字应一致。
 import sqlite3, json, sys, os
-db = sqlite3.connect(os.path.expanduser('~/.trading-swarm-okx/research/judgment-replay/jr.sqlite'))
+db = sqlite3.connect(os.path.expanduser('~/.trade-gate-okx/research/judgment-replay/jr.sqlite'))
 M = sys.argv[1]; MGMT = sys.argv[2] if len(sys.argv) > 2 else 'trail'; RISK = 0.01
 man = json.loads(db.execute("select json from manifests where id=?", (M,)).fetchone()[0])
 evs = {r[0]: json.loads(r[1]) for r in db.execute("select id, event_json from events where manifest_id=?", (M,))}

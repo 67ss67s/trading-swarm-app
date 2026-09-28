@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { LayoutGrid, List, Plus, Search, X } from 'lucide-react';
-import type { ResearchStrategyList } from '@trading-swarm/contracts';
+import type { ResearchStrategyList } from '@trade-gate/contracts';
 import { api, researchApi } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';

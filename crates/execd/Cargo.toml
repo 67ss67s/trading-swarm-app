@@ -4,7 +4,7 @@ version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "trading-swarm 执行服务:唯一凭证持有者与账户写者;UDS JSON-RPC、exec.sqlite、六记录状态机(A0 为骨架)"
+description = "trade-gate 执行服务:唯一凭证持有者与账户写者;UDS JSON-RPC、exec.sqlite、六记录状态机(A0 为骨架)"
 
 [[bin]]
 name = "execd"
@@ -28,3 +28,4 @@ uuid.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+

@@ -16,7 +16,7 @@
 
 ## 1. 设置
 
-**数据(冻结)。** OKX 现货 1h,BTC/ETH/SOL/BNB/XRP/DOGE 各 2880 根(2026-05-24 06:00 → 09-21 06:00 UTC),从 `~/.trading-swarm-okx/demo/state.sqlite` 的 `research_datasets` 表只读复制到实验库 `scratchpad/geometry-lab.sqlite`(`datasets` 表记了来源 id)。之后的每一次重跑都只读实验库。
+**数据(冻结)。** OKX 现货 1h,BTC/ETH/SOL/BNB/XRP/DOGE 各 2880 根(2026-05-24 06:00 → 09-21 06:00 UTC),从 `~/.trade-gate-okx/demo/state.sqlite` 的 `research_datasets` 表只读复制到实验库 `scratchpad/geometry-lab.sqlite`(`datasets` 表记了来源 id)。之后的每一次重跑都只读实验库。
 
 **入场(所有臂完全相同)。** 只做多,Donchian-20 收盘突破(收盘 > 前 20 根最高),且量 ≥ 前 20 根均量的 1.1 倍;下一根开盘市价成交。as_of = 信号根收盘。同一个币两次信号至少间隔 24 根(突破会扎堆)。预热 480 根(20 天),尾部留出 168 根给结算,信号窗口 2026-06-13 → 09-14,共 **200 个候选**(BTC 40,XRP 34,SOL 33,BNB 32,ETH 31,DOGE 30)。
 
@@ -83,7 +83,7 @@ A 的目标是「最近的摆动高点」,所以很近(RR 中位数 0.68),一半
 
 样本量:从这次的 CI 反推,B/C 的配对差标准差约 0.75R,要以 80% 把握测出 0.2R 的差距,大约需要 110 笔,所以 **200 笔全跑能判 B/C 相对 A 的 0.2R 级差距**;D 的配对差标准差约 1.8R,200 笔也只能看出 0.35R 以上的差距。
 
-## 5. 止血规则:止损 < k×ATR14 就拒单(另一工作线 追加,零模型调用)
+## 5. 止血规则:止损 < k×ATR14 就拒单(jacky-24 追加,零模型调用)
 
 在决策时刻(参考收盘价)算止损距离,小于 k×ATR14 就不做这一笔(记 0R)。「Δ vs 无规则」是逐笔的(有规则 − 无规则):被拒的那笔记 −R,其余记 0。
 
@@ -109,8 +109,8 @@ A 的目标是「最近的摆动高点」,所以很近(RR 中位数 0.68),一半
 ## 7. 复跑 / 扩量
 
 ```bash
-cd ~/Desktop/trading-swarm-okx
-LAB=$TMPDIR/geometry-lab.sqlite
+cd <repo>
+LAB=/tmp/trade-gate-scratch/geometry-lab.sqlite
 npx jiti packages/gateway/scripts/geometry-lab.ts import --db $LAB          # 只读复制冻结数据集(已做过)
 npx jiti packages/gateway/scripts/geometry-lab.ts run-a  --db $LAB          # 候选 + A 全集(0 调用;有模型行时拒绝重建)
 npx jiti packages/gateway/scripts/geometry-lab.ts pilot  --db $LAB --n 20  --arms B,C,D --max-calls 160 --concurrency 4
@@ -139,9 +139,9 @@ cd packages/gateway && npx vitest run test/demo/geometry-lab   # 16 条
 **怎么跑的。** 两个库,行不会串:GLM 用原库 `scratchpad/geometry-lab.sqlite`(保留试点的 20 笔 B/C/D,可续跑),DeepSeek 用它的副本 `scratchpad/geometry-lab-deepseek.sqlite`(删掉 B/C/D 行和 model_calls,只留候选和 A)。`arm_results` 和 `model_calls` 新加了 `model` 列,试点行补标为 `pi:zai/glm-5.3`。并发 4。两道硬闸:`--max-calls`(按库内累计调用数)和新加的 `--max-cny`(只算本次;每次调用前先按中日韩字符计 1 token、其余每 2.5 个字符计 1 token 的保守估计预留额度,`spent + 在途预留 + 本次预留 > cap` 就不再发)。DeepSeek 的 key 用 `--api-key-env DEEPSEEK_API_KEY` 从环境变量读,经 `piBrain({apiKey})` 以 `--api-key` 传给 pi,错误信息里会被替换成 `[redacted]`。事后查过:日志、两个库、仓库里都没有这个 key。连续 5 笔失败就停(本次 0 错误,没触发)。
 
 ```bash
-S=$TMPDIR
+S=/tmp/trade-gate-scratch
 npx jiti packages/gateway/scripts/geometry-lab.ts pilot --db $S/geometry-lab.sqlite --n 200 --arms B,D --model zai/glm-5.3 --max-calls 535 --max-cny 2.0
-(set -a; source ~/.trading-swarm-okx/secrets/deepseek.env; set +a
+(set -a; source ~/.trade-gate-okx/secrets/deepseek.env; set +a
  npx jiti packages/gateway/scripts/geometry-lab.ts pilot --db $S/geometry-lab-deepseek.sqlite --n 200 --arms B,D --model deepseek/deepseek-v4-flash --api-key-env DEEPSEEK_API_KEY --max-calls 450 --max-cny 1.5)
 npx jiti packages/gateway/scripts/geometry-lab.ts report --db <库> --arms B,D --md out.md
 ```

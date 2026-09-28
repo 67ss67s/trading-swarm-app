@@ -1,6 +1,6 @@
 // 五条内置策略导入研究台(apply-spec §7):译文能过 IR 检查、导入幂等、规则未编码的草稿没有版本、回测只跑一次。
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { validate } from '@trading-swarm/contracts';
+import { validate } from '@trade-gate/contracts';
 import { openStateDb } from '../../../../src/state-db.js';
 import { ResearchStore } from '../../../../src/demo/research/store.js';
 import type { ResearchService } from '../../../../src/demo/research/service.js';

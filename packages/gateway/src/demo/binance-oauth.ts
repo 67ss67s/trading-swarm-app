@@ -80,8 +80,8 @@ export const pkceChallenge = (verifier: string): string => base64url(createHash(
 export function clientMetadataDocument(clientId: string, redirectUris: string[]): Record<string, unknown> {
   return {
     client_id: clientId,
-    client_name: 'trading-swarm',
-    client_uri: 'https://github.com/67ss67s/trading-swarm',
+    client_name: 'trade-gate',
+    client_uri: 'https://github.com/67ss67s/trade-gate',
     redirect_uris: redirectUris,
     grant_types: ['authorization_code'],
     response_types: ['code'],

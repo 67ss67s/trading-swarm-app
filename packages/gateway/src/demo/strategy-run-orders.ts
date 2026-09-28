@@ -1,5 +1,5 @@
 /** 运行器的研究适配:订单 IR 复用 orders 意图/方向/价位核;旧 IR 保持 irCandidate 口径。 */
-import type { ResearchDataset, ResearchScreenRow } from '@trading-swarm/contracts';
+import type { ResearchDataset, ResearchScreenRow } from '@trade-gate/contracts';
 import { candidateId, CANDIDATE_VERSION, generateCandidates, SYNTH_POLICY, toResearchBars, type GenerateInput, type StrategyCandidate } from './strategy-candidate.js';
 import { passesUniverseScreen, timeframeMillis } from './research/strategy.js';
 import { viewBars } from './research/engine.js';
@@ -7,7 +7,7 @@ import { orderIntents, resolveOrder } from './research/orders/intents.js';
 import { firstLegMargin, fundedLeg } from './research/orders/shared.js';
 import { volTargetOf, volTargetWeight, volLookbackBars, sizeNote } from './research/primitives/sizing.js';
 import { q, decimal } from './research/primitives.js';
-import type { StrategyIR } from '@trading-swarm/contracts';
+import type { StrategyIR } from '@trade-gate/contracts';
 import type { StrategyRun } from './strategy-run.js';
 import { orderGateFor } from './research/order-gate.js';
 import { screenUniverse } from './research/screen.js';

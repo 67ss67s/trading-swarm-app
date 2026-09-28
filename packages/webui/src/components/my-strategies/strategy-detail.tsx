@@ -14,7 +14,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, useReducedMotion } from 'motion/react';
 import { ArrowLeft, Check, FileBarChart, Grid3x3, Loader2, Lock, Play, Rocket, Settings2, Share } from 'lucide-react';
 import { toast } from 'sonner';
-import type { ResearchStrategyDetail, ResearchStrategyEvent, ResearchStrategyStatus } from '@trading-swarm/contracts';
+import type { ResearchStrategyDetail, ResearchStrategyEvent, ResearchStrategyStatus } from '@trade-gate/contracts';
 import { researchApi } from '@/api/client';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { Button } from '@/components/ui/button';
@@ -263,10 +263,10 @@ export function StrategyDetail({ id, report, tab = 'report' }: { id: string; rep
             {running ? <Loader2 className="animate-spin" /> : <Play />}
             {running ? t('回测运行中…') : d.report ? t('重新回测') : t('运行回测')}
           </Button>
-          {/* §9.53 B:把这条策略当矩阵的一行,跨资产 × 周期 × 两臂测;表单预选它 */}
-          <Button variant="outline" size="sm" disabled={s.status === 'archived' || !s.current_version} title={t('资产 × 周期(15m/4h/1d)× 纯代码 / 代码 + Jev 一起测;通过的存成这条策略的新版本')} onClick={() => { window.location.hash = `matrix-study?strategy=${encodeURIComponent(s.id)}`; }}>
+          {/* §9.53 B:把这条策略当矩阵的一行,跨资产 × 周期 × 两臂测;09-25 起走「策略研究」第 2 步海选,表单预选它 */}
+          <Button variant="outline" size="sm" disabled={s.status === 'archived' || !s.current_version} title={t('换几个币、几个周期(15m/4h/1d)一起回测,顺便比一比加上 Jev 判断会不会更好;通过验收的存成这条策略的新版本')} onClick={() => { window.location.hash = `strategy-research?step=scout&sref=${encodeURIComponent(s.id)}`; }}>
             <Grid3x3 />
-            {t('在矩阵研究里测这条')}
+            {t('用海选测这条')}
           </Button>
           <StrategyMenu strategy={s} actions={actions} triggerClassName="size-7" />
           <RunButton run={run} disabled={s.status === 'archived'} onOpen={() => setRunOpen(true)} />

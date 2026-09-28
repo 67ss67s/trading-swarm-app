@@ -2,7 +2,7 @@
  * 4h 永续均线趋势加杠杆研究 · 取标记价(零模型,只读 OKX 公共接口):资产池(universe.json)× 4h 永续,
  * 用 data/perp-market.ts 的 syncCandles(kind='mark')拉标记价 K 线 + loadTiers 拉维持保证金分档与合约面值(分档是当前值,不是历史值),
  * 按批量研究已冻结的成交价 K 线(data/<SYM>-4h-perp.json)的 open_time 对齐,写新的冻结文件
- * ~/.trading-swarm-okx/research-batch/perp-trend/data/<SYM>-4h-mark.json;已存在的文件不覆盖。走共享 market-cache.sqlite(只补缺口)。
+ * ~/.trade-gate-okx/research-batch/perp-trend/data/<SYM>-4h-mark.json;已存在的文件不覆盖。走共享 market-cache.sqlite(只补缺口)。
  * 用法(走 Clash 代理):HTTPS_PROXY=http://127.0.0.1:7897 node --experimental-transform-types --no-warnings --import ./scripts/research-oracle/register.mjs scripts/research-batch/perp-trend-fetch.ts
  */
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';

@@ -1,6 +1,6 @@
 import { calculateMicrostructure, LIVE_ONLY_FIELDS, type MicrostructureSnapshot } from './microstructure.js';
 import { Ajv2020 } from 'ajv/dist/2020.js';
-import { schemas, type StrategyJudge, type ResearchBar, type JudgeStateField } from '@trading-swarm/contracts';
+import { schemas, type StrategyJudge, type ResearchBar, type JudgeStateField } from '@trade-gate/contracts';
 import type { DecisionQuestion } from '../../decisions.js';
 import type { JudgeCandidateSnapshot, JudgeStateV1, NormalizedAnswer, PredicateEvaluation } from './types.js';
 
@@ -82,7 +82,7 @@ export function decisionQuestions(spec: StrategyJudge): Record<string, DecisionQ
   return Object.fromEntries(spec.questions.map(q => [q.key, q.type === 'noul' ? { type: q.type, instructions: q.instructions, criteria: { true: q.criteria[0]!, false: q.criteria[1]! } } : q.type === 'score' ? { type: q.type, instructions: q.instructions, criteria: [...q.criteria] } : { type: q.type, instructions: q.instructions, criteria: Object.fromEntries(q.labels!.map((l,i) => [l,q.criteria[i]!])) }]));
 }
 /** score 使用有序类别概率，不把 score 的位置/期望当成获利概率。 */
-export function normalizeAnswers(spec: StrategyJudge, raw: unknown, parser_version: import('@trading-swarm/contracts').FrozenModelProfile['parser_version'] = 'judge_answers_v1'): NormalizedAnswer[] {
+export function normalizeAnswers(spec: StrategyJudge, raw: unknown, parser_version: import('@trade-gate/contracts').FrozenModelProfile['parser_version'] = 'judge_answers_v1'): NormalizedAnswer[] {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw Error('judge_answers_invalid');
   const all = raw as Record<string, Record<string, unknown>>;
   if (Object.keys(all).length !== spec.questions.length) throw Error('judge_answers_keys');

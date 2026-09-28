@@ -29,6 +29,9 @@ export function renderDeliverable(e: PublishEvent, settings: PublisherSettings) 
   return { payload, text };
 }
 export const SIGNAL_MAX_CHARS = 200;
+const CJK_RE = /[\u3000-\u303f\u3400-\u9fff\uff00-\uffef]/;
+/** 对外内容一律英文:策略名含中文就不带出去(返回 null,调用方只写周期) */
+export function englishName(name: string | null | undefined): string | null { const n = (name ?? '').trim(); return n && !CJK_RE.test(n) ? n : null; }
 /** 官方订阅信号类型头(中英)。 */
 export const SIGNAL_HEADERS = ['【Spot】', '【Futures】', '【Prediction】', '【Options】', '【DeFi】', '【现货】', '【合约】', '【预测市场】', '【期权】'];
 /** 订阅交付文本合规检查:可执行信号以类型头开头,非可执行消息以「Service message:」开头;≤200 字;无收益保证词。 */
@@ -56,7 +59,16 @@ function validFor(ms: number): string {
   return m < 120 ? `${m}min` : `${Math.round(m / 60)}h`;
 }
 /** 可执行信号的一行规范文本。now 用于重发旧信号时按剩余有效期计算「Valid for」。 */
-export function signalLine(e: PublishEvent, action: string, now: number): string {
+/** 信号行里的价格:引擎算出的止损/止盈是浮点(如 120.14060717822389),按量级保留有效位,去掉尾零 */
+export function signalPrice(v: string | null | undefined): string | null {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v); if (!Number.isFinite(n) || n <= 0) return String(v);
+  const dp = n >= 1000 ? 2 : n >= 100 ? 3 : n >= 1 ? 4 : n >= 0.01 ? 6 : 8;
+  const fixed = n.toFixed(dp).replace(/\.?0+$/, '');
+  return String(v).length <= fixed.length ? String(v) : fixed;
+}
+export function signalLine(e0: PublishEvent, action: string, now: number): string {
+  const e = { ...e0, price: signalPrice(e0.price), stop_loss: signalPrice(e0.stop_loss), take_profit: e0.take_profit.map((x) => signalPrice(x) ?? x) };
   const spot = e.market === 'spot';
   const inst = symbolToInstId(e.symbol, e.market);
   const limit = e.entry_type === 'limit';
@@ -73,12 +85,16 @@ export function signalLine(e: PublishEvent, action: string, now: number): string
   } else fields = spot ? [`【Spot】OKX`, inst, e.direction === 'short' ? 'SELL' : 'BUY', price, ...risk, valid]
     : [`【Futures】${inst}`, `${side} ${e.leverage ?? 1}x`, price, ...risk, valid];
   const line = fields.filter(Boolean).join(' | ');
-  const tagged = `${line} | Trading Swarm${e.strategy ? ` ${e.strategy.name} ${e.strategy.timeframe}` : ''}`;
+  const tagged = `${line} | Trading Swarm${e.strategy ? ` ${englishName(e.strategy.name) ?? 'strategy'} ${e.strategy.timeframe}` : ''}`;
   return [...tagged].length <= SIGNAL_MAX_CHARS ? tagged : clip(line);
 }
 export class MarketPublisher {
   private chain: Promise<unknown> = Promise.resolve();
-  constructor(private readonly deps: { store: DemoStore; cli: MarketCli; settings: () => PublisherSettings; aspId: () => Promise<string>; emit: (event: string, payload: unknown) => void }) {
+  constructor(private readonly deps: { store: DemoStore; cli: MarketCli; settings: () => PublisherSettings; aspId: () => Promise<string>; emit: (event: string, payload: unknown) => void;
+    /** 策略信号服务的 serviceId:只推给订了这个服务的 job(同一 ASP 下还有市场情报/微观告警等订阅,不能收到交易信号) */
+    serviceId?: () => string | null;
+    /** 卖方暂停了策略信号产品:新信号不推送、也不记推送账本 */
+    paused?: () => boolean }) {
     // Interrupted sends are unknown, never automatically replayed. Explicit retry remains available.
     this.db.prepare("UPDATE okx_market_delivery_out_job SET status='failed',error='进程中断，投递结果未知；人工核实后可重发',updated_at=? WHERE status='pending'").run(Date.now());
   }
@@ -88,7 +104,7 @@ export class MarketPublisher {
   publish(event: PublishEvent, opts: { strategy_run?: boolean } = {}) { const frozen = structuredClone(event); return this.serial(() => this.publishInner(frozen, opts.strategy_run === true && !!frozen.strategy)); }
   private async publishInner(e: PublishEvent, strategyRun = false): Promise<unknown> {
     const s = this.deps.settings();
-    if ((!s.enabled && !strategyRun) || e.transport === 'okx_asp') return null;
+    if ((!s.enabled && !strategyRun) || e.transport === 'okx_asp' || this.deps.paused?.()) return null;
     if (this.db.prepare('SELECT 1 FROM okx_market_delivery_out WHERE event_id=?').get(e.event_id)) return this.get(e.event_id);
     const backend = e.backend === 'paper' ? 'paper' : e.backend.startsWith('okx') ? 'okx' : 'binance';
     const analysis = !e.signal_only && (e.paper || backend === 'paper' || e.kind === 'decision_record');
@@ -98,7 +114,7 @@ export class MarketPublisher {
     let refusal: string | null = BANNED_WORDS.test(text) || BANNED_WORDS.test(e.reason) ? '敏感词拦截:禁止收益保证' : null;
     let asp = ''; let subscribers: string[] = [];
     if (!refusal) {
-      try { asp = await this.deps.aspId(); subscribers = [...new Set(list(await this.deps.cli.call('subscribe-active', ['--agent-id', asp])).map((x) => String(x['jobId'] ?? x['job_id'] ?? '')).filter(Boolean))]; }
+      try { asp = await this.deps.aspId(); subscribers = await this.signalSubscribers(asp); }
       catch (err) { refusal = `订阅者集合获取失败:${(err as Error).message}`; }
     }
     this.db.exec('BEGIN IMMEDIATE');
@@ -115,6 +131,23 @@ export class MarketPublisher {
     this.deps.store.bots.finishRun(run, { status: refusal || failed ? 'failed' : 'done', error: refusal, result: { jobs, refusal } });
     if (failed > subscribers.length / 2) captainHandoff(this.deps.store, `publish:${e.event_id}`, '信号投递失败超过一半', { event_id: e.event_id, jobs });
     const result = this.get(e.event_id); this.deps.emit('market_publish', result); return result;
+  }
+  /** 活跃订阅里 serviceId 等于策略信号服务的 job;行里缺 serviceId 用 provider 视图补,仍对不上的一律不推 */
+  private async signalSubscribers(asp: string): Promise<string[]> {
+    const rows = list(await this.deps.cli.call('subscribe-active', ['--agent-id', asp]));
+    const want = this.deps.serviceId?.() ?? null;
+    const jobOf = (r: Record<string, unknown>) => String(r['jobId'] ?? r['job_id'] ?? '');
+    if (!want) return [...new Set(rows.map(jobOf).filter(Boolean))];
+    const sid = (r: Record<string, unknown> | undefined) => { const v = r?.['serviceId'] ?? r?.['service_id']; return v === undefined || v === null || v === '' ? null : String(v); };
+    let provider: Map<string, Record<string, unknown>> | null = null;
+    const out: string[] = [];
+    for (const r of rows) {
+      const job = jobOf(r); if (!job) continue;
+      let s = sid(r);
+      if (s === null) { provider ??= new Map(list(await this.deps.cli.call('my-subscriptions', ['--role', 'provider'])).map((x) => [jobOf(x), x])); s = sid(provider.get(job)); }
+      if (s === want && !out.includes(job)) out.push(job);
+    }
+    return out;
   }
   private async send(event: string, job: string, asp: string, text: string, retry: boolean) {
     const claim = this.db.prepare(`UPDATE okx_market_delivery_out_job SET status='pending',attempts=attempts+1,updated_at=? WHERE event_id=? AND job_id=? AND status=? AND ${retry ? '1=1' : 'attempts=0'}`).run(Date.now(), event, job, retry ? 'failed' : 'pending');

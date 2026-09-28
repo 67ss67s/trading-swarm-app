@@ -3,7 +3,7 @@
  */
 import { useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight } from 'lucide-react';
-import type { BacktestReport, BacktestTrade } from '@trading-swarm/contracts';
+import type { BacktestReport, BacktestTrade } from '@trade-gate/contracts';
 import { Button } from '@/components/ui/button';
 import { fmtPrice, fmtQty } from '@/lib/format';
 import { t } from '@/lib/i18n';

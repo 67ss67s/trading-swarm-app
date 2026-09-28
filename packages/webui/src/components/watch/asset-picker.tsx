@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { relativeTime } from '@/lib/format';
-import { t } from '@/lib/i18n';
+import { t, listSep } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { fmtChange, fmtCompact, fmtFunding, fmtLast, parseSymbolInput, pickerRows, quota, type AssetSortKey, type RadarHit, type SortDir } from './watch-logic';
 
@@ -106,7 +106,7 @@ export function AssetPicker({
       const syms = parseSymbolInput(q);
       const bad = data ? syms.filter((s) => !known.has(s)) : [];
       if (bad.length) {
-        toast.error(t('{ex} 上没有这些币', { ex: exchangeName }), { description: bad.join('、') });
+        toast.error(t('{ex} 上没有这些币', { ex: exchangeName }), { description: bad.join(listSep()) });
         return;
       }
       tryAdd(syms);

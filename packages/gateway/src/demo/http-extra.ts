@@ -27,6 +27,8 @@ import { researchRoutes } from './routes-research.js';
 import { teamRiskRoutes } from './routes-team-risk.js';
 import { modelConnectionRoutes } from './routes-model-connections.js';
 import { matrixStudyRoutes } from './routes-matrix-study.js';
+import { judgeLiveRoutes } from './routes-judge-live.js';
+import { tradingRoutes } from './routes-trading.js';
 
 export type RouteHandler = (req: http.IncomingMessage, res: http.ServerResponse, url: URL, params: Record<string, string>) => Promise<void>;
 
@@ -62,6 +64,7 @@ export const extraRouteModules: RouteModule[] = [
   marketRoutes,
   funnelRoutes,
   indicatorRoutes,
+  judgeLiveRoutes,
   judgmentLedgerRoutes,
   modelConnectionRoutes,
   okxOnboardingRoutes,
@@ -70,4 +73,5 @@ export const extraRouteModules: RouteModule[] = [
   strategyRoutes,
   strategyRunRoutes,
   teamRiskRoutes,
+  tradingRoutes,
 ];

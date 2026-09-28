@@ -3,7 +3,7 @@
  * 每个试验:先登记(config_hash 唯一)→ 已有 completed 评估直接复用(恢复不重跑)→ 否则开一次 attempt 跑评估。
  * 生成器只拿开发视图(单资产、截断到选择段末、holdout 哨兵)。
  */
-import type { StrategyIR } from '@trading-swarm/contracts';
+import type { StrategyIR } from '@trade-gate/contracts';
 import type { AssetExecutor } from '../backtest-report.js';
 import { getGenerator } from '../improve/generators/index.js';
 import { compileCheck } from '../improve/runner.js';
@@ -64,24 +64,28 @@ export async function evalTrial(x: SearchCtx, cell: MatrixCell, v: MatrixVariant
   }
 }
 
-/** 矩阵阶段:全部 applicable 格子 × 变体(第 0 代) */
-export async function runMatrix(x: SearchCtx): Promise<TrialRec[]> {
-  const out: TrialRec[] = [];
-  for (const cell of x.row.manifest.cells) if (cell.applicability === 'applicable') {
-    const groups = new Map<string, MatrixVariantRef[]>();
-    for (const v of cell.variants) { const key=v.template_group??v.id;groups.set(key,[...(groups.get(key)??[]),v]); }
-    for (const vs of groups.values()) {
-      if (!vs[0]!.template_group) { out.push(await evalTrial(x,cell,vs[0]!,0,null));continue; }
-      const training: {v:MatrixVariantRef;t:TrialRec}[]=[];
-      for (const v of vs) training.push({v,t:await evalTrial(x,cell,v,0,null,'template_train')});
-      training.sort((a,b)=>(b.t.dev?.train.sharpe??-Infinity)-(a.t.dev?.train.sharpe??-Infinity)||a.v.id.localeCompare(b.v.id));
-      const winner=training.find(t=>t.t.dev)?.v;
-      for (const item of training) if(item.v!==winner) {
-        const rec:TrialRec={...item.t,dev:null,status:'failed',error:item.t.error??'template_train_not_selected'};out.push(rec);x.onTrial(rec);
-      }
-      if(winner)out.push(await evalTrial(x,cell,winner,0,null));
+/** 一格的一组变体(第 0 代):无模板直接评估;模板组先只在训练段选出赢家,其余记 template_train_not_selected */
+export async function evalCellVariants(x: SearchCtx, cell: MatrixCell, variants: MatrixVariantRef[]): Promise<TrialRec[]> {
+  const out: TrialRec[] = [], groups = new Map<string, MatrixVariantRef[]>();
+  for (const v of variants) { const key=v.template_group??v.id;groups.set(key,[...(groups.get(key)??[]),v]); }
+  for (const vs of groups.values()) {
+    if (!vs[0]!.template_group) { out.push(await evalTrial(x,cell,vs[0]!,0,null));continue; }
+    const training: {v:MatrixVariantRef;t:TrialRec}[]=[];
+    for (const v of vs) training.push({v,t:await evalTrial(x,cell,v,0,null,'template_train')});
+    training.sort((a,b)=>(b.t.dev?.train.sharpe??-Infinity)-(a.t.dev?.train.sharpe??-Infinity)||a.v.id.localeCompare(b.v.id));
+    const winner=training.find(t=>t.t.dev)?.v;
+    for (const item of training) if(item.v!==winner) {
+      const rec:TrialRec={...item.t,dev:null,status:'failed',error:item.t.error??'template_train_not_selected'};out.push(rec);x.onTrial(rec);
     }
+    if(winner)out.push(await evalTrial(x,cell,winner,0,null));
   }
+  return out;
+}
+
+/** 矩阵阶段:全部 applicable 格子 × 变体(第 0 代);Jev 两段式(candidates)第一阶段只跑 code 格,code_judge 留给封存前补跑 */
+export async function runMatrix(x: SearchCtx): Promise<TrialRec[]> {
+  const out: TrialRec[] = [], stage = x.row.manifest.judge_stage?.mode === 'candidates';
+  for (const cell of x.row.manifest.cells) if (cell.applicability === 'applicable' && !(stage && cell.arm === 'code_judge')) out.push(...await evalCellVariants(x, cell, cell.variants));
   return out;
 }
 

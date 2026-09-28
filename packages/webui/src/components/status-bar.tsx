@@ -1,4 +1,5 @@
 import { backendLabel } from '@/lib/format';
+import { IS_JUDGE } from '@/lib/edition';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
@@ -11,7 +12,8 @@ export function StatusBar({ connected, backend, brain }: { connected: boolean; b
         {connected ? t('实时连接正常') : t('连接断了,正在重连')}
       </span>
       <span className="num">{t('后端')} {backendLabel(backend)}</span>
-      <span className="num ml-auto">{t('主脑')} {brain}</span>
+      {/* 评审版:旧「主脑」槽位(workflow.brain)不反映按角色绑定的实际模型,访客又读不到 /api/models,干脆不显示 */}
+      {IS_JUDGE ? null : <span className="num ml-auto">{t('主脑')} {brain}</span>}
     </footer>
   );
 }

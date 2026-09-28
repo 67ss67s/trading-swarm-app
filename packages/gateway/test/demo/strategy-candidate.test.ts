@@ -4,7 +4,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import type http from 'node:http';
 import { openStateDb } from '../../src/state-db.js';
 import type { Kline } from '../../src/demo/types.js';
-import type { StrategyIR } from '@trading-swarm/contracts';
+import type { StrategyIR } from '@trade-gate/contracts';
 import type { RouteContext, RouteHandler } from '../../src/demo/http-extra.js';
 import { candidateRoutes } from '../../src/demo/routes-candidates.js';
 import { candidateAt } from '../../src/demo/research/engine.js';

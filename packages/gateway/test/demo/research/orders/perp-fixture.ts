@@ -1,5 +1,5 @@
 /** 永续回测测试共用:合成行情(几何随机游走)+ 合成永续取数(标记价 = 成交价,可加尖刺;每 8h 正费率资金费,2022 前标为币安代理)+ 跌破低点做空 3 倍 IR。只做工程验证。 */
-import type { ResearchBar, StrategyIR } from '@trading-swarm/contracts';
+import type { ResearchBar, StrategyIR } from '@trade-gate/contracts';
 import type { BarsLoader } from '../../../../src/demo/research/backtest-report.js';
 import type { PerpMarket } from '../../../../src/demo/research/data/perp-market.js';
 import { toOrderBar } from '../../../../src/demo/research/orders/index.js';

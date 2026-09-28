@@ -1,5 +1,5 @@
 /**
- * 诊断与「改善来自哪里」(research round 2 §4):出场原因分布、R 直方图、MAE/MFE、成本占比、
+ * 诊断与「改善来自哪里」(round2-spec §4):出场原因分布、R 直方图、MAE/MFE、成本占比、
  * 因子归因(alpha/beta 占比、残差回撤)、持有根数、多资产分币;父子实验逐段消融归因。
  * 文案一律按「观察 → 假设 → 验证」三段写:观察是能引用的数值,假设注明它只是可能原因,
  * 验证给出「只改一个条件、同窗口对照、再到预留窗口复核」的做法。不写确定性因果。
@@ -315,7 +315,7 @@ export function AttributionCard({ run }: { run: ResearchRunSummary }) {
   return (
     <Card title={t('改善来自哪里')} hint={t('父 {p} → 子 {c}', { p: parentId.slice(0, 8), c: run.id.slice(0, 8) })} foot={a?.note ?? t('逐段消融是探索性归因,段间有交互;不是因果证明。')}>
       {q.isLoading ? <div className="px-3 py-3 text-[11.5px] text-muted-foreground">{t('逐段回放中(纯规则,零模型调用)…')}</div> : null}
-      {q.error ? <div className="px-3 py-3 text-[11.5px] text-muted-foreground">{/404|not_found|不存在/.test((q.error as Error).message) ? t('后端还没有归因接口(后端交付中)') : (q.error as Error).message}</div> : null}
+      {q.error ? <div className="px-3 py-3 text-[11.5px] text-muted-foreground">{/404|not_found|不存在/.test((q.error as Error).message) ? t('后端还没有归因接口(第二轮 astra 交付中)') : (q.error as Error).message}</div> : null}
       {a ? (
         <div className="px-3 py-2">
           <div className="mb-2 flex items-center gap-4 text-[11.5px]">

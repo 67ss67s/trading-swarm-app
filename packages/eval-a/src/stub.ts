@@ -3,7 +3,7 @@
 // the offline run exercises the whole checker (mix of actions, symmetric under mirroring, honest
 // about STALE and halted) without any model.
 
-import { demo } from '@trading-swarm/gateway';
+import { demo } from '@trade-gate/gateway';
 
 interface StructureLine {
   ref: string;

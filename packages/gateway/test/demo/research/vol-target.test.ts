@@ -2,7 +2,7 @@
 // 第一段是旧口径钉子:vol_target 接入前实测的结构口径(DEFAULT_ORDER_GATE)结果哈希——不用 vol_target 的 IR 走 engine v5 快路径、
 // 订单周期执行核(现货 + 永续)逐字节不变。哈希变了 = 旧 run 重放不再一致。
 import { describe, it, expect } from 'vitest';
-import type { ResearchRequest, StrategyIR } from '@trading-swarm/contracts';
+import type { ResearchRequest, StrategyIR } from '@trade-gate/contracts';
 import { runReplay } from '../../../src/demo/research/engine.js';
 import { runOrderPath } from '../../../src/demo/research/orders/index.js';
 import { DEFAULT_ORDER_GATE, orderGateFor } from '../../../src/demo/research/order-gate.js';

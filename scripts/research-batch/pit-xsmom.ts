@@ -12,12 +12,12 @@
  *  - 对照:① 资产池等权持有(同一按时点成员,周调仓等权,即 top_k = 池大小);② BTC 持有;③ 同敞口持有(①的日收益 × 策略前一日敞口);
  *    ④ 随机选币 20 个种子(同成员、同名数、同调仓);⑤ 当前在售资产池(universe.json)同一币安价格重跑,分离「价格来源」与「资产池口径」两种效应。
  *  - 每笔收益给均值、中位数、截尾均值(两端各 10%);笔数 < 30 标「观察」。
- * 输出 ~/.trading-swarm-okx/research-batch/pit-xsmom.json,并打印摘要。
+ * 输出 ~/.trade-gate-okx/research-batch/pit-xsmom.json,并打印摘要。
  * 用法:node --experimental-transform-types --no-warnings --import ./scripts/research-oracle/register.mjs scripts/research-batch/pit-xsmom.ts
  */
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import type { ResearchBar } from '@trading-swarm/contracts';
+import type { ResearchBar } from '@trade-gate/contracts';
 import { runXsmom, DAY_MS, type PortfolioAsset, type PortfolioRun, type XsmomParams, type XsmomRunOptions } from '../../packages/gateway/src/demo/research/primitives/portfolio-xsmom.ts';
 import { looksExcluded } from '../../packages/gateway/src/demo/research/batch/universe.ts';
 import { portfolioVariants } from '../../packages/gateway/src/demo/research/batch/families.ts';

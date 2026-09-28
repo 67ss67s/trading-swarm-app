@@ -13,7 +13,7 @@
 // chosen = 该 case 的(众数)判断:HOLD→hold,REDUCE→半 hold 半 exit,EXIT/INVALIDATE→exit_now;
 // 挂单侧 HOLD→keep,INVALIDATE/EXIT→0。best = argmax(平手算 HOLD),regret = best − chosen(≥ 0)。
 
-import { demo } from '@trading-swarm/gateway';
+import { demo } from '@trade-gate/gateway';
 import { openTrade, simulateOutcome, stepTrade, tradeR } from './outcome.js';
 import type { Action, Direction, EvalCase, Judgment } from './types.js';
 import { mean, median, round } from './util.js';

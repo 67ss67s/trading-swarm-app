@@ -8,7 +8,7 @@
  * 类型放这里,不改 api/types.ts(别人在动)。
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { BindingRole, BindingRoleSlice } from '@trading-swarm/contracts';
+import type { BindingRole, BindingRoleSlice } from '@trade-gate/contracts';
 
 export type AgentStrategyKind = 'free' | 'strategy';
 export type RoleEngine = 'code' | 'decision' | 'llm';
@@ -19,7 +19,7 @@ export interface AgentStrategyView {
   name: string | null;
   run_id: string | null;
   run_status: 'running' | 'paused' | 'stopped' | 'error' | null;
-  mode: 'auto' | 'agent' | 'confirm' | 'signal_only' | null;
+  mode: 'auto' | 'jev' | 'agent' | 'confirm' | 'signal_only' | null;
   since: number | null;
   slices: BindingRoleSlice[];
   role_engines: Partial<Record<BindingRole, RoleEngine>>;
@@ -27,7 +27,7 @@ export interface AgentStrategyView {
 }
 export type AgentStrategyPut =
   | { kind: 'free' }
-  | { kind: 'strategy'; strategy_id: string; version?: number; mode?: 'auto' | 'agent' | 'confirm'; confirm?: string };
+  | { kind: 'strategy'; strategy_id: string; version?: number; mode?: 'auto' | 'jev' | 'agent'; confirm?: string };
 
 async function call<T>(method: 'GET' | 'PUT', body?: unknown): Promise<T> {
   const res = await fetch('/api/agent/strategy', { method, headers: body ? { 'content-type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined });

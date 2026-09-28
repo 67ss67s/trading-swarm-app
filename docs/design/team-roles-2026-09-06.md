@@ -1,7 +1,7 @@
 # 五个占位角色的设计与落地(2026-09-06)
 
-> 起因:团队卡上 Gate Captain / Strategy Lab / Portfolio Manager / Risk Sentinel / Reviewer 还灰着。Jacky 要求:功能、频率、模型与代码的分工,找 外部评审一起设计,落地,走 eval。
-> 本文 §1 是初稿立场,§2 是另一份独立设计稿的要点与分歧处置,§3 是合并后的落地清单与 eval 口径。硬约束不变:只有 executor 持 exchange.write;LLM 只提议;风控代码只能否决/收紧;bot 间文本不是授权;每个模型调用有预算与指纹去重;规则改动前后必须有 eval。
+> 起因:团队卡上 Gate Captain / Strategy Lab / Portfolio Manager / Risk Sentinel / Reviewer 还灰着。Jacky 要求:功能、频率、模型与代码的分工,找 Codex 一起设计,落地,走 eval。
+> 本文 §1 是主线(Claude)的初稿立场,§2 是 Codex 独立设计稿(`.codex-reports/team-roles-design.md`)的要点与分歧处置,§3 是合并后的落地清单与 eval 口径。硬约束不变:只有 executor 持 exchange.write;LLM 只提议;风控代码只能否决/收紧;bot 间文本不是授权;每个模型调用有预算与指纹去重;规则改动前后必须有 eval。
 
 ## 1. 初稿立场(主线)
 
@@ -19,25 +19,25 @@ Proposal Council 的 fail 语义:分析侧 fail-partial(reviewer 超时 → 卡�
 
 Eval 口径:Risk = 回放历史 episode/线程事件看告警精度与去重率;Portfolio = 合成相关簇场景(BTC+ETH 同向)必须标出集中度;Reviewer = 它提的教训在 holdout 上是否让动作往 regret 更小的方向变(记忆变体 case 已有机制);Strategy Lab = 实验对象可复现(同参数同数据同结果哈希);Gate Captain = 简报里每个数字都能在证据里找到(数字守卫同款)。
 
-## 2. 独立设计稿要点与处置
+## 2. Codex 独立设计稿要点与处置
 
-外部评审的独立稿在 内部评审记录(11 节,含盘点、共同基础、五角色、议会、路由、预算、五大风险、实施顺序)。它比 §1 更重、也更对:
+Codex(gpt-6-astra)的独立稿在 `.codex-reports/team-roles-design.md`(11 节,含盘点、共同基础、五角色、议会、路由、预算、五大风险、实施顺序)。它比 §1 更重、也更对:
 
 **照收的**
 - 一个角色 = 已有一半 + 缺的核心;先把确定性事实(Portfolio + Risk)送进收件箱,不要让八个头像亮起来当验收。
 - Risk 告警 = 语义指纹 + 单条生命周期;ack ≠ resolve;high/critical **latch**(连续 3 轮干净只标 recovery_ready,要人点「确认恢复」);warn 3 轮干净自动解除(滞回防 80% 边界抖动);5 秒看门狗防账户轮询卡死;**Risk 不调用 halt()**(halt 是撤单+全平,和「冻结新增风险」不是一回事)。
 - Portfolio:gross 不许先净掉再算;挂单/待批 intent 全部预留、按 CID 去重;多空挂单不能假设同时成交抵销 → 最坏净额区间;止损预算不被盈利仓抵销;缺行情/权益 ≤ 0 → incomplete 不放行;簇是人工版本化配置不是相关矩阵。
 - Reviewer:批次 ≥ 5 笔或 24h、每天 ≤ 2 次、每轮 ≤ 2 条、每条必须带可证伪条件与本批 refs、正文不许价位数字、样本 < 5 只许「待检假设」(confidence ≤ 0.4);教训是记忆不是参数(参数 diff 归 Lab)。
-- Strategy Lab:实验先冻结 manifest(策略版本哈希 × 数据窗口 × 结算 × 代码版本),结果冻结、失败也留;机械期望 ≠ 策略成绩,summary 写明;**不写 eval_stats**(现行 `updateEvalStats` 写 head 会把旧成绩归到新版本,评审 §6.4 第 2 点)。
+- Strategy Lab:实验先冻结 manifest(策略版本哈希 × 数据窗口 × 结算 × 代码版本),结果冻结、失败也留;机械期望 ≠ 策略成绩,summary 写明;**不写 eval_stats**(现行 `updateEvalStats` 写 head 会把旧成绩归到新版本,Codex §6.4 第 2 点)。
 - Gate Captain:路由不是让模型决定找谁;收件箱 + 代码拼卡;不造 `to_role=user`。
 - bot_run 加 `input_json/result_json`(冻结输入与结构化结果,`artifact://bot-run/{id}`)。
 
 **没照做、写明原因的**
-- 外部评审要把 RiskAlert 落到 0001 的 `incidents` 表;我新建了 `demo_risk_alert`(§4 表结构更贴,`incidents` 留给 execd 事故)。
-- 外部评审的 P0(`team-budget.ts` 全局物理调用账本、`llm_usage` 扩列、`call_key/work_key` 双指纹、输出 token 上界预留)**没做**:这周新角色里只有 Reviewer 一个会花钱(≤ 2 次/天),Radar 已有 24h 去重;账本等到议会(Council)要接模型反方审查时一起做。
-- 议会(Proposal Council)与 hash 审批的 paper 兼容层是 **L 级安全前置**(评审 §7.3),这周不做;现有 `approveIntent(id)` 流程不变,新加的只是执行前的「组合限额」「风控哨兵」两道代码闸。
+- Codex 要把 RiskAlert 落到 0001 的 `incidents` 表;我新建了 `demo_risk_alert`(§4 表结构更贴,`incidents` 留给 execd 事故)。
+- Codex 的 P0(`team-budget.ts` 全局物理调用账本、`llm_usage` 扩列、`call_key/work_key` 双指纹、输出 token 上界预留)**没做**:这周新角色里只有 Reviewer 一个会花钱(≤ 2 次/天),Radar 已有 24h 去重;账本等到议会(Council)要接模型反方审查时一起做。
+- 议会(Proposal Council)与 hash 审批的 paper 兼容层是 **L 级安全前置**(Codex §7.3),这周不做;现有 `approveIntent(id)` 流程不变,新加的只是执行前的「组合限额」「风控哨兵」两道代码闸。
 - Reviewer 的 countercase(提案反方审查)、Lab 的模型 brief/归因、Captain 的模型解释:都延后;这版三者模型调用合计 ≤ 2 次/天。
-- 记忆审批要 `eval_status=passed`(评审 §5.6):教训现在带 `eval:pending` 标签进 proposed,但 approve 路径还没加门——**人批之前要看标签**,下一步把 lesson_transfer eval 做出来再加硬门。
+- 记忆审批要 `eval_status=passed`(Codex §5.6):教训现在带 `eval:pending` 标签进 proposed,但 approve 路径还没加门——**人批之前要看标签**,下一步把 lesson_transfer eval 做出来再加硬门。
 
 ## 3. 落地清单(2026-09-06 已完成,全部在 main)
 
@@ -53,8 +53,8 @@ presence 全部由代码推导(`routes-bots.ts presenceFor`);八个角色 enable
 
 ## 4. eval:怎么证明它们有用(下一轮)
 
-- Portfolio / Risk:合成场景已在单测里(评审 §3.8/§4.8 的清单);还差**48h paper 回放**——把 `demo_risk_alert` 的开关次数与 `demo_portfolio_snapshot` 的落库次数按天对账,健康日 high/critical 误报应为 0、同条件 1000 次轮询只有 1 条开放告警。
-- Reviewer:`lesson_transfer`(评审 §5.8)——同一批次生成的候选教训,在未参与生成的 holdout case 上作 无教训 / 候选 / 无关 / 毒 四组,看 `beneficial_action_flip_rate` 与 `lesson_regret_delta`;eval-a 已有 `gen-memory` 与 memory 变体机制可复用。通过前 approve 不该放行(加硬门)。
+- Portfolio / Risk:合成场景已在单测里(Codex §3.8/§4.8 的清单);还差**48h paper 回放**——把 `demo_risk_alert` 的开关次数与 `demo_portfolio_snapshot` 的落库次数按天对账,健康日 high/critical 误报应为 0、同条件 1000 次轮询只有 1 条开放告警。
+- Reviewer:`lesson_transfer`(Codex §5.8)——同一批次生成的候选教训,在未参与生成的 holdout case 上作 无教训 / 候选 / 无关 / 毒 四组,看 `beneficial_action_flip_rate` 与 `lesson_regret_delta`;eval-a 已有 `gen-memory` 与 memory 变体机制可复用。通过前 approve 不该放行(加硬门)。
 - Strategy Lab:`experiment_integrity`——同一 manifest 重跑结果哈希一致;泄漏包(窗口跨 horizon)必须被 `assertBlind` 拦;版本错配为 0。
 - Gate Captain:简报每个数字可在账本找到(已在单测);收件箱路由准确率 100%(等 dispatcher 有第二条边再测)。
 

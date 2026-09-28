@@ -6,7 +6,7 @@
 import { randomBytes } from 'node:crypto';
 import { existsSync, unlinkSync } from 'node:fs';
 import net from 'node:net';
-import { encodeFrame, NdjsonDecoder } from '@trading-swarm/contracts';
+import { encodeFrame, NdjsonDecoder } from '@trade-gate/contracts';
 
 /**
  * A short (well under macOS's 104-byte UDS path limit), collision-resistant socket path under

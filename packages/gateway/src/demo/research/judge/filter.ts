@@ -1,6 +1,6 @@
 /** matrix-study 的唯一接入面；无数据读取、网络或模型默认值。 */
 export { requiredPurgeBars, assertPurge, assertSplitPurges } from './purge.js';
-import type { ResearchBar, StrategyIR } from '@trading-swarm/contracts';
+import type { ResearchBar, StrategyIR } from '@trade-gate/contracts';
 import { EvalEnv, runPool, type Window, type PoolRun } from '../improve/evaluate.js';
 import { judgeWithBars, type JudgeRuntime } from './index.js';
 import type { JudgeCandidateSnapshot, JudgeResult } from './types.js';

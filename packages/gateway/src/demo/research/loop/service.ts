@@ -1,4 +1,4 @@
-import type { LoopRevisionCommand } from '@trading-swarm/contracts';
+import type { LoopRevisionCommand } from '@trade-gate/contracts';
 import { commandPlan, revisionContext } from './revisions.js';
 import type { Brain } from "../../brain.js";
 import type { MarketData } from "../data/index.js";

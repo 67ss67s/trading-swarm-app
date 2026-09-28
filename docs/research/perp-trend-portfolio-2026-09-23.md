@@ -16,7 +16,7 @@
   - `ma_trend:ema50_200_vt:perp:long:4h`:同样的规则,EMA50/200。
   - IR 原样取自 `batch/families.ts`,只改了 `order.leverage` 和仓位节点。
 - **杠杆网格**:{1, 2, 3} 倍,逐仓。
-  - 强平按标记价判:新拉的 OKX `history-mark-price-candles` 4H,冻结在 `~/.trading-swarm-okx/research-batch/perp-trend/data/<SYM>-4h-mark.json`,按成交价 K 线 open_time 对齐。
+  - 强平按标记价判:新拉的 OKX `history-mark-price-candles` 4H,冻结在 `~/.trade-gate-okx/research-batch/perp-trend/data/<SYM>-4h-mark.json`,按成交价 K 线 open_time 对齐。
   - 维持保证金分档来自 `loadTiers`。**这是取数当天的当前值,不是历史值**,早年真实分档可能更严。
 - **子账户口径**:执行核每笔保证金占子账户 25%(mf=0.25)。这样子账户被强平一次不会归零,后面的信号照常出现。某笔在保证金上的收益 = (E/E_ref − 1)/mf,手续费、资金费、强平都按名义值计入执行核,所以能按任意保证金缩放。
   - 复现校验:1 倍、每笔 100%、批量研究口径下,验证段 +131.98% / +142.62%,和批量研究随机基线里的「冠军独立跑」逐位一致。加了标记价之后 +131.97% / +142.61%,1 倍下几乎不变。
@@ -51,7 +51,7 @@
 
 ## 结果表
 
-(由 `scripts/research-batch/perp-trend-report.ts` 从 `results.json` 生成,原文也在 `~/.trading-swarm-okx/research-batch/perp-trend/tables.md`)
+(由 `scripts/research-batch/perp-trend-report.ts` 从 `results.json` 生成,原文也在 `~/.trade-gate-okx/research-batch/perp-trend/tables.md`)
 
 切段(永续 4h,makeSegments):训练 2020-02-04~2023-05-30 / 验证 2023-05-30~2025-01-25 / 留出 2025-01-25~2026-09-23
 

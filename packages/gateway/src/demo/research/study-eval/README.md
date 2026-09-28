@@ -3,7 +3,7 @@
 `nulls.ts` 生成相关鞅随机游走 N1 与开发数据同步块重抽+共同独立符号 N2。`statistics.ts` 提供精确二项 CP 单侧上界、Holm 与配对时间块 bootstrap。`g1.ts` 必须注入完整 matrix study adapter；小规模 CI 固定输出 `insufficient_evidence`，不把少量无误放当成统计通过。`g3.ts` 定义真实调用协议及录制账户日收益的离线比较。
 
 ```sh
-npm exec -w @trading-swarm/gateway -- vitest run test/demo/research/study
+npm exec -w @trade-gate/gateway -- vitest run test/demo/research/study
 node packages/gateway/scripts/research-study-eval/run.mjs --gate g1 --profile release --provider stub --null-replicates 1000 --network deny
 node packages/gateway/scripts/research-study-eval/run.mjs --gate g3 --network deny
 ```
@@ -20,3 +20,9 @@ npx vitest run packages/gateway/test/demo/research/study/g3-collect.test.ts --ma
 ```
 
 真实命令、输入契约和已知有损点见 `docs/research/jev-adapt-v2-2026-09-25.md`。
+
+## G3 SQLite 导出（2026-09-25）
+
+`g3-export.ts` 是纯选择/冻结/时间抽样/条件执行函数；`g3-export-db.ts` 只读 SQL 适配研究数据与可选 market-cache 副本。根目录 `scripts/research-study-eval/g3-export-{manifest,outcomes}.mjs` 提供 CLI，禁网、禁 demo 路径、拒绝覆盖冻结产物。缺行情/状态明确不可评，不伪造费用或成交。`g3-export-fixture.ts` 是人造 SQLite 数据夹具。
+
+详细命令、当前副本结果、费用上界及有损边界见 [G3 导出与真跑交接](../../../../../../../docs/research/jev-g3-export-run-2026-09-25.md)。测试使用 `g3-export.test.ts`，连同 `g3-collect.test.ts`、`g3-protocol.test.ts` 运行。真实 manifest 可以离线 stub，但 stub 与 live 账本有模式锁，不允许混用。

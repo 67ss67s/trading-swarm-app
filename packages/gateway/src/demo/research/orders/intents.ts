@@ -16,12 +16,12 @@
  *  - min_rr 只认 order.min_rr(用户原话硬约束),gate 的 min_rr 不再作为门槛;
  *  - 不放宽止损;止损离参考价不到 min_stop_atr×ATR(14,信号根 Wilder)→ 执行核判 stop_too_close 不下单(意图里带 atr/min_stop_atr)。
  */
-import type { ResearchBar, StrategyIR, StrategyPrimitive, OrderLevelSource, OrderGateParams, StrategyOrder } from '@trading-swarm/contracts';
+import type { ResearchBar, StrategyIR, StrategyPrimitive, OrderLevelSource, OrderGateParams, StrategyOrder } from '@trade-gate/contracts';
 import { registry } from '../primitives/index.js';
 import type { PrimitiveContext, PrimitiveValue } from '../primitives/registry.js';
 import { stopFloorPct, isStructureGate } from '../order-gate.js';
 import { hasSignalExit } from '../strategy-spec.js';
-import { atrSeries } from '../primitives/indicators.js';
+import { atrSeries, registerWindow, windowOf } from '../primitives/indicators.js';
 import { volTargetOf, volTargetWeight, sizeNote } from '../primitives/sizing.js';
 import { defaultExpiryBars } from './fills.js';
 import { drainSync, drainAsync } from './drain.js';
@@ -85,7 +85,13 @@ export function levelSource(primitive: string, role: Role, side: Side): OrderLev
 const noteOf = (x: StrategyPrimitive) => { const p = x.params as Record<string, unknown>; if (x.primitive === 'indicator_level') return `${String(p.indicator).toUpperCase()}${p.args ? `(${Object.values(p.args as object).join(',')})` : ''}${p.output ? `.${String(p.output)}` : ''}${Number(p.buffer_atr ?? 0) > 0 ? ` ±${String(p.buffer_atr)}ATR` : ''}`; return `${x.primitive}${Object.keys(p).length ? `(${Object.entries(p).map(([k, v]) => `${k}=${typeof v === 'object' ? JSON.stringify(v) : String(v)}`).join(',')})` : ''}`; };
 /** view = 每根决策可见的最近根数(缺省 WINDOW=5000;全窗口回测传 engine v4 同口径的 viewBars,6×预热夹在 500–5000) */
 export interface IntentContext { bars: ResearchBar[]; mirrored: ResearchBar[] | null; timeframe_ms: number; fee_rate?: number; view?: number }
-const sliceCtx = (c: IntentContext, i: number, side: Side, mirrored = false): PrimitiveContext => { const src = mirrored ? c.mirrored! : c.bars, s = Math.max(0, i - (c.view ?? WINDOW) + 1), bars = src.slice(s, i + 1); return { bars, i: bars.length - 1, timeframe_ms: c.timeframe_ms, side, ...(c.fee_rate !== undefined ? { fee_rate: c.fee_rate } : {}), series: src, series_i: i }; };
+/** 同一根的决策视图只切一次(方向门/信号/价位/离场共用同一个登记过的数组,原语只读);视图内容仍是 src[s..i] */
+const viewCache = new WeakMap<ResearchBar[], { i: number; view: number; bars: ResearchBar[] }>();
+function viewOf(src: ResearchBar[], i: number, view: number): ResearchBar[] {
+  const hit = viewCache.get(src); if (hit && hit.i === i && hit.view === view && windowOf(hit.bars)) return hit.bars;
+  const s = Math.max(0, i - view + 1), bars = registerWindow(src.slice(s, i + 1), src, s); viewCache.set(src, { i, view, bars }); return bars;
+}
+const sliceCtx = (c: IntentContext, i: number, side: Side, mirrored = false): PrimitiveContext => { const src = mirrored ? c.mirrored! : c.bars, bars = viewOf(src, i, c.view ?? WINDOW); return { bars, i: bars.length - 1, timeframe_ms: c.timeframe_ms, side, ...(c.fee_rate !== undefined ? { fee_rate: c.fee_rate } : {}), series: src, series_i: i }; };
 /** 按角色取一个价位原语的价;做空的镜像安全原语在镜像 K 线上算。 */
 export function evalLevel(node: StrategyPrimitive, role: Role, side: Side, c: IntentContext, i: number): number | null {
   const prim = registry.get(node.primitive); if (!prim) return null;
@@ -149,11 +155,12 @@ export function* intentSteps(ir: StrategyIR, bars: ResearchBar[], timeframe_ms: 
     const fb = opts.gate?.target_fallback_r ?? 0;
     if (!tps.length && fb > 0 && stop && ref && (ref - stop.price) * dir > 0) tps.push({ price: ref + dir * fb * Math.abs(ref - stop.price), size_pct: 1, source: 'rr', note: `fallback_r ${fb}R(止盈来源在此处算不出价位,按止损距离补)` });
     const nodes = side === 'long' ? longNodes! : shortNodes!;
-    // 结构口径:信号根的 ATR(14,Wilder,同几何实验室)随意图交给执行核判 stop_too_close
-    const atr = minStopAtr !== null ? atrSeries(sliceCtx(c, i, 'long').bars, 14).at(-1) ?? null : null;
+    // 结构口径:信号根的 ATR(14,Wilder,同几何实验室)随意图交给执行核判 stop_too_close;冻结了执行层阈值时也算(执行层 ATR 止损下限用),
+    // min_stop_atr 仍只在结构口径下带(执行层的 ATR 倍数在阈值快照里,不借这个字段)
+    const needAtr = minStopAtr !== null || !!opts.gate?.execution_thresholds, atr = needAtr ? atrSeries(sliceCtx(c, i, 'long').bars, 14).at(-1) ?? null : null;
     // 波动率目标仓位:σ 用信号根(含)及以前的已收盘 K 线(整段 bars 按下标取,不受决策视图截断),执行核在首腿按 w 缩放保证金
     const sized = vt ? volTargetWeight(bars, i, timeframe_ms, vt) : null;
-    return { ...(sized ? { size_weight: sized.weight, size_note: sizeNote(sized, vt!.target_vol) } : {}), ...(minStopAtr !== null ? { atr: atr !== null && Number.isFinite(atr) ? atr : null, min_stop_atr: minStopAtr } : {}), side, reason: `${side === 'long' ? '做多' : '做空'}:${nodes.signal.map((x) => x.primitive).join('+')}${nodes.regime ? ` | ${nodes.regime.primitive}` : ''}`, entry: { type: order!.entry.type, price: limit ? entryPx : null, source: limit && order!.entry.price ? levelSource(order!.entry.price.primitive, 'entry', side) : null, note: limit && order!.entry.price ? noteOf(order!.entry.price) : '' }, reference_price: close, expiry_bars: order!.entry.expiry_bars, stop, take_profits: tps, min_rr: order!.min_rr };
+    return { ...(sized ? { size_weight: sized.weight, size_note: sizeNote(sized, vt!.target_vol) } : {}), ...(needAtr ? { atr: atr !== null && Number.isFinite(atr) ? atr : null } : {}), ...(minStopAtr !== null ? { min_stop_atr: minStopAtr } : {}), side, reason: `${side === 'long' ? '做多' : '做空'}:${nodes.signal.map((x) => x.primitive).join('+')}${nodes.regime ? ` | ${nodes.regime.primitive}` : ''}`, entry: { type: order!.entry.type, price: limit ? entryPx : null, source: limit && order!.entry.price ? levelSource(order!.entry.price.primitive, 'entry', side) : null, note: limit && order!.entry.price ? noteOf(order!.entry.price) : '' }, reference_price: close, expiry_bars: order!.entry.expiry_bars, stop, take_profits: tps, min_rr: order!.min_rr };
   }
 }
 /** 持仓管理:按 ir.exit 的走势跟踪出场算移动止损与信号离场(止盈类与 time_stop 在执行核里处理,这里跳过)。

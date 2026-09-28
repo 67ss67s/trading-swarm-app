@@ -467,10 +467,22 @@ export class MemoryStore {
   /**
    * 扫已结算的判断账本行(demo_judgment_ledger.settled_at 非空)× demo_episodes,把 episode 引用过的记忆
    * (citedMemoryIds)逐条 recordOutcome(outcome_r = outcome_r_model,regret_r = regret_review)。幂等,可反复跑。
-   * 没接进 runtime(见 docs/demo/memory.md「待接线」)。`db` 缺省用本 store 的库。
+   * runtime 用 incremental 限量回填；默认全量入口保留用于人工重算。`db` 缺省用本 store 的库。
    */
-  sweepOutcomes(db: DatabaseSync = this.db, opts: { since?: number; now?: number } = {}): { scanned: number; recorded: number } {
-    const rows = db
+  sweepOutcomes(db: DatabaseSync = this.db, opts: { since?: number; now?: number; incremental?: boolean; limit?: number } = {}): { scanned: number; recorded: number } {
+    // runtime 每轮只处理一小批；先选账本主键，再取大 JSON，避免反复全文扫描。
+    const rows = opts.incremental ? db.prepare(`
+      WITH pending AS MATERIALIZED (
+        SELECT episode_id, outcome_r_model, regret_review, settled_at FROM demo_judgment_ledger l
+        WHERE settled_at IS NOT NULL AND settled_at >= ?
+          AND EXISTS (SELECT 1 FROM demo_episodes e WHERE e.id = l.episode_id)
+          AND NOT EXISTS (SELECT 1 FROM demo_memory_outcome_sweep s WHERE s.episode_id = l.episode_id AND s.settled_at = l.settled_at)
+        ORDER BY settled_at, episode_id LIMIT ?
+      )
+      SELECT l.episode_id, l.outcome_r_model AS r, l.regret_review AS g, l.settled_at, e.json AS ej
+      FROM pending l JOIN demo_episodes e ON e.id = l.episode_id
+    `).all(opts.since ?? 0, Math.max(1, Math.min(100, opts.limit ?? 20))) as { episode_id: string; r: number | null; g: number | null; settled_at: number; ej: string }[] :
+    db
       .prepare(
         `SELECT l.episode_id AS episode_id, l.outcome_r_model AS r, l.regret_review AS g, l.settled_at AS settled_at, e.json AS ej
            FROM demo_judgment_ledger l JOIN demo_episodes e ON e.id = l.episode_id
@@ -483,11 +495,14 @@ export class MemoryStore {
       try {
         ep = JSON.parse(row.ej) as Parameters<typeof citedMemoryIds>[0];
       } catch {
+        // 坏 JSON 不得堵住其后的回填；证据修复 UPDATE 会使该标记失效。
+        if (opts.incremental) db.prepare('INSERT OR REPLACE INTO demo_memory_outcome_sweep(episode_id, settled_at) VALUES (?, ?)').run(row.episode_id, row.settled_at);
         continue;
       }
       for (const id of citedMemoryIds(ep)) {
         if (this.recordOutcome({ memory_id: id, episode_id: row.episode_id, outcome_r: row.r, regret_r: row.g, at: opts.now ?? row.settled_at })) recorded++;
       }
+      if (opts.incremental) db.prepare('INSERT INTO demo_memory_outcome_sweep(episode_id, settled_at) VALUES (?, ?) ON CONFLICT(episode_id) DO UPDATE SET settled_at = excluded.settled_at').run(row.episode_id, row.settled_at);
     }
     return { scanned: rows.length, recorded };
   }
@@ -593,7 +608,7 @@ export function tradeFactCandidate(t: StrategyThread, ctx: { regime: string | nu
 /** Prompt for the reflect step (design §11 L-daily): distil ≤ 3 lessons from recent finished trades + existing memory. */
 export function reflectPrompt(closed: StrategyThread[], facts: MemoryItem[], existing: MemoryItem[]): { system: string; user: string } {
   const system = [
-    '你是 trading-swarm 的复盘模块。你读最近已结束的交易和已批准的记忆,提炼最多 3 条"教训"(lesson),每条一句话,≤ 120 字,简体中文,面向交易员。',
+    '你是 trade-gate 的复盘模块。你读最近已结束的交易和已批准的记忆,提炼最多 3 条"教训"(lesson),每条一句话,≤ 120 字,简体中文,面向交易员。',
     '规则:只写从这些交易里能直接看出来的规律(如"某 regime 下做多突破连亏"),不要写通用常识;不要写具体价格数字;不要重复已有记忆;每条给 confidence(0.3–0.9)、适用范围 symbol(可 null)、regime(可 null)、tags(≤ 6 个英文/小写)、source_refs(引用下面的线程 id)。',
     '没有值得记的规律就输出空数组。只输出 JSON 数组:[{"content":"…","confidence":0.6,"symbol":"BTCUSDT"|null,"regime":"bear"|null,"tags":["…"],"source_refs":["thr-…"]}]',
   ].join('\n');

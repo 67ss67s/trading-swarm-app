@@ -125,14 +125,32 @@ describe('applyWorkflowPatch: daily_loss_stop_pct', () => {
 });
 
 describe('applyWorkflowPatch: max_open_threads / max_opens_per_day', () => {
-  it('clamps max_open_threads to [1, 6]', () => {
+  // 09-27 上限放宽到和执行层设置页同一组边界(execution-policy.ts):同时持仓 1–20,每日开仓 1–50
+  it('clamps max_open_threads to [1, 20]', () => {
     expect(applyWorkflowPatch(base(), { max_open_threads: 0 }).next.max_open_threads).toBe(1);
-    expect(applyWorkflowPatch(base(), { max_open_threads: 99 }).next.max_open_threads).toBe(6);
+    expect(applyWorkflowPatch(base(), { max_open_threads: 99 }).next.max_open_threads).toBe(20);
   });
 
-  it('clamps max_opens_per_day to [1, 12]', () => {
+  it('clamps max_opens_per_day to [1, 50]', () => {
     expect(applyWorkflowPatch(base(), { max_opens_per_day: 0 }).next.max_opens_per_day).toBe(1);
-    expect(applyWorkflowPatch(base(), { max_opens_per_day: 99 }).next.max_opens_per_day).toBe(12);
+    expect(applyWorkflowPatch(base(), { max_opens_per_day: 99 }).next.max_opens_per_day).toBe(50);
+  });
+
+  it('止损距离、ATR 下限和净盈亏比越界时报错,不偷偷改成边界值', () => {
+    expect(applyWorkflowPatch(base(), { min_stop_pct: 0.1 }).errors[0]).toContain('min_stop_pct');
+    expect(applyWorkflowPatch(base(), { max_stop_pct: 20 }).errors[0]).toContain('max_stop_pct');
+    expect(applyWorkflowPatch(base(), { min_stop_atr: -1 }).errors[0]).toContain('min_stop_atr');
+    const ok = applyWorkflowPatch(base(), { min_stop_pct: 0.6, max_stop_pct: 8, min_stop_atr: 0, min_net_rr: 2 });
+    expect(ok.errors).toEqual([]);
+    expect(ok.next).toMatchObject({ min_stop_pct: 0.6, max_stop_pct: 8, min_stop_atr: 0, min_net_rr: 2 });
+    const crossed = applyWorkflowPatch(base(), { min_stop_pct: 1.5, max_stop_pct: 1 });
+    expect(crossed.errors).toContain('min_stop_pct 必须小于 max_stop_pct');
+    expect(crossed.next.min_stop_pct).toBe(base().min_stop_pct);
+  });
+
+  it('老库缺执行层字段或存了坏值时回到默认值', () => {
+    const w = loadWorkflow(JSON.stringify({ ...base(), min_stop_pct: 'x', max_stop_pct: undefined, min_stop_atr: 99, min_net_rr: 1.8 }));
+    expect(w).toMatchObject({ stop_floor_mode: 'pct', stop_floor_atr_tf: '1h', min_stop_pct: 1, max_stop_pct: 5, min_stop_atr: 1, min_net_rr: 1.8 });
   });
 });
 

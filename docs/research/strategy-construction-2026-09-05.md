@@ -1,4 +1,4 @@
-# Trading Swarm 策略构造研究（2026-09-05）
+# Trade Gate 策略构造研究（2026-09-05）
 
 ## Part 1 — 策略族分类（taxonomy）
 

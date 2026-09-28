@@ -12,7 +12,7 @@
  *   仓位可以跨折持有,折首净值取上一折最后一点。
  * 目标与门槛见 objectiveOf / trainGates,门槛数字来自任务冻结的 Objective(跑中不改)。
  */
-import type { BacktestReport, ResearchBar, ResearchDataset, ResearchExecution, ResearchRequest, StrategyIR } from '@trading-swarm/contracts';
+import type { BacktestReport, ResearchBar, ResearchDataset, ResearchExecution, ResearchRequest, StrategyIR } from '@trade-gate/contracts';
 import { DEFAULT_EXECUTION, WARMUP_BARS, assetExecutorFor, type AssetExecutor, type AssetRunEquity, type AssetRunOutput } from '../backtest-report.js';
 import { orderGateFor } from '../order-gate.js';
 import { assertSplitPurges } from '../judge/purge.js';

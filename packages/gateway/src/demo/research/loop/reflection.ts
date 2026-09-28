@@ -5,7 +5,7 @@
  *  - groundText:模型复盘文本逐句核数字——每个数字都要在可信文本(观察句、诊断、横比、问题原文、报告标题)里出现过,
  *    对不上的句子整句剥掉(沿用「非法引用剥掉」的规则,粒度从整块细到句)。
  */
-import type { BacktestReport } from "@trading-swarm/contracts";
+import type { BacktestReport } from "@trade-gate/contracts";
 import { listBacktestReports } from "../backtest-report.js";
 import type { ResearchStore } from "../store.js";
 import { diagnoseReport, type DiagnoseContext, type DiagnosisFinding } from "./diagnose.js";

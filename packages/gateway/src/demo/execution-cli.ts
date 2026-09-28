@@ -21,7 +21,7 @@ export interface CliBackendOptions {
 /** 给用户看的接入步骤(cli 后端不可用时显示在执行页顶上)。 */
 export const CLI_SETUP_GUIDE = [
   '1. 到 https://demo.binance.com 开 Demo Trading,生成一对 API key(模拟盘,不动真钱)。',
-  '2. 终端里跑:npx binance-cli profile create --name tswarm-demo,按提示粘 key/secret,环境选 demo。',
+  '2. 终端里跑:npx binance-cli profile create --name tgate-demo,按提示粘 key/secret,环境选 demo。',
   '3. 回到这里刷新,「Binance 模拟盘(官方 binance-cli)」会变成可选,点它切换。',
   '密钥只存在 binance-cli 自己的 profile 里,网关不碰。想用别的 profile 名:启动时设 TG_DEMO_CLI_PROFILE。',
 ].join('\n');

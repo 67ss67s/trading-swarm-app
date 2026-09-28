@@ -9,6 +9,7 @@ import type { ResearchArmResult } from '@/api/research-types';
 import { CHART_COLORS } from '@/lib/chart-colors';
 import { cn } from '@/lib/utils';
 import { fmtDateTime } from '@/lib/format';
+import { t } from '@/lib/i18n';
 
 /** 臂的家族色:A 冰青、B 琥珀、C 紫;repeat 用同色系变淡。 */
 export function armColor(arm: string): string {
@@ -20,7 +21,7 @@ export function armColor(arm: string): string {
 
 export function armLabel(arm: string): string {
   const [kind, rep] = arm.split(':');
-  const name = kind === 'a_rules' ? 'A · 固定规则' : kind === 'b_agent' ? 'B · 代理判断' : kind === 'c_filter' ? 'C · 规则+代理筛选' : arm;
+  const name = kind === 'a_rules' ? t('A · 固定规则') : kind === 'b_agent' ? t('B · 代理判断') : kind === 'c_filter' ? t('C · 规则+代理筛选') : arm;
   return rep && rep !== '0' ? `${name} #${Number(rep) + 1}` : name;
 }
 
@@ -146,7 +147,7 @@ export function ArmChart({ arms, visible, mode, focusAt, initialCash, className 
             {hover && typeof hover.values[arm] === 'number' ? <span className="num text-foreground">{pct(hover.values[arm]!)}</span> : null}
           </span>
         ))}
-        {hover ? <span className="num text-muted-foreground">{fmtDateTime(hover.time)}</span> : focusMarker ? <span className="num text-muted-foreground">定位 {focusMarker}</span> : null}
+        {hover ? <span className="num text-muted-foreground">{fmtDateTime(hover.time)}</span> : focusMarker ? <span className="num text-muted-foreground">{t('定位 {m}', { m: focusMarker })}</span> : null}
       </div>
     </div>
   );

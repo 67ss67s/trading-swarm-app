@@ -19,7 +19,9 @@ import { BrainPickerRow } from '@/components/brain-picker';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
-import { t, tmap } from '@/lib/i18n';
+import { JudgeLock } from '@/components/judge-lock';
+import { friendlyError } from '@/lib/edition';
+import { t, tmap, listSep } from '@/lib/i18n';
 import { ROLE_META } from '@/components/floor/roles';
 import { SLOT_ROLES, SLOT_ROLE_DUTY, type BrainSlot } from '@/lib/role-brain';
 import { MODEL_ROLE_LABEL, MODEL_ROLES } from '@/components/models/logic';
@@ -62,7 +64,7 @@ export function SlotRoles({ slot }: { slot: BrainSlot }) {
   if (modelsQ.data) {
     const src = slot === 'main' ? 'fallback_main' : 'fallback_cheap';
     const roles = MODEL_ROLES.filter((r) => modelsQ.data.effective[r]?.source === src);
-    return <span className="num">{roles.length > 0 ? t('回退到这里:{roles}', { roles: roles.map((r) => MODEL_ROLE_LABEL[r]).join('、') }) : t('没有角色回退到这里(都单独绑定了)')}</span>;
+    return <span className="num">{roles.length > 0 ? t('回退到这里:{roles}', { roles: roles.map((r) => MODEL_ROLE_LABEL[r]).join(listSep()) }) : t('没有角色回退到这里(都单独绑定了)')}</span>;
   }
   return (
     <span className="inline-flex flex-wrap items-center gap-x-1.5">
@@ -131,7 +133,7 @@ export function BrainControls({ idPrefix, className, onApplied }: { idPrefix: st
         onApplied?.();
       }
     },
-    onError: (err) => toast.error(t('切换失败'), { description: err instanceof Error ? err.message : String(err) }),
+    onError: (err) => toast.error(t('切换失败'), { description: friendlyError(err instanceof Error ? err.message : String(err)) }),
   });
 
   if (!draft) {
@@ -189,9 +191,11 @@ export function BrainControls({ idPrefix, className, onApplied }: { idPrefix: st
       ) : null}
 
       <div className="flex items-center gap-1.5 px-3 pb-2.5">
-        <Button size="sm" className="flex-1" disabled={!dirty || apply.isPending} onClick={() => apply.mutate(patch as Partial<Workflow>)}>
-          {apply.isPending ? t('应用中…') : dirty ? t('应用 {n} 项', { n: Object.keys(patch).length }) : t('没有改动')}
-        </Button>
+        <JudgeLock feature="model_connection_edit" className="flex-1">
+          <Button size="sm" className="flex-1" disabled={!dirty || apply.isPending} onClick={() => apply.mutate(patch as Partial<Workflow>)}>
+            {apply.isPending ? t('应用中…') : dirty ? t('应用 {n} 项', { n: Object.keys(patch).length }) : t('没有改动')}
+          </Button>
+        </JudgeLock>
         {dirty ? (
           <Button
             size="sm"
@@ -208,7 +212,7 @@ export function BrainControls({ idPrefix, className, onApplied }: { idPrefix: st
       </div>
       {dirty ? (
         <div className="num truncate px-3 pb-2 text-[10.5px] text-muted-foreground">
-          {t('待应用')}:{Object.keys(patch).map((k) => BRAIN_FIELD_LABEL[k] ?? k).join('、')}
+          {t('待应用')}:{Object.keys(patch).map((k) => BRAIN_FIELD_LABEL[k] ?? k).join(listSep())}
         </div>
       ) : null}
     </div>

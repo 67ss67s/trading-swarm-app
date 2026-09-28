@@ -1,6 +1,7 @@
 /** 订单周期执行核的输入/输出类型(WP-F,2026-09-23)。契约侧对应 packages/contracts/schema/research-orders.json。
  * 执行核是纯函数:K 线、每根的计划意图、资金费序列、维持保证金分档都由调用方喂进来,不碰 DB/网络(同 8794 shadow.rs)。 */
-import type { BacktestPlan, BacktestPlanStats, BacktestTrade, BacktestEquityPoint, BacktestSegmentName, OrderLevelSource } from '@trading-swarm/contracts';
+import type { BacktestPlan, BacktestPlanStats, BacktestTrade, BacktestEquityPoint, BacktestSegmentName, OrderLevelSource, ExecutionGateStats } from '@trade-gate/contracts';
+import type { ExecutionThresholds } from '../../execution-policy.js';
 export type Side = 'long' | 'short';
 /** 数值化的一根 K 线(open_time 为 K 线开始,close_time 为最后一毫秒)。 */
 export interface OrderBar { open_time: number; close_time: number; open: number; high: number; low: number; close: number; volume: number }
@@ -19,7 +20,8 @@ export interface PlanIntent {
   take_profits: IntentTakeProfit[];
   /** 放置时的最小盈亏比;null = 不检查 */
   min_rr: number | null;
-  /** 结构口径:信号根 ATR(14,Wilder)与「止损太近不做」倍数;止损离参考价 < min_stop_atr×atr → blocked stop_too_close。旧口径不带这两个字段 */
+  /** 结构口径:信号根 ATR(14,Wilder)与「止损太近不做」倍数;止损离参考价 < min_stop_atr×atr → blocked stop_too_close。旧口径不带这两个字段。
+   * 冻结了执行层阈值时也带 atr(执行层 ATR 止损下限用),min_stop_atr 仍只在结构口径下带 */
   atr?: number | null;
   min_stop_atr?: number | null;
   /** 波动率目标仓位(IR risk.sizing=vol_target):首腿保证金 × size_weight(0<w≤1),按信号根及以前的已收盘 K 线算;不用 vol_target 的 IR 不带这两个字段 */
@@ -68,6 +70,9 @@ export interface OrderExecParams {
   max_blocked_rows?: number;
   /** 结构口径(research-orders-v2):统计里多给 blocked_by(按原因计数),engine_version 记 v2;旧口径输出逐字不变 */
   structure?: boolean;
+  /** 执行层阈值快照(2026-09-27,来自冻结的 order_gate.execution_thresholds):放置前在策略自身校验之后按实盘同一套阈值挡单,
+   * 被挡 = blocked 行(blocked_reason 取第一条原因),统计进 execution_gate;不传或传 null 时输出和以前完全一样 */
+  execution_thresholds?: ExecutionThresholds | null;
 }
 export interface OrderSimResult {
   candidates?: import('../judge/filter.js').CandidateLog[];
@@ -79,4 +84,6 @@ export interface OrderSimResult {
   stats: BacktestPlanStats;
   /** 数据/口径标注:funding_missing / funding_partial / mark_fallback / spot_short_rejected ... */
   flags: string[];
+  /** 执行层统计(只在 params.execution_thresholds 非空时出现) */
+  execution_gate?: ExecutionGateStats;
 }

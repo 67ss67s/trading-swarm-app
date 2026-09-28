@@ -13,16 +13,19 @@
  */
 import { useSyncExternalStore } from 'react';
 import { EN } from './i18n-en';
+import { DEFAULT_LANG } from './edition';
 
 export type Lang = 'zh' | 'en';
 
 const STORAGE_KEY = 'tg.lang';
 
+/** 用户手动切过就用存的;没切过用默认语言(英文,见 ./edition.ts) */
 function readStored(): Lang {
   try {
-    return window.localStorage.getItem(STORAGE_KEY) === 'en' ? 'en' : 'zh';
+    const saved = window.localStorage.getItem(STORAGE_KEY);
+    return saved === 'en' || saved === 'zh' ? saved : DEFAULT_LANG;
   } catch {
-    return 'zh'; // 隐私模式等
+    return DEFAULT_LANG; // 隐私模式等
   }
 }
 
@@ -41,6 +44,16 @@ syncDocumentLang();
 
 export function getLang(): Lang {
   return current;
+}
+
+/** 列表分隔符:中文「、」,英文「, 」(前端拼列表用 xs.join(listSep()),别写死中文顿号) */
+export function listSep(): string {
+  return current === 'en' ? ', ' : '、';
+}
+
+/** 引用一段文字:中文「…」,英文 “…” */
+export function quote(text: string): string {
+  return current === 'en' ? `\u201c${text}\u201d` : `「${text}」`;
 }
 
 export function setLang(next: Lang): void {

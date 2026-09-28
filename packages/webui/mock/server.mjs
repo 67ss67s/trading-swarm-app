@@ -1631,7 +1631,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`[mock] trading-swarm demo mock gateway 监听 http://${HOST}:${PORT}`);
+  console.log(`[mock] trade-gate demo mock gateway 监听 http://${HOST}:${PORT}`);
   console.log(`[mock] auto_approve=${loop.auto_approve},每 ${loop.every_ms / 1000}s 一轮判断`);
   addLog('info', 'system', 'mock 网关已启动');
 });

@@ -11,24 +11,24 @@
 数据库由 gateway migrations 管理，第二轮表为 `0026_research_universes.sql`、`0027_research_attribution.sql`。本任务不修改正在运行的数据库，不重启 dev 进程；按正常启动/部署流程应用迁移。
 
 ```sh
-npm run generate:check -w @trading-swarm/contracts
-npm run build -w @trading-swarm/gateway
-npm exec -w @trading-swarm/gateway -- vitest run test/demo/research --maxWorkers 4
-npm exec -w @trading-swarm/gateway -- vitest run --maxWorkers 4
+npm run generate:check -w @trade-gate/contracts
+npm run build -w @trade-gate/gateway
+npm exec -w @trade-gate/gateway -- vitest run test/demo/research --maxWorkers 4
+npm exec -w @trade-gate/gateway -- vitest run --maxWorkers 4
 ```
 
-沙箱禁止 listen 时的旧 socket 文件清单见 `docs/research/round2-socket-exclusions.json`。research HTTP 集成测试不监听端口、不调用真实行情或模型；测试行情来自 synthetic fixture。NumPy 对拍输入与生成脚本在 `test/demo/research/data/`，生产运行不依赖 Python/NumPy。旧固定持有期候选标签不套用到无固定持有期的 IR/多资产结果；此类结果使用净权益比较、diagnostics 与 A 臂消融。
+沙箱禁止 listen 时的旧 socket 文件清单与实际计数见 `docs/research/round2-report.md`。research HTTP 集成测试不监听端口、不调用真实行情或模型；测试行情来自 synthetic fixture。NumPy 对拍输入与生成脚本在 `test/demo/research/data/`，生产运行不依赖 Python/NumPy。旧固定持有期候选标签不套用到无固定持有期的 IR/多资产结果；此类结果使用净权益比较、diagnostics 与 A 臂消融。
 
 ## 第三轮
 
 新 run 默认 unit_notional 并冻结 order_gate；旧 manifest 缺字段继续按旧口径重放。B/C 的规则书只取冻结策略与其原语证据，不复用实盘上下文。原语目录增加确认 pivot、BOS/CHoCH、order block、高周期结构与结构目标；compile 必须提供初始止损和独立目标来源。precheck 是零模型检查，不是策略效果保证。
 
-chat 将 run 与行情导出到 ~/.trading-swarm-okx/research-sandbox/<chat_id>/，使用受限 Node ESM 执行脚本并注册 chart/table/markdown；任务 SSE 可通过 GET chats 补齐。Node 24 使用正式 --permission 参数，旧 --experimental-permission 在此版本不可用。正常部署前需复核 OS 级内存隔离：heap/分配配额与 RSS watchdog 不是容器级硬限，受限环境无法运行 ps 时 stderr 明示。
+chat 将 run 与行情导出到 ~/.trade-gate-okx/research-sandbox/<chat_id>/，使用受限 Node ESM 执行脚本并注册 chart/table/markdown；任务 SSE 可通过 GET chats 补齐。Node 24 使用正式 --permission 参数，旧 --experimental-permission 在此版本不可用。正常部署前需复核 OS 级内存隔离：heap/分配配额与 RSS watchdog 不是容器级硬限，受限环境无法运行 ps 时 stderr 明示。
 
 CCXT 仅接公开现货行情，无交易/账户方法；完整市场池使用 filter，shortlist 在段起点冻结给 B/C，A 全量。CCXT 需要联网安装 gateway 依赖；Python 对账只在 /tmp venv，详见 scripts/research-crosscheck/README.md 与 docs/research/engine-crosscheck.md。
 
 ```sh
-npm run generate:check -w @trading-swarm/contracts
-npm run build -w @trading-swarm/gateway
-npm exec -w @trading-swarm/gateway -- vitest run test/demo/research --maxWorkers 4
+npm run generate:check -w @trade-gate/contracts
+npm run build -w @trade-gate/gateway
+npm exec -w @trade-gate/gateway -- vitest run test/demo/research --maxWorkers 4
 ```

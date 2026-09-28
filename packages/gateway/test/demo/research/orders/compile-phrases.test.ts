@@ -1,6 +1,6 @@
 /** 编译:五种订单说法由规则层确定性落进 order 块并过 checkIR(不调真模型,模型用桩)。 */
 import { describe, it, expect } from 'vitest';
-import type { StrategyIR } from '@trading-swarm/contracts';
+import type { StrategyIR } from '@trade-gate/contracts';
 import { applyOrderPhrases, checkIR, compileStrategy, compileConstraints, repairIR, node } from '../../../../src/demo/research/strategy.js';
 /** 模型桩:只给信号/止损/仓位,故意漏掉订单块(测规则层兜底);返回的是模型的原始 JSON */
 const bare = (patch: Partial<StrategyIR> = {}): StrategyIR => ({ version: 1, label: 't', description: '持有数天,每 1000 根约数十个信号', signal: [node('ema_cross', { fast: 20, slow: 50 })], entry: node('next_open_market', {}), risk: { stop: node('htf_structure', { htf: '1d', swing_length: 3 }), sizing: node('equal_notional', { max_allocation: '1' }) }, exit: [node('structure_target', { htf: '1d', swing_length: 3 })], ...patch });

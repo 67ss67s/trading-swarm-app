@@ -275,7 +275,7 @@ export type BacktestConfidence = "low" | "medium" | "high";
  */
 export type ResearchBatchPortfolioPrimitive = PortfolioXsmomNode | PortfolioCarryNode;
 /**
- * §9.47 StrategyBinding:研究台策略版本(StrategyIR,唯一真源)编译出来的实盘绑定(只读编译产物)。字段对齐 docs/design/strategy-apply-spec-2026-09-23.md §3 与 复审修订;实盘侧(radar / 候选生成 / holding-policy / gates)按这些字段消费,字段名保持稳定。部署模式、仓位 cap 不在这里(属于部署,由实盘注册表管)。
+ * §9.47 StrategyBinding:研究台策略版本(StrategyIR,唯一真源)编译出来的实盘绑定(只读编译产物)。字段对齐 docs/design/strategy-apply-spec-2026-09-23.md §3 与 Codex 复审修订;实盘侧(radar / 候选生成 / holding-policy / gates)按这些字段消费,字段名保持稳定。部署模式、仓位 cap 不在这里(属于部署,由实盘注册表管)。
  */
 export type ResearchStrategyBinding = StrategyBindingResponse | BuiltinImportResult;
 /**
@@ -464,7 +464,7 @@ export type ResearchPrecheckRequest1 = {
   [k: string]: unknown;
 };
 /**
- * gateway ↔ execd 的 UDS 契约:JSON-RPC 2.0,每帧一行(newline-delimited,UTF-8,单帧 ≤ 4 MiB)。execd 监听 ~/.trading-swarm/run/execd.sock(0600)。请求方法见 Method;execd → gateway 的通知只有 exec.event。错误码映射见 tables/error_codes.json。
+ * gateway ↔ execd 的 UDS 契约:JSON-RPC 2.0,每帧一行(newline-delimited,UTF-8,单帧 ≤ 4 MiB)。execd 监听 ~/.trade-gate/run/execd.sock(0600)。请求方法见 Method;execd → gateway 的通知只有 exec.event。错误码映射见 tables/error_codes.json。
  */
 export type ExecutionServiceRpc = RpcRequest | RpcSuccess | RpcFailure | RpcNotification;
 export type RpcId = string | number;
@@ -490,7 +490,7 @@ export type Method =
 export type OauthState = "missing" | "fresh" | "expiring" | "expired" | "revoked";
 
 /**
- * 账户真相(设计 §6.2 account.truth / external review #6):每个组件各自 observed_at、取数区间、completeness;经济组件哈希 = account_version;组件缺失或跨度过大 → inconsistent(gate 拒开仓);不可得 → unavailable。
+ * 账户真相(设计 §6.2 account.truth / Codex review #6):每个组件各自 observed_at、取数区间、completeness;经济组件哈希 = account_version;组件缺失或跨度过大 → inconsistent(gate 拒开仓);不可得 → unavailable。
  */
 export interface AccountSnapshot {
   schema_version: SchemaVersion;
@@ -1145,7 +1145,7 @@ export interface MarketRef {
   observed_at: TimestampMs;
 }
 /**
- * execd 持有的 policy 子集(设计 §10):模式、authority、上限。gateway 的 gate v2 与 execd 的重闸读同一份;改动需 policy.set + confirm 回填。金丝雀期默认值取评审建议的保守值(§17.2),向导里显式输入。
+ * execd 持有的 policy 子集(设计 §10):模式、authority、上限。gateway 的 gate v2 与 execd 的重闸读同一份;改动需 policy.set + confirm 回填。金丝雀期默认值取 Codex 保守值(§17.2),向导里显式输入。
  */
 export interface ExecPolicy {
   schema_version: SchemaVersion;
@@ -1460,6 +1460,10 @@ export interface BacktestReport {
    * @maxItems 64
    */
   warnings: string[];
+  /**
+   * 报告级执行层统计 = 各单资产相加(不含篮子,避免重复计数),阈值快照冻结在 thresholds;null = 旧口径(旧报告/显式不套执行层)
+   */
+  execution_gate?: ExecutionGateStats | null;
 }
 export interface StrategyIR1 {
   version: 1 | 2;
@@ -2419,6 +2423,10 @@ export interface BacktestAsset {
   daily_pnl?: BacktestDailyPnl[];
   capital_usage?: BacktestCapitalUsage | null;
   strategy_capacity?: BacktestCapacity | null;
+  /**
+   * 该资产(篮子 = 两腿相加)在下单决策时刻被执行层阈值挡单的统计;null = 旧口径(不套执行层)
+   */
+  execution_gate?: ExecutionGateStats | null;
 }
 export interface BacktestMetrics {
   /**
@@ -2868,7 +2876,7 @@ export interface BacktestPlan {
    */
   entry_source?: OrderLevelSource | null;
   /**
-   * status=blocked/cancelled 的原因代码(min_rr/no_target/no_stop/stop_side/stop_too_close/target_side/gap_invalidated/opposite_signal);stop_too_close=止损离入场不到 min_stop_atr×ATR(14)(结构口径)
+   * status=blocked/cancelled 的原因代码(min_rr/no_target/no_stop/stop_side/stop_too_close/target_side/gap_invalidated/opposite_signal/stop_distance/stop_atr/stop_too_wide/min_net_rr);stop_too_close=止损离入场不到 min_stop_atr×ATR(14)(结构口径);stop_distance/stop_atr/stop_too_wide/min_net_rr=执行层阈值挡单(2026-09-27,冻结了 order_gate.execution_thresholds 才有:止损距离低于下限/小于 ATR 下限/超过上限/扣往返成本的净盈亏比不足,命中多条时取第一条)
    */
   blocked_reason?: string | null;
 }
@@ -3023,6 +3031,130 @@ export interface BacktestCapacity {
   median_bar_quote_volume: number | null;
   avg_entry_fraction: number | null;
   method: string;
+}
+/**
+ * 回测在下单决策时刻套执行层阈值(stopGeometry + netRrCheck)的统计;null / 缺字段 = 旧口径(不套执行层)
+ */
+export interface ExecutionGateStats {
+  version: "exec-gate-v1";
+  thresholds: ExecutionGateThresholds;
+  /**
+   * 进入执行层判定的候选数(已通过策略自身闸,按决策 bar 去重)
+   */
+  checked: number;
+  /**
+   * 被执行层挡掉的去重候选数
+   */
+  rejected: number;
+  /**
+   * 按原因计数,一个候选可命中多条
+   */
+  rejected_by_execution: {
+    stop_distance: number;
+    stop_atr: number;
+    stop_too_wide: number;
+    min_net_rr: number;
+  };
+  /**
+   * @maxItems 5
+   */
+  examples?:
+    | []
+    | [
+        {
+          symbol: string;
+          at: number;
+          reason: string;
+        }
+      ]
+    | [
+        {
+          symbol: string;
+          at: number;
+          reason: string;
+        },
+        {
+          symbol: string;
+          at: number;
+          reason: string;
+        }
+      ]
+    | [
+        {
+          symbol: string;
+          at: number;
+          reason: string;
+        },
+        {
+          symbol: string;
+          at: number;
+          reason: string;
+        },
+        {
+          symbol: string;
+          at: number;
+          reason: string;
+        }
+      ]
+    | [
+        {
+          symbol: string;
+          at: number;
+          reason: string;
+        },
+        {
+          symbol: string;
+          at: number;
+          reason: string;
+        },
+        {
+          symbol: string;
+          at: number;
+          reason: string;
+        },
+        {
+          symbol: string;
+          at: number;
+          reason: string;
+        }
+      ]
+    | [
+        {
+          symbol: string;
+          at: number;
+          reason: string;
+        },
+        {
+          symbol: string;
+          at: number;
+          reason: string;
+        },
+        {
+          symbol: string;
+          at: number;
+          reason: string;
+        },
+        {
+          symbol: string;
+          at: number;
+          reason: string;
+        },
+        {
+          symbol: string;
+          at: number;
+          reason: string;
+        }
+      ];
+}
+/**
+ * §9.56 执行层阈值快照(与 gateway execution-policy.ts 的 ExecutionThresholds 同形):回测/研究 run 创建时从 workflow 读当前值冻结进来,重放按冻结值,不再读 workflow
+ */
+export interface ExecutionGateThresholds {
+  min_stop_pct: number;
+  max_stop_pct: number;
+  min_stop_atr: number;
+  min_net_rr: number;
+  round_trip_cost_bps: string;
 }
 export interface BacktestScore {
   value: number;
@@ -3397,7 +3529,7 @@ export interface StrategyBinding {
     max_risk_fraction: string;
   };
   /**
-   * 模型在这条策略里的角色(复审:agent_mode 拆成 entry_filter / exit_discretion)。缺省 entry_filter=on、exit_discretion=off:模型只决定做/不做,不改任何价位,持仓期零模型调用;最终取值由 A/C 臂配对证据定,属于部署决定
+   * 模型在这条策略里的角色(Codex 复审:agent_mode 拆成 entry_filter / exit_discretion)。缺省 entry_filter=on、exit_discretion=off:模型只决定做/不做,不改任何价位,持仓期零模型调用;最终取值由 A/C 臂配对证据定,属于部署决定
    */
   model: {
     entry_filter: "on" | "off";
@@ -6902,6 +7034,10 @@ export interface OrderGateParams {
    * 结构口径(2026-09-23):止损离入场(市价=信号收盘价,限价=挂单价)不到 min_stop_atr×ATR(14,Wilder) 的单子直接不做(blocked stop_too_close),代码不会把止损挪远;缺省 0.5。字段存在(非 null)即启用结构口径:不再用盈亏比拦单(只认 IR 的 order.min_rr)、不放宽止损、不按 R 倍数补止盈
    */
   min_stop_atr?: number | null;
+  /**
+   * 执行层阈值快照(2026-09-27):存在(非 null)= 回测在下单决策时刻按与实盘同一套执行层阈值挡单(止损距离上下限 / ATR 下限 / 净盈亏比,只在策略自身闸通过后判),被挡的候选不下单;缺字段或 null = 旧口径,不套执行层(旧 manifest 重放逐字不变)
+   */
+  execution_thresholds?: ExecutionGateThresholds | null;
 }
 export interface ResearchDataset {
   venue: string;
@@ -7566,6 +7702,7 @@ export interface ResearchArmResult {
   pending_at_end: boolean;
   by_symbol?: ResearchSymbolResult[];
   diagnostics?: ResearchDiagnostics;
+  execution_gate?: ExecutionGateStats | null;
 }
 export interface ResearchSymbolResult {
   symbol: string;
@@ -7667,6 +7804,10 @@ export interface PrimitiveParamsRsiThreshold {
 }
 export interface PrimitiveParamsHigherLowSequence {
   count: number;
+}
+export interface PrimitiveParamsCandleStreak {
+  count: number;
+  direction?: "up" | "down";
 }
 export interface PrimitiveParamsMacdCross {
   fast: number;
@@ -10036,7 +10177,7 @@ export interface OauthRevokeResult {
   ok: boolean;
 }
 /**
- * 浏览器用 execd 的 P-256 公钥做 ECDH → HKDF-SHA256(salt 空, info 'trading-swarm/credentials/v1') → AES-256-GCM;gateway 只转发密文,TS 进程永远拿不到明文(AGENTS.md 规矩 1)
+ * 浏览器用 execd 的 P-256 公钥做 ECDH → HKDF-SHA256(salt 空, info 'trade-gate/credentials/v1') → AES-256-GCM;gateway 只转发密文,TS 进程永远拿不到明文(AGENTS.md 规矩 1)
  */
 export interface SealedSecret {
   alg: "ecdh-p256-hkdf-sha256-aes256gcm";

@@ -6,12 +6,15 @@
  *   full(完整矩阵):≤3 资产 × ≤2 周期 × 策略族 × 方向的矩阵研究,训练/选择/留出三段,留出只看一次(见 matrix-report.ts)。
  *
  * 档位:JSON `tier` 优先;否则自由文本里「矩阵/完整/全面/full/matrix」且没有「快速/quick」→ full,其余 → quick。
- * 两档交付物都带 sha256 与 anchor {chain:'xlayer', status:'not_anchored'};第一行中英双语标题;只给分析与依据,不写收益保证。
+ * 两档交付物都带 sha256 与 anchor {chain:'xlayer', status:'not_anchored'};正文英文(第一行英文标题);只给分析与依据,不写收益保证。
  */
 import { deliverable } from './render.js';
 import { freeText, jsonParams } from './params.js';
-import { matrixBody, runMatrix, validateMatrix, type MatrixReportParams } from './matrix-report.js';
-import { quickLines, runQuickBacktest, validateQuick, type QuickBacktestDeps, type QuickBacktestParams } from './quick-backtest.js';
+import { matrixBody, notRunBody, runMatrix, validateMatrix, type MatrixReportParams } from './matrix-report.js';
+import { englishOnly, quickLines, runQuickBacktest, SUPPORTED_RULES, validateQuick, type QuickBacktestDeps, type QuickBacktestParams } from './quick-backtest.js';
+import { createHash } from 'node:crypto';
+
+const CJK = /[\u3000-\u303f\u4e00-\u9fff\uff00-\uffef]/;
 import { ServiceInputError, type PerCallJob, type PerCallService, type ServiceKey } from './types.js';
 
 /** 服务键(types.ts ServiceKey 已含 research_report;旧 matrix_report 由主线程在交付后删除) */
@@ -23,11 +26,12 @@ export type ResearchReportDeps = QuickBacktestDeps;
 export const SUGGESTED_PRICE_USDT: Record<ResearchTier, string> = { quick: '2', full: '15' };
 
 const TITLE: Record<ResearchTier, string> = {
-  quick: '【策略研究报告·快速回测 / Strategy Research Report · Quick Backtest】 Trading Swarm',
-  full: '【策略研究报告·完整矩阵 / Strategy Research Report · Full Matrix】 Trading Swarm',
+  quick: '[Strategy Research Report · Quick Backtest] Trading Swarm',
+  full: '[Strategy Research Report · Full Matrix] Trading Swarm',
 };
 const ANCHOR = { chain: 'xlayer', status: 'not_anchored' } as const;
-const NATURE = '性质 / Nature: 历史回放,只给分析与依据,不构成投资建议,过去表现不代表未来 / Historical replay with evidence only; not investment advice; past performance does not indicate future results';
+/** 与 render 的 DISCLAIMER(不构成投资建议)不重复:这里只补「历史回放 / 过去不代表未来」 */
+const NATURE = 'Nature: historical replay, analysis and evidence only; past performance does not indicate future results';
 
 export function tierIn(job: PerCallJob): ResearchTier {
   const v = jsonParams(job)?.['tier'];
@@ -35,7 +39,7 @@ export function tierIn(job: PerCallJob): ResearchTier {
     const s = String(v).trim().toLowerCase();
     if (['quick', 'fast', '快速', '回测', 'backtest'].includes(s)) return 'quick';
     if (['full', 'matrix', '完整', '矩阵'].includes(s)) return 'full';
-    throw new ServiceInputError('tier_invalid', 'tier 只能是 quick / full');
+    throw new ServiceInputError('tier_invalid', 'tier must be quick or full');
   }
   const text = freeText(job);
   return /矩阵|完整|全面|\bfull\b|\bmatrix\b/i.test(text) && !/快速|\bquick\b/i.test(text) ? 'full' : 'quick';
@@ -50,18 +54,29 @@ export function makeResearchReportService(opts: { nl_compile?: boolean } = {}): 
     },
     async handle(job, params, deps) {
       if (params.tier === 'full') {
-        const r = await runMatrix(job, params.full, deps), m = matrixBody(r.view, r);
-        return deliverable(job, RESEARCH_REPORT_KEY, TITLE.full, m.summary, [...m.lines, NATURE], { tier: 'full', ...m.body, anchor: ANCHOR });
+        const r = await runMatrix(job, params.full, deps), m = r.view ? matrixBody(r.view, r) : notRunBody(params.full, r.dropped);
+        return deliverable(job, RESEARCH_REPORT_KEY, TITLE.full, m.summary, [...m.lines, NATURE], englishOnly({ tier: 'full', ...m.body, anchor: ANCHOR }));
       }
       const q = params.quick, r = await runQuickBacktest(q, deps as ResearchReportDeps, job), { summary, lines } = quickLines(q, r);
-      return deliverable(job, RESEARCH_REPORT_KEY, TITLE.quick, summary, [...lines, NATURE], {
-        tier: 'quick', symbol: q.symbol, timeframe: q.timeframe, market: r.ir.order?.market ?? q.market, side: r.ir.order?.direction ?? q.side, days: q.days,
-        request_text: q.text, ir_source: r.ir_source, strategy_ir: r.ir, strategy_ir_hash: r.ir_hash, compile: r.compile,
-        window: r.window, data_source: r.data_source, fees: r.fees, engine_version: r.engine_version,
+      // 买方原话含中文时不回显(交付 JSON 一律英文),只给原文哈希供核对
+      const request = CJK.test(q.text) ? { request_text: null, request_text_sha256: createHash('sha256').update(q.text).digest('hex'), request_text_note: 'Original request text is not echoed because it is not in English; sha256 of the original text is given for verification' } : { request_text: q.text };
+      const run = {
+        window: r.window, data_source: r.data_source, initial_cash: r.initial_cash, fees: r.fees, engine_version: r.engine_version,
         metrics: r.full, stressed: r.stressed, segments: r.segments, yearly: r.yearly, exit_reasons: r.exit_reasons, warnings: r.warnings,
-        anchor: ANCHOR,
-        method: '单资产全窗口连续回放:已收盘 K 线判信号、下一根开盘成交,taker 手续费 + 滑点,每笔 100% 可用资金不加杠杆;持有基准同费率;另以 2 倍手续费重跑做压力 / full-window replay with fees and slippage, 2× fee stress',
-      });
+      };
+      const common = { tier: 'quick', symbol: q.symbol, timeframe: q.timeframe, market: r.ir.order?.market ?? q.market, side: r.ir.order?.direction ?? q.side, days: q.days, ...request };
+      const body = r.outcome === 'not_mapped'
+        ? {
+          ...common, outcome: 'not_mapped', tested_as_described: false,
+          requested: { ir_source: 'model', strategy_ir: r.requested?.ir ?? null, strategy_ir_hash: r.requested?.ir_hash ?? null, compile: r.requested?.compile ?? null, reasons: r.requested?.reasons ?? [] },
+          reference: { note: 'Closest supported template on the same asset, timeframe and window; NOT the requested strategy', family: r.reference_family ?? null, ir_source: 'template', strategy_ir: r.ir, strategy_ir_hash: r.ir_hash, ...run },
+          supported_rules: SUPPORTED_RULES,
+        }
+        : { ...common, outcome: 'tested', tested_as_described: !(r.compile?.unmapped.length), ir_source: r.ir_source, strategy_ir: r.ir, strategy_ir_hash: r.ir_hash, compile: r.compile, ...run };
+      return deliverable(job, RESEARCH_REPORT_KEY, TITLE.quick, summary, [...lines, NATURE], englishOnly({
+        ...body, anchor: ANCHOR,
+        method: 'Single-asset continuous full-window replay: signals on closed bars, fills at the next bar open, taker fees + slippage, 100% of available capital per trade without leverage; buy-and-hold benchmark at the same fee rate; a second run at 2× fees as a stress test',
+      }));
     },
   };
 }

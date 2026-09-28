@@ -1,6 +1,6 @@
-# 信息员页(#intel)重构 — 2026-09-06(外部评审 方案 + 我的处置,待 Jacky 拍板)
+# 信息员页(#intel)重构 — 2026-09-06(Codex astra 方案 + 我的处置,待 Jacky 拍板)
 
-来源:内部评审记录;现状 `packages/webui/src/pages/intel.tsx`(头部徽章 + 总览/历史两个 tab,新闻在总览里)。
+来源:`.codex-reports/intel-page-redesign.md`;现状 `packages/webui/src/pages/intel.tsx`(头部徽章 + 总览/历史两个 tab,新闻在总览里)。
 
 ## 1. 定位与边界
 
@@ -41,5 +41,5 @@
 ## 6. 拍板与落地(09-06 中午)
 
 Jacky:结构认可;默认源**五个**(CoinDesk、Cointelegraph、Decrypt、PANews、美联储),律动与以太坊基金会博客先不加;**不允许自定义源**。
-gateway(另一工作线,a1c2eca + 09438cd,契约 §9.17):五源真抓验证、每源 10 条总 25、跨源按链接/归一化标题去重;`GET /api/info/sources` 只读状态表,无增删改;红黄口径:任一源 error 黄,全部 error 或 as_of 超过 info_every_ms×2 红。
+gateway(jacky-0e,a1c2eca + 09438cd,契约 §9.17):五源真抓验证、每源 10 条总 25、跨源按链接/归一化标题去重;`GET /api/info/sources` 只读状态表,无增删改;红黄口径:任一源 error 黄,全部 error 或 as_of 超过 info_every_ms×2 红。
 webui:`pages/intel.tsx` 重写为单页(顶栏态势+新鲜度+来源弹层+频率弹层+立即总结 → 先看什么(重点/风险事件/关注线索→筛选页)→ 新闻流(按时间|高相关;来源徽章;「相关度」徽章;模型解读两行可展开;拿去问 Agent 走 `askAgent` 预填不自动发;无 http 链接标「原文缺失」;「这轮没有新闻」与「采集失败」分开)→ 右栏主流币/情绪/异动默认收起 → 底部偏向历史/原始事件折叠,展开才拉数据)。§3 的 keywords/weight/enabled 字段随「不做自定义」一起取消。

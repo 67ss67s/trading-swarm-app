@@ -103,7 +103,7 @@ impl ApiRestrictions {
     }
 
     /// A1 判据:这把 key 够不够做「主账户手动交易 + 主/子划转」。
-    pub fn missing_for_trading_swarm(&self) -> Vec<&'static str> {
+    pub fn missing_for_trade_gate(&self) -> Vec<&'static str> {
         let mut missing = Vec::new();
         if !self.enable_reading {
             missing.push("enableReading(读)");
@@ -363,7 +363,7 @@ mod tests {
         assert!(restrictions.permits_universal_transfer);
         assert!(!restrictions.enable_withdrawals);
         assert_eq!(restrictions.create_time_ms, Some(1_698_000_000_000));
-        assert_eq!(restrictions.missing_for_trading_swarm(), Vec::<&str>::new());
+        assert_eq!(restrictions.missing_for_trade_gate(), Vec::<&str>::new());
         // 未知的新权限位必须原样留着,不能被解析吃掉
         assert_eq!(restrictions.raw.get("someBrandNewFlag"), Some(&json!(true)));
     }
@@ -372,7 +372,7 @@ mod tests {
     fn missing_permissions_are_named_precisely() {
         let restrictions = ApiRestrictions::from_value(&json!({ "enableReading": true }));
         assert_eq!(
-            restrictions.missing_for_trading_swarm(),
+            restrictions.missing_for_trade_gate(),
             vec!["enableFutures(合约交易)", "permitsUniversalTransfer(子账户万能划转)"]
         );
     }

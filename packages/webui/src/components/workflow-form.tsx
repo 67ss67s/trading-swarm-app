@@ -26,10 +26,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 
+import { friendlyError } from '@/lib/edition';
 import { relativeTime } from '@/lib/format';
 import { trimNum, verdictText } from '@/lib/capacity';
 import { cn } from '@/lib/utils';
-import { t, tmap } from '@/lib/i18n';
+import { t, tmap, listSep } from '@/lib/i18n';
 
 
 
@@ -566,7 +567,7 @@ export function WorkflowForm({ groups, sectioned = false, defaultOpen = ['pace']
         toast.success(n > 0 ? t('已保存 {n} 项', { n }) : t('没有改动'));
       }
     },
-    onError: (err) => toast.error(t('保存失败'), { description: err instanceof Error ? err.message : String(err) }),
+    onError: (err) => toast.error(t('保存失败'), { description: friendlyError(err instanceof Error ? err.message : String(err)) }),
   });
 
   if (!draft) {
@@ -1087,7 +1088,7 @@ export function WorkflowForm({ groups, sectioned = false, defaultOpen = ['pace']
         </div>
         {dirty ? (
           <div className="num truncate text-[10.5px] text-muted-foreground">
-            {t('改了')}:{Object.keys(patch).map((k) => FIELD_LABEL[k] ?? k).join('、')}
+            {t('改了')}:{Object.keys(patch).map((k) => FIELD_LABEL[k] ?? k).join(listSep())}
           </div>
         ) : null}
       </div>

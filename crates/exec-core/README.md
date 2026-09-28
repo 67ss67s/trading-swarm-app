@@ -1,6 +1,6 @@
 # exec-core —— REST / 主账户半边(A1)
 
-从 8794(`~/Desktop/trade-switch-dev-8793`,实盘基线)**复制**出来的纯执行逻辑,剥离 `console_types`/`TradingCore` 后独立演进;不引用、不回改那边。凭证只从 env(`TG_MAIN_API_KEY`/`TG_MAIN_API_SECRET`)或 `~/.trading-swarm/secrets/apikey-main.json`(0600)读,**不接受命令行传密钥**。**不实现任何提币端点**(设计 §16 Q7)。
+从 8794(`<separate console repo>`,实盘基线)**复制**出来的纯执行逻辑,剥离 `console_types`/`TradingCore` 后独立演进;不引用、不回改那边。凭证只从 env(`TG_MAIN_API_KEY`/`TG_MAIN_API_SECRET`)或 `~/.trade-gate/secrets/apikey-main.json`(0600)读,**不接受命令行传密钥**。**不实现任何提币端点**(设计 §16 Q7)。
 
 ## 来源与删改
 
@@ -16,11 +16,11 @@
 | `filters` / `ids` | `SymbolRules`/`decimal_text`/`allocate_lots`;clientOrderId | `decimal_text` 修过 float 尾巴导致 -1111 的 bug;`tg-` 前缀本机、`ts_`(8794)算外部 | — |
 | `secrets` | 新写 | `SecretString`(Debug/Display 脱敏)、0600 强制 | — |
 
-## 探针 `tswarm-rest-probe`(默认全只读)
+## 探针 `tgate-rest-probe`(默认全只读)
 
 ```
-export TG_MAIN_API_KEY=... TG_MAIN_API_SECRET=...        # 或写 ~/.trading-swarm/secrets/apikey-main.json(chmod 600)
-CARGO_TARGET_DIR=target/exec-core cargo run -p exec-core --bin tswarm-rest-probe -- --json-out docs/research/a1-main-key-probe.json [--show-balances]
+export TG_MAIN_API_KEY=... TG_MAIN_API_SECRET=...        # 或写 ~/.trade-gate/secrets/apikey-main.json(chmod 600)
+CARGO_TARGET_DIR=target/exec-core cargo run -p exec-core --bin tgate-rest-probe -- --json-out docs/research/a1-main-key-probe.json [--show-balances]
 ```
 
 步骤:服务器时间偏移 → `apiRestrictions`(enableWithdrawals=true 会红字)→ 现货余额概要 → 合约账户 + 持仓模式 → `sub-account/list`(每行除 email 外**全部字段原样保留**,自动标 looks_agentic)→ 每个子账户 `sub-account/assets` → 万能划转历史。**动钱**分支 `--transfer-test --asset USDT --amount 1 --to-email <sub>` 还必须 `TG_ALLOW_TRANSFER=1`,由主线在 Jacky 放行后亲自跑。

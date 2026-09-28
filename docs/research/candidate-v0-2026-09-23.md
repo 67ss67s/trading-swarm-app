@@ -135,7 +135,7 @@ K 线不全时先等;过了 `as_of + (horizon+4)` 根还不全,记为 `unscoreab
 
 ## 离线回放结果(库副本,不是前向证据)
 
-`npx jiti packages/gateway/scripts/candidate-replay.ts --db <副本> --days 30`,跑在 `~/.trading-swarm-okx/demo/state.sqlite` 的 `.backup` 副本上,OKX 永续 1h,通过代理拉取。watchlist 取自副本的 `demo.workflow`:BTC/ETH/SOL/BNB。回放窗口 2026-08-23 21:00 到 09-22 21:00 UTC。
+`npx jiti packages/gateway/scripts/candidate-replay.ts --db <副本> --days 30`,跑在 `~/.trade-gate-okx/demo/state.sqlite` 的 `.backup` 副本上,OKX 永续 1h,通过代理拉取。watchlist 取自副本的 `demo.workflow`:BTC/ETH/SOL/BNB。回放窗口 2026-08-23 21:00 到 09-22 21:00 UTC。
 
 - 候选 134 条,已结算 120 条(另 14 条未满 48 根),`rr` 全是 2,全部有目标。
 - 计划腿:50 次止盈、66 次止损、4 次到期,胜率 43.3%,期望毛 +0.28R、净 +0.18R。

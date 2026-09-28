@@ -23,8 +23,12 @@ import { THREAD_STATUS_LABEL, backendLabel, relativeTime, useNow } from '@/lib/f
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { todaySummary } from '@/components/agent/logic';
+import { JudgeLiveFeed } from '@/components/judge-live';
+import { StatusTag } from '@/components/tour/status-tag';
+import { st } from '@/lib/server-text-en';
+import { friendlyError } from '@/lib/edition';
 
-type Tab = 'status' | 'execution' | 'team';
+type Tab = 'status' | 'jev' | 'execution' | 'team';
 const TAB_KEY = 'tg.agent.side.tab';
 
 interface Alert {
@@ -48,7 +52,7 @@ export function AgentSide() {
   const [tab, setTab] = useState<Tab>(() => {
     try {
       const v = window.localStorage.getItem(TAB_KEY) as Tab | null;
-      return v === 'execution' || v === 'team' ? v : 'status';
+      return v === 'jev' || v === 'execution' || v === 'team' ? v : 'status';
     } catch {
       return 'status';
     }
@@ -74,10 +78,10 @@ export function AgentSide() {
   const alerts: Alert[] = [];
   if (ov?.loop?.halted) alerts.push({ id: 'halt', level: 'danger', text: t('紧急停止中:任何开仓都会被拒'), href: '#settings', hrefLabel: t('去解除') });
   for (const th of threads) if (th.attention) alerts.push({ id: `attn:${th.id}`, level: 'danger', text: t('{symbol} 要你处理:{detail}', { symbol: th.symbol, detail: th.attention }), href: '#trade', hrefLabel: t('去交易页') });
-  if (executionQ.data?.account_read_error) alerts.push({ id: 'acct-read', level: 'danger', text: t('执行通道读不到账户:{detail}', { detail: executionQ.data.account_read_error.message }), onTab: 'execution', hrefLabel: t('去执行') });
+  if (executionQ.data?.account_read_error) alerts.push({ id: 'acct-read', level: 'danger', text: t('执行通道读不到账户:{detail}', { detail: friendlyError(executionQ.data.account_read_error.message) }), onTab: 'execution', hrefLabel: t('去执行') });
   else if (executionQ.data?.account_funded === false) alerts.push({ id: 'unfunded', level: 'warn', text: t('{acct}还没入金:agent 开不了新仓(权益是真的 0,不是读失败)', { acct: exchangeInfo(executionQ.data).account }), href: exchangeInfo(executionQ.data).depositUrl, hrefLabel: t('去入金 ↗') });
   const conn = executionQ.data?.connection;
-  if (executionQ.data && conn && conn.status !== 'connected' && executionQ.data.backend !== 'paper') alerts.push({ id: 'exec', level: conn.status === 'needs_auth' ? 'danger' : 'warn', text: t('执行后端 {backend}:{detail}', { backend: backendLabel(executionQ.data.backend), detail: conn.detail || conn.status }), href: '#connect', hrefLabel: t('去接入') });
+  if (executionQ.data && conn && conn.status !== 'connected' && executionQ.data.backend !== 'paper') alerts.push({ id: 'exec', level: conn.status === 'needs_auth' ? 'danger' : 'warn', text: t('执行后端 {backend}:{detail}', { backend: backendLabel(executionQ.data.backend), detail: friendlyError(conn.detail) || conn.status }), href: '#connect', hrefLabel: t('去接入') });
   // 09-25 ③-2:简单模式 + 工作流开着永续 = agent 的永续单会被 OKX 拒(51010),原因要在这里看得到
   if (okxSimpleMode(executionQ.data) && wantsPerp(ov?.workflow)) alerts.push({ id: 'simple-mode', level: 'warn', text: t('OKX 账户是简单模式,永续单会被拒(51010);现货照常'), href: '#connect', hrefLabel: t('去切换') });
   // 09-25 ③-3:保护单没标记验证 = 闸门不放开新开仓
@@ -90,18 +94,18 @@ export function AgentSide() {
     const kinds = new Map<string, { title: string; since: number }>();
     for (const a of riskQ.data.alerts.filter((a) => a.severity === 'high' || a.severity === 'critical')) {
       const prev = kinds.get(a.kind);
-      kinds.set(a.kind, { title: prev?.title ?? a.title, since: Math.min(prev?.since ?? Infinity, a.first_seen_at) });
+      kinds.set(a.kind, { title: prev?.title ?? st(a.title), since: Math.min(prev?.since ?? Infinity, a.first_seen_at) });
     }
     for (const [kind, a] of kinds) {
       const mins = Math.round((Date.now() - a.since) / 60_000);
       alerts.push({ id: `risk:${kind}`, level: 'danger', text: `${a.title}${mins >= 2 ? ` · ${t('持续 {n} 分钟', { n: mins })}` : ''}`, href: '#floor?sel=risk_sentinel', hrefLabel: t('去楼层处理') });
     }
   }
-  else if (riskQ.data && riskQ.data.level === 'warn') alerts.push({ id: 'risk', level: 'warn', text: t('风控告警 {n} 条:{first}', { n: riskQ.data.alerts.length, first: riskQ.data.alerts[0]?.title ?? '' }), href: '#floor?sel=risk_sentinel', hrefLabel: t('去楼层') });
+  else if (riskQ.data && riskQ.data.level === 'warn') alerts.push({ id: 'risk', level: 'warn', text: t('风控告警 {n} 条:{first}', { n: riskQ.data.alerts.length, first: st(riskQ.data.alerts[0]?.title) ?? '' }), href: '#floor?sel=risk_sentinel', hrefLabel: t('去楼层') });
   if (usage?.capped) alerts.push({ id: 'cap', level: 'warn', text: t('今日判断到上限 {n} 次了,明天之前不再调模型', { n: usage.cap }), href: '#settings', hrefLabel: t('调上限') });
   // §9.19:待批意图不再是一句提示,下面直接渲染两步确认卡(ApprovalsList)
   if (pendingHandoffs.length) alerts.push({ id: 'handoffs', level: 'warn', text: t('{n} 条 bot 交接待读', { n: pendingHandoffs.length }), onTab: 'team', hrefLabel: t('看团队') });
-  if (ov?.market?.as_of && now - ov.market.as_of > 3 * 60_000) alerts.push({ id: 'stale', level: 'warn', text: t('行情 {ago}没更新了', { ago: relativeTime(ov.market.as_of, now) }), href: '#logs', hrefLabel: t('看日志') });
+  if (ov?.market?.as_of && now - ov.market.as_of > 3 * 60_000) alerts.push({ id: 'stale', level: 'warn', text: t('行情 {ago}没更新了', { ago: relativeTime(ov.market.as_of, now) }) }); // 日志页已下线,不再给跳转
 
   const today = todaySummary({ now, openThreads: threads, historyThreads: historyQ.data?.threads });
   const needTotal = alerts.length + needs.total;
@@ -182,6 +186,9 @@ export function AgentSide() {
             <TabsTrigger value="status" className="h-6 text-[11.5px]">
               {t('状态')}
             </TabsTrigger>
+            <TabsTrigger value="jev" className="h-6 text-[11.5px]">
+              {t('Jev 判断')}
+            </TabsTrigger>
             <TabsTrigger value="execution" className="h-6 text-[11.5px]">
               {t('执行')}
               {executionQ.data ? <span className="ml-1 text-[10px] text-muted-foreground">{backendLabel(executionQ.data.backend)}</span> : null}
@@ -222,6 +229,11 @@ export function AgentSide() {
                 {t('主脑')} {ov?.loop?.brain?.split(':').pop() ?? '—'} · {t('后端')} {backendLabel(ov?.loop?.backend)} · {t('每 {n} 分钟', { n: Math.round((ov?.loop?.every_ms ?? 0) / 60000) })} · {t('观察列表')} {ov?.workflow?.watchlist.join(' / ') || '—'}
               </div>
             </div>
+          </TabsContent>
+          <TabsContent value="jev" className="min-h-0 flex-1 overflow-y-auto">
+            <Pane title={t('Jev 判断')} badge={<StatusTag kind="live" />} hint={t('每条候选 Jev 怎么判 · 影子只记录不挡单')}>
+              <JudgeLiveFeed />
+            </Pane>
           </TabsContent>
           <TabsContent value="execution" className="min-h-0 flex-1 overflow-y-auto">
             <Pane title={t('执行')} hint={t('只读摘要 · 改设置去接入页')}>

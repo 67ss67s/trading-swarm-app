@@ -1,5 +1,5 @@
 import { describe,it,expect,afterEach } from 'vitest';
-import { validate, type StrategyJudge } from '@trading-swarm/contracts';
+import { validate, type StrategyJudge } from '@trade-gate/contracts';
 import { buildJudgeState,normalizeAnswers,evaluateJudgeRule,judgeCandidate,validateState,validateJudge } from '../../../../src/demo/research/judge/index.js';
 import { requiredPurgeBars,assertPurge } from '../../../../src/demo/research/judge/filter.js';
 import { hash } from '../../../../src/demo/research/primitives.js';

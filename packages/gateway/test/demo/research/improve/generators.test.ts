@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { StrategyIR } from '@trading-swarm/contracts';
+import type { StrategyIR } from '@trade-gate/contracts';
 import { node } from '../../../../src/demo/research/strategy.js';
 import { compileCheck } from '../../../../src/demo/research/improve/runner.js';
 import { diagnosisGenerator, RULES } from '../../../../src/demo/research/improve/generators/diagnosis.js';

@@ -467,7 +467,7 @@ export function HistoryPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto">
-      <div role="tablist" aria-label={t('复盘')} className="flex shrink-0 items-center gap-1 border-b pb-2">
+      <div role="tablist" aria-label={t('复盘')} data-tour="history-tabs" className="flex shrink-0 items-center gap-1 border-b pb-2">
         {HISTORY_TABS.map((x) => (
           <button
             key={x.id}

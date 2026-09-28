@@ -1,5 +1,5 @@
 /**
- * 把 perp-trend-run.ts 的 results.json 汇成 markdown 表(写 ~/.trading-swarm-okx/research-batch/perp-trend/tables.md 并打印),报告正文引用这些表。
+ * 把 perp-trend-run.ts 的 results.json 汇成 markdown 表(写 ~/.trade-gate-okx/research-batch/perp-trend/tables.md 并打印),报告正文引用这些表。
  * 用法:node --experimental-transform-types --no-warnings --import ./scripts/research-oracle/register.mjs scripts/research-batch/perp-trend-report.ts
  */
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';

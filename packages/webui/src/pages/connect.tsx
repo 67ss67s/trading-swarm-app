@@ -21,7 +21,7 @@ import type { StartStepState } from '@/components/start/logic';
 import { StepStateTag } from '@/components/start/step-state';
 import { useStartFull } from '@/components/start/use-start';
 import { acctLvLabel } from '@/lib/format';
-import { t } from '@/lib/i18n';
+import { t, listSep } from '@/lib/i18n';
 
 function Step({ n, title, hint, state, children }: { n: number; title: string; hint?: string; state?: StartStepState; children: ReactNode }) {
   return (
@@ -118,7 +118,7 @@ export function ConnectPage() {
             <>
               <span>{t('{ok} / {n} 个可用', { ok: okConnectionCount(modelsQ.data), n: modelsQ.data.connections.length })}</span>
               {brokenRoles(modelsQ.data).length > 0 ? (
-                <span className="text-destructive">{t('这些角色绑定的连接失效了:{roles}', { roles: brokenRoles(modelsQ.data).map((r) => MODEL_ROLE_LABEL[r]).join('、') })}</span>
+                <span className="text-destructive">{t('这些角色绑定的连接失效了:{roles}', { roles: brokenRoles(modelsQ.data).map((r) => MODEL_ROLE_LABEL[r]).join(listSep()) })}</span>
               ) : null}
             </>
           ) : (

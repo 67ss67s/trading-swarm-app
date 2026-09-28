@@ -1,4 +1,4 @@
-import type { ResearchBar, ResearchTrend } from '@trading-swarm/contracts';
+import type { ResearchBar, ResearchTrend } from '@trade-gate/contracts';
 export interface TrendParams {adx_period?:number;adx_min?:number;ema_fast?:number;ema_slow?:number;htf?:string}
 export function ema(values:number[],period:number):number[] {
   const k=2/(period+1),out:number[]=[];

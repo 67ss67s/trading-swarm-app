@@ -19,6 +19,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { relativeTime, useNow } from '@/lib/format';
 import { t, tmap } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
+import { st as serverText } from '@/lib/server-text-en';
 
 const RUN_STATUS: Record<BotRun['status'], string> = tmap({ running: '进行中', done: '完成', failed: '失败', skipped: '跳过' });
 
@@ -53,7 +54,7 @@ function RoleRow({ bot, evo, lastRun, pending, now, evoReady }: { bot: BotProfil
     >
       <div className="flex items-center gap-1.5">
         <span className={cn('size-1.5 shrink-0 rounded-full', stateTone(bot, lastRun))} />
-        <span className="min-w-0 flex-1 truncate text-[11.5px] font-medium">{bot.name}</span>
+        <span className="min-w-0 flex-1 truncate text-[11.5px] font-medium">{t(bot.name)}</span>
         <span className="shrink-0 text-[10px] text-muted-foreground">{status}</span>
         {pending ? (
           <Badge variant="outline" className="h-4 shrink-0 border-warn/30 bg-warn/10 px-1 text-[9.5px] text-warn">
@@ -64,12 +65,12 @@ function RoleRow({ bot, evo, lastRun, pending, now, evoReady }: { bot: BotProfil
       </div>
       <div className="mt-0.5 flex items-center gap-2 pl-3">
         <span className="num min-w-0 flex-1 truncate text-[10px] text-muted-foreground">
-          {presence?.action ? `${presence.action}` : lastRun ? `${lastRun.routine} ${RUN_STATUS[lastRun.status]} ${relativeTime(lastRun.started_at, now)}` : evo?.metric_label || '—'}
+          {presence?.action ? `${serverText(presence.action)}` : lastRun ? `${lastRun.routine} ${RUN_STATUS[lastRun.status]} ${relativeTime(lastRun.started_at, now)}` : (evo?.metric_label ? t(evo.metric_label) : '—')}
         </span>
       </div>
       <div className="mt-1 flex items-center gap-2 pl-3">
-        <DayGrid days={evo?.days ?? []} mode="compact" compactDays={30} cell={5} gap={1} label={t('{who} 最近 30 天', { who: bot.name })} tipSide="bottom" />
-        <span className="num shrink-0 text-[9.5px] text-muted-foreground" title={evo?.metric_label || undefined}>
+        <DayGrid days={evo?.days ?? []} mode="compact" compactDays={30} cell={5} gap={1} label={t('{who} 最近 30 天', { who: t(bot.name) })} tipSide="bottom" />
+        <span className="num shrink-0 text-[9.5px] text-muted-foreground" title={evo?.metric_label ? t(evo.metric_label) : undefined}>
           {evoReady && s ? (
             <>
               <span className="text-up">{s.good}</span>/<span className="text-warn">{s.ok}</span>/<span className="text-down">{s.bad}</span>

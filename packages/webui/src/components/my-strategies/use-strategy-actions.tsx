@@ -8,7 +8,7 @@
 import { useState, type ReactNode } from 'react';
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import type { ResearchStrategy, ResearchStrategyPatch } from '@trading-swarm/contracts';
+import type { ResearchStrategy, ResearchStrategyPatch } from '@trade-gate/contracts';
 import { researchApi } from '@/api/client';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { Button } from '@/components/ui/button';

@@ -1,6 +1,6 @@
 {
   "generated_with": {
-    "from": "~/Desktop/trading-swarm/packages/eval-a/cases/v1",
+    "from": "<repo>/packages/eval-a/cases/v1",
     "seed": "7",
     "set": "v1-mem",
     "source_cases": 108

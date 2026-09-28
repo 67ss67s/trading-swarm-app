@@ -12,14 +12,14 @@
 | `codex mcp add … --url` 成功,但 `codex mcp login` 报 "Dynamic client registration not supported" | 本机 codex | **codex 路径目前走不通**(等 Codex 支持 CIMD 或 bearer 环境变量拿到 token) |
 | 本机没有 grok CLI;币安文档里的 "Grok Bot" 是 Grok 应用自己的连接器,不是可 spawn 的进程 | which / 文档 | **grok 没有可接的接口**;若 xAI 出 CLI 再说 |
 | 工具清单(名称/参数)文档没写,页面是 JS 渲染,拉不到;要 tools/list 必须先有 token | WebFetch / llms-full.txt | 执行映射只能在授权后再定 |
-| 从钥匙串读 Claude 的 token 复用 | 评估 | 也不该这么做:另一个应用的凭证、无 refresh、脆弱 |
+| 从钥匙串读 Claude 的 token 复用被本会话的权限层拦下 | 本会话 | 也不该这么做:另一个应用的凭证、无 refresh、脆弱 |
 | **(2026-09-05)带着网关自己的 client_id 打开币安同意页,币安直接拒:「The AI Agent you are using is not currently supported (**3346001**)」** | 真机点了一次 | 币安**按 client_id 白名单**放行 agent,不是 PKCE/CIMD 哪里写错了。Claude Code 在白名单里,网关不在 → **A 路(gate 自己做 OAuth 客户端)今天走不通**,直到币安把网关加进名单 |
 
 ## 1. 三条路,选两条
 
 **A. gate 自己做 OAuth 客户端 + 直接调 MCP(零 LLM 成本,但 2026-09-05 起被币安挡死:3346001)**
 - ⛔ **现状:代码全都写完并可用,但币安的同意页不接受网关的 client_id**(3346001,见 §0)。所以默认不再设 `TG_BINANCE_OAUTH_CLIENT_ID`(start-demo.sh 里注释掉了),`POST /api/execution/connect` 也不再返回同意页 URL;只有 `TG_BINANCE_OAUTH_FORCE=1` **且**配了 client id 时才会再走这条路(留给「币安哪天把我们加进白名单了」的复测)。`mcp` 选项在 UI 里给出的理由就是这句话。下面是等白名单通过后的原设计:
-- `binance-oauth.ts`:PKCE + CIMD。client_id 是一个 https URL,内容由 `GET /oauth/binance/client-metadata.json` 给出(`redirect_uris` = `http://127.0.0.1:18800/oauth/binance/callback`,`token_endpoint_auth_method=none`)。本机 gateway 不是 https,所以把这份 JSON 放到任一静态 https 地址(例如 Jacky 的 DO 服务器 `https://<bridge-domain>/trading-swarm/client-metadata.json`),把该地址设为 `TG_BINANCE_OAUTH_CLIENT_ID`。Claude Code 自己就是用 loopback redirect + CIMD 通过币安授权的,所以币安接受 loopback。
+- `binance-oauth.ts`:PKCE + CIMD。client_id 是一个 https URL,内容由 `GET /oauth/binance/client-metadata.json` 给出(`redirect_uris` = `http://127.0.0.1:18800/oauth/binance/callback`,`token_endpoint_auth_method=none`)。本机 gateway 不是 https,所以把这份 JSON 放到任一静态 https 地址(例如 Jacky 的 DO 服务器 `https://bridge.example.com/trade-gate/client-metadata.json`),把该地址设为 `TG_BINANCE_OAUTH_CLIENT_ID`。Claude Code 自己就是用 loopback redirect + CIMD 通过币安授权的,所以币安接受 loopback。
 - 前端「连接币安」→ `POST /api/execution/connect` 返回 `url` → 新标签页打开币安同意页 → 回调到 gateway → token 存 `demo_kv`(`binance.oauth.token`)→ SSE `execution.changed`。没有 refresh grant,过期(看 `expires_in`)后 UI 提示重新连接。
 - `mcp-client.ts`:initialize / tools/list / tools/call,处理 `mcp-session-id`、SSE 帧、401、404 重连。
 - 授权后第一件事是 `GET /api/binance/tools` 把工具清单落盘(`docs/demo/binance-mcp-tools.json`),然后写 `McpDirectBackend`(ExecBackend → 对应工具),每笔下单就是一次 HTTP,不经过任何模型。
@@ -48,7 +48,7 @@
   - 前端「币安直连」整块**默认折叠**并挂一行说明(代码原样留着),`mcp` 选项的理由统一为「币安未把网关列为受支持的 Agent(3346001),直连不可用;用 agent_mcp(Claude)」。
 - **现在的点击路径(Jacky 照着点)**:
 
-  执行卡 →「用 Claude 登录币安」→ 网关弹出一个终端窗口(里面已经在跑 `cd ~ && claude "/mcp"`)→ 在 MCP 面板里选 `binance-mcp-server` → **Authenticate** → 浏览器里同意 → 回 trading-swarm 点「检查连接」(应该变「已连接」)→ 执行后端选 **`币安官方 MCP(agent CLI 驱动)`**(`agent_mcp`)。
+  执行卡 →「用 Claude 登录币安」→ 网关弹出一个终端窗口(里面已经在跑 `cd ~ && claude "/mcp"`)→ 在 MCP 面板里选 `binance-mcp-server` → **Authenticate** → 浏览器里同意 → 回 trade-gate 点「检查连接」(应该变「已连接」)→ 执行后端选 **`币安官方 MCP(agent CLI 驱动)`**(`agent_mcp`)。
   模型不用改:默认就是 sonnet(执行卡的「模型」框会显示 `sonnet`,提示「默认 sonnet,便宜」)。
 
 - B 路(`agent_mcp`)是现在唯一活的执行链路;C 路(借钥匙串 token)结论不变:不做。codex(`codex mcp login` 只支持动态注册)、grok(没有可接的接口)结论也不变。

@@ -1,4 +1,4 @@
-import type {ResearchExecution,OrderGateParams,ResearchEntry,StrategyIR} from '@trading-swarm/contracts';
+import type {ResearchExecution,OrderGateParams,ResearchEntry,StrategyIR} from '@trade-gate/contracts';
 import {evaluateOrderGate,fitOrderGate,riskCapApplies} from './order-gate.js';
 import {q,mul,div,min,decimal,SCALE} from './primitives.js';
 /** Fixed-R targets are always re-anchored to the placed stop: a strategy_ir with fixed_r_target, or a legacy policy's take_profit_r. */

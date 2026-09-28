@@ -1,5 +1,5 @@
 /** 离线评测用四类判断桩，无凭证、无网络。名称不可冒充真实 Jev。 */
-import type { StrategyJudge } from '@trading-swarm/contracts';
+import type { StrategyJudge } from '@trade-gate/contracts';
 import type { DecisionAnswer } from '../../decisions.js';
 import { hash } from '../primitives.js';
 import type { DecisionProvider, FrozenModelProfile } from './types.js';

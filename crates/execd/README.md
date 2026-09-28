@@ -5,7 +5,7 @@
 ## 启动与目录
 
 ```
-CARGO_TARGET_DIR=target/a0-rust cargo run -p execd -- [--data-dir ~/.trading-swarm] [--socket <path>] [--log-level info]
+CARGO_TARGET_DIR=target/a0-rust cargo run -p execd -- [--data-dir ~/.trade-gate] [--socket <path>] [--log-level info]
 ```
 
 `<data-dir>/`:`exec.sqlite`(WAL,0600,只有 execd 打开)、`run/execd.sock`(0600)、`run/execd.lock`(flock 单实例)、`secrets/`(0700)、`logs/`。第二个实例同目录启动会失败并指出持有者 pid。

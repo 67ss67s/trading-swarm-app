@@ -1,5 +1,5 @@
 import {htfStructure} from './primitives/structure.js';
-import type { ResearchDataset, ResearchScreen, ResearchScreenRow, ResearchUniverse } from '@trading-swarm/contracts';
+import type { ResearchDataset, ResearchScreen, ResearchScreenRow, ResearchUniverse } from '@trade-gate/contracts';
 import { factorDecompose } from './factor.js';
 import { periodsPerYear } from './calendar.js';
 import { trendState } from './primitives/trend-state.js';

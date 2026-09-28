@@ -15,6 +15,6 @@
 - **skills**:`~/.hermes/skills/<cat>/<name>/SKILL.md`(frontmatter name/description/version/platforms/metadata.hermes.requires_toolsets…)+ references/ scripts/ templates/;渐进披露三层:`skills_list`(索引 ~3k tok 进 system prompt)→ `skill_view`(整文)→ `skill_view(path)`(引用文件);**自创技能**:复杂任务/纠错后 system prompt 提示用 `skill_manage(create|patch|edit|delete|write_file)` 记录;`skills.write_approval` 开时写入先进 `~/.hermes/pending/skills/`,`/skills diff|approve`;安装扫描注入/外泄/破坏命令。memory(小而常驻的事实)与 skills(长而按需的流程)分开。
 - prompt 分层 stable → context → volatile(身份/工具指导/skills 索引 → 上下文文件 → memory/profile/时间戳),配 Anthropic 缓存断点。会话 SQLite+FTS5 可搜。
 
-## pi(TypeScript;见 pi-agent-internals.md 工作线报告)
+## pi(TypeScript;见 pi-agent-internals.md 子代理报告)
 - 四种模式:interactive / print(`-p`)/ RPC(子进程 JSON 协议)/ SDK(`createAgentSession`)。默认四工具 read/write/edit/bash,可整体替换。
 - 借用点:agent loop 的 toolCall/toolResult 配对不变量、steer/followUp 队列、会话树+分支+compaction、extensions 钩子(tool_call before/after)、provider 抽象(pi-ai:OpenAI-compat/Anthropic/…,usage 计费)。

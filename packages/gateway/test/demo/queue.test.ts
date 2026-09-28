@@ -170,9 +170,10 @@ describe('BrainQueue priority', () => {
     q.enqueue({ key: 'first', kind: 'scan', symbol: 'A', run: async () => { order.push('first'); await gate; } });
     q.enqueue({ key: 'second', kind: 'scan', symbol: 'B', run: async () => { order.push('second'); } });
     q.enqueue({ key: 'chat', kind: 'chat', symbol: null, run: async () => { order.push('chat'); } }, { priority: true });
+    q.enqueue({ key: 'chat2', kind: 'chat', symbol: null, run: async () => { order.push('chat2'); } }, { priority: true });
     expect(q.view().running?.key ?? q.view().running?.kind).toBeTruthy();
     release();
     await new Promise((r) => setTimeout(r, 20));
-    expect(order).toEqual(['first', 'chat', 'second']);
+    expect(order).toEqual(['first', 'chat', 'chat2', 'second']);
   });
 });

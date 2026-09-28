@@ -1,6 +1,6 @@
 // Hard-invariant checkers (docs/eval/README.md §1). Pure functions over (case, context, judgment).
 
-import { demo } from '@trading-swarm/gateway';
+import { demo } from '@trade-gate/gateway';
 import type { EvalCase, Evidence, Judgment, Kline, StrategyThread } from './types.js';
 import { featureTfs } from './inputs.js';
 

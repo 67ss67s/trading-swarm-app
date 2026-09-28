@@ -6,7 +6,7 @@ dist/
 .vite/
 coverage/
 
-# data & secrets (runtime lives in ~/.trading-swarm, never in repo)
+# data & secrets (runtime lives in ~/.trade-gate, never in repo)
 secrets/
 *.sqlite
 *.sqlite3
@@ -19,6 +19,7 @@ secrets/
 
 # scratch
 .DS_Store
+.codex-reports/*.tmp
 scratch/
 *.log
 !.env.example

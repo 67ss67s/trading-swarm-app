@@ -1,4 +1,4 @@
-import type { ResearchDataset, ResearchFactorDefinition, ResearchUniverse, ResearchUniverseRequest } from '@trading-swarm/contracts';
+import type { ResearchDataset, ResearchFactorDefinition, ResearchUniverse, ResearchUniverseRequest } from '@trade-gate/contracts';
 import { assertContract, hash } from './primitives.js';
 export function factorDefinition(raw:ResearchUniverseRequest):ResearchFactorDefinition {
   const {kind,symbols}=raw.market_factor;

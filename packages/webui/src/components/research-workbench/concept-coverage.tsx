@@ -13,7 +13,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { FileCode, LoaderCircle } from 'lucide-react';
-import type { LoopConcept, LoopConceptStatus } from '@trading-swarm/contracts';
+import type { LoopConcept, LoopConceptStatus } from '@trade-gate/contracts';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AdmissionVerdictBadge, PineAdmissionReportView, PineInputsTable, pineApi, pineKeys } from '@/components/research-workbench/pine-catalog';

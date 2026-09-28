@@ -1,4 +1,4 @@
-//! token 文件仓:`~/.trading-swarm/secrets/oauth-binance.json`(目录 0700、文件 0600)。
+//! token 文件仓:`~/.trade-gate/secrets/oauth-binance.json`(目录 0700、文件 0600)。
 //!
 //! 写入是**原子替换**:同目录写临时文件 → fsync → rename。崩溃在 rename 之前,
 //! 旧 token 完好;崩溃在 rename 之后,新 token 完整。绝不原地截断重写。
@@ -182,7 +182,7 @@ impl TokenStore {
         Self { path: path.into() }
     }
 
-    /// `~/.trading-swarm/secrets/oauth-binance.json`;`TRADING_SWARM_HOME` 可覆盖根目录。
+    /// `~/.trade-gate/secrets/oauth-binance.json`;`TRADE_GATE_HOME` 可覆盖根目录。
     pub fn default_path() -> Result<PathBuf> {
         Ok(crate::data_home()?.join("secrets").join("oauth-binance.json"))
     }

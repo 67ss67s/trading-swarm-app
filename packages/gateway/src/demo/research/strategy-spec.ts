@@ -10,7 +10,7 @@
  * 规范只做判断和文字,不改数据、不调模型;与 order-gate 的关系:order-gate 是执行期兜底(先放置再判定),
  * 规范是设计期约束(策略/proposal 本来就该满足)。违反 warn 只记录;违反 block 的 IR 不允许发起实验。
  */
-import type { StrategyIR, StrategyCompileResult, StrategySpecReport, OrderGateParams, ResearchEntry } from '@trading-swarm/contracts';
+import type { StrategyIR, StrategyCompileResult, StrategySpecReport, OrderGateParams, ResearchEntry } from '@trade-gate/contracts';
 import { roundTripCostPct, stopFloorPct } from './order-gate.js';
 /** v2(2026-09-23 结构口径):止盈止损按图上结构放、盈亏比不拦单、止损太近不做、止盈不能按 R 倍数倒推。新 run 冻结 v2;
  * 规范正文按 constraints 选口径(有 min_stop_atr = v2),旧 manifest 的 gate 没有这个字段,重建出来的仍是 v1 原文。 */

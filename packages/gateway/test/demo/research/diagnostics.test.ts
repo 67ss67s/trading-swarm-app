@@ -2,7 +2,7 @@ import { buildUniverse } from '../../../src/demo/research/universe.js';
 import { runPortfolio } from '../../../src/demo/research/portfolio.js';
 import { defaultIR,node } from '../../../src/demo/research/strategy.js';
 import { describe,it,expect } from 'vitest';
-import { validate } from '@trading-swarm/contracts';
+import { validate } from '@trade-gate/contracts';
 import { fixture,params,study,STEP } from './fixtures.js';
 import { runReplay } from '../../../src/demo/research/engine.js';
 import { SpotLedger } from '../../../src/demo/research/ledger.js';

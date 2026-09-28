@@ -57,7 +57,7 @@ Jacky 原话:「从用户角度去想就是这里有策略那里又有,最好能
 | range_mean_reversion | 部分可译,1h | 回归概率门(reversionStats)没有原语 |
 | funding_oi_extreme | 译不了 | 缺资金费率极值、OI 变化、结算时间窗三个原语;只建了「规则未编码」草稿,没有版本 |
 
-### 实盘侧(另一工作线,待做)
+### 实盘侧(jacky-24,待做)
 
 1. `POST /api/strategies/apply {strategy_id, version}`:编译 binding,建或更新 `StrategySpec(source:'research')`,写回 lab_strategy_id。要带幂等键、CAS 和 outbox。本轮没做,因为它会碰实盘,需要 Jacky 放行。
 2. radar 用 `binding.trigger`;候选生成用 binding 的 stop、targets、min_stop_atr,这一步要和 CandidateV0 对齐;holding-policy 读 trail、breakeven、signal_exits、max_holding_bars;`fitOrderGate` 接到 gates.ts。

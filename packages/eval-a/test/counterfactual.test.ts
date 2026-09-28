@@ -1,4 +1,4 @@
-import { demo } from '@trading-swarm/gateway';
+import { demo } from '@trade-gate/gateway';
 import { describe, expect, it } from 'vitest';
 import { counterfactualFor, regimeAgreement, regimeRow, summarizeCounterfactual, type Counterfactual } from '../src/index.js';
 import type { EvalCase, Judgment, Kline, StrategyThread } from '../src/index.js';

@@ -97,7 +97,7 @@ export function quadrantOf(side: PositionSide, reduceOnly: boolean): OrderQuadra
 export function quadrantSpec(quadrant: OrderQuadrant): QuadrantSpec {
   const found = ORDER_QUADRANTS.find((spec) => spec.quadrant === quadrant);
   // 四个字面量已被类型穷举,这里只是给运行时一个不 throw 的地板。
-  // (trading-swarm 的 tsconfig 开了 noUncheckedIndexedAccess,ORDER_QUADRANTS[0] 类型上
+  // (trade-gate 的 tsconfig 开了 noUncheckedIndexedAccess,ORDER_QUADRANTS[0] 类型上
   // 是 QuadrantSpec | undefined;数组是本文件内的非空 const 字面量,! 是安全的。)
   return found ?? ORDER_QUADRANTS[0]!;
 }

@@ -1,4 +1,4 @@
-//! exchange-mcp —— trading-swarm 的 **MCP / OAuth 半边**(工作包 A1)。
+//! exchange-mcp —— trade-gate 的 **MCP / OAuth 半边**(工作包 A1)。
 //!
 //! 职责(设计 §3 包布局、§12 失败矩阵):
 //! - OAuth 2.1 授权码 + PKCE(public client,client_id 走 CIMD 元数据文档)
@@ -54,10 +54,10 @@ pub const BINANCE_AS_METADATA_URL: &str =
 pub const BINANCE_AUTHORIZE_ENDPOINT: &str = "https://accounts.binance.com/agentic-oauth/authorize";
 pub const BINANCE_TOKEN_ENDPOINT: &str = "https://accounts.binance.com/oauth-agentic/token";
 
-/// 我们的 CIMD 元数据文档 URL(内容见 `deploy/cimd/trading-swarm-client.json`)。
+/// 我们的 CIMD 元数据文档 URL(内容见 `deploy/cimd/trade-gate-client.json`)。
 /// AS 没有动态注册端点,client_id 只能是这个 URL;文档必须公网可达且逐字匹配。
 pub const DEFAULT_CLIENT_ID: &str =
-    "https://<bridge-domain>/guide/oauth/trading-swarm-client.json";
+    "https://bridge.example.com/guide/oauth/trade-gate-client.json";
 
 /// 回调端口固定 —— CIMD 文档里的 `redirect_uris` 必须逐字匹配。
 pub const DEFAULT_CALLBACK_PORT: u16 = 18801;
@@ -66,11 +66,11 @@ pub const DEFAULT_CALLBACK_PATH: &str = "/oauth/callback";
 /// 先报这个协议版本;服务端回什么就用什么。
 pub const DEFAULT_PROTOCOL_VERSION: &str = "2025-11-25";
 
-pub const CLIENT_NAME: &str = "trading-swarm-execd";
+pub const CLIENT_NAME: &str = "trade-gate-execd";
 pub const CLIENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// 运行时数据根目录 `~/.trading-swarm`(`TRADING_SWARM_HOME` 可覆盖,测试用)。
-pub const HOME_ENV: &str = "TRADING_SWARM_HOME";
+/// 运行时数据根目录 `~/.trade-gate`(`TRADE_GATE_HOME` 可覆盖,测试用)。
+pub const HOME_ENV: &str = "TRADE_GATE_HOME";
 
 pub fn data_home() -> Result<PathBuf> {
     if let Ok(dir) = std::env::var(HOME_ENV)
@@ -79,11 +79,11 @@ pub fn data_home() -> Result<PathBuf> {
         return Ok(PathBuf::from(dir));
     }
     let home = std::env::var("HOME")
-        .map_err(|_| Error::Io("读不到 HOME,无法定位 ~/.trading-swarm".to_string()))?;
-    Ok(PathBuf::from(home).join(".trading-swarm"))
+        .map_err(|_| Error::Io("读不到 HOME,无法定位 ~/.trade-gate".to_string()))?;
+    Ok(PathBuf::from(home).join(".trade-gate"))
 }
 
-/// 探针原始响应落盘目录 `~/.trading-swarm/probe`。
+/// 探针原始响应落盘目录 `~/.trade-gate/probe`。
 pub fn probe_dir() -> Result<PathBuf> {
     Ok(data_home()?.join("probe"))
 }

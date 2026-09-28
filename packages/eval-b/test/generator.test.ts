@@ -1,4 +1,4 @@
-import { demo } from '@trading-swarm/gateway';
+import { demo } from '@trade-gate/gateway';
 import { describe, expect, it } from 'vitest';
 
 import { generateCasesFromData, type HistoricalData } from '../src/generator.js';

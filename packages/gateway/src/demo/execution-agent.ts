@@ -315,7 +315,7 @@ export class AgentMcpBackend implements ExecBackend {
   }
 
   async start(): Promise<void> {
-    if (!this.scratch) this.scratch = mkdtempSync(path.join(os.tmpdir(), 'tswarm-mcp-'));
+    if (!this.scratch) this.scratch = mkdtempSync(path.join(os.tmpdir(), 'tgate-mcp-'));
     if (this.opts.cli === 'claude') {
       this.mcpConfigPath = path.join(this.scratch, 'mcp.json');
       // Same server name + url as the one the human logged in with, so the CLI reuses its stored OAuth token.

@@ -1,7 +1,7 @@
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { demo } from '@trading-swarm/gateway';
+import { demo } from '@trade-gate/gateway';
 import { describe, expect, it } from 'vitest';
 import { buildEvalContext } from '../src/context.js';
 import { evaluateCase } from '../src/runner.js';

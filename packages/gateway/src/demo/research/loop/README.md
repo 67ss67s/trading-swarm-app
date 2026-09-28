@@ -17,8 +17,8 @@
 测试（仓库根）：
 
 ```sh
-npm run generate:check -w @trading-swarm/contracts
-npm run build -w @trading-swarm/gateway
+npm run generate:check -w @trade-gate/contracts
+npm run build -w @trade-gate/gateway
 cd packages/gateway
 npx vitest run test/demo/research --maxWorkers 4
 ```

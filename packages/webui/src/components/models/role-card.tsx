@@ -18,7 +18,9 @@ import type { CliTool, ConnectionKind, ModelConnection, ModelRole, ModelsView, R
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { JudgeLock } from '@/components/judge-lock';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { friendlyError, lockReason } from '@/lib/edition';
 import { relativeTime, useNow } from '@/lib/format';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -58,12 +60,12 @@ function errorText(e: unknown): string {
     const human = bindingErrorText(e.code, '');
     return human || saveErrorText(e);
   }
-  return e instanceof Error ? e.message : String(e);
+  return friendlyError(e instanceof Error ? e.message : String(e));
 }
 
-function Segmented<T extends string>({ value, options, onChange, disabled }: { value: T; options: { value: T; label: string }[]; onChange: (v: T) => void; disabled?: boolean }) {
+function Segmented<T extends string>({ value, options, onChange, disabled, title }: { value: T; options: { value: T; label: string }[]; onChange: (v: T) => void; disabled?: boolean; title?: string }) {
   return (
-    <div className="inline-flex w-full rounded-md border bg-muted/30 p-0.5" role="radiogroup">
+    <div className="inline-flex w-full rounded-md border bg-muted/30 p-0.5" role="radiogroup" title={title}>
       {options.map((o) => (
         <button
           key={o.value}
@@ -81,9 +83,9 @@ function Segmented<T extends string>({ value, options, onChange, disabled }: { v
   );
 }
 
-function ModelInput({ id, value, hints, placeholder, disabled, onChange }: { id: string; value: string; hints: string[]; placeholder: string; disabled?: boolean; onChange: (v: string) => void }) {
+function ModelInput({ id, value, hints, placeholder, disabled, title, onChange }: { id: string; value: string; hints: string[]; placeholder: string; disabled?: boolean; title?: string; onChange: (v: string) => void }) {
   return (
-    <div>
+    <div title={title}>
       <div className="mb-1 text-[10.5px] text-muted-foreground">{t('模型')}</div>
       <Input list={id} value={value} disabled={disabled} placeholder={placeholder} spellCheck={false} onChange={(e) => onChange(e.target.value)} className="num h-7 text-[12px]" />
       <datalist id={id}>
@@ -226,7 +228,9 @@ export function RoleCard({ role, view }: { role: ModelRole; view: ModelsView }) 
     },
   });
 
-  const busy = save.isPending || runTest.isPending;
+  // 评审版:模型 key 不外露,角色绑定整张卡只读(Segmented / 下拉 / 输入框跟着 busy 一起禁用,原因挂在卡体 title 和按钮 tooltip 上)
+  const lock = lockReason('model_connection_edit');
+  const busy = save.isPending || runTest.isPending || !!lock;
   const health = cardHealth(view, role, test);
   // 显示的测试结果:本卡刚测的优先;否则绑定连接的上次测试
   const shownTest = test ?? (eff?.source === 'binding' ? (boundConn?.last_test ?? null) : null);
@@ -275,7 +279,7 @@ export function RoleCard({ role, view }: { role: ModelRole; view: ModelsView }) 
         </span>
       </div>
 
-      <Segmented value={draft.mode} options={modeOptions} onChange={onMode} disabled={busy} />
+      <Segmented value={draft.mode} options={modeOptions} onChange={onMode} disabled={busy} title={lock ?? undefined} />
 
       {draft.mode === 'cli' ? (
         <div className="flex flex-col gap-2">
@@ -291,7 +295,7 @@ export function RoleCard({ role, view }: { role: ModelRole; view: ModelsView }) 
                     const h = cliModelHints(view, tool, brainsQ.data?.brains);
                     patch({ cli: tool, model: h.includes(draft.model) ? draft.model : '' });
                   }}
-                  title={det?.command ?? undefined}
+                  title={lock ?? det?.command ?? undefined}
                   className={cn('flex flex-col items-start rounded-md border px-2 py-1 text-left hover:bg-muted', draft.cli === tool && 'border-primary bg-primary/10')}
                 >
                   <span className="num text-[12px] font-semibold">{tool}</span>
@@ -300,14 +304,14 @@ export function RoleCard({ role, view }: { role: ModelRole; view: ModelsView }) 
               );
             })}
           </div>
-          <ModelInput id={`rc-${role}-cli`} value={draft.model} hints={hints} disabled={busy} placeholder={t('留空 = 用 CLI 自己的缺省模型')} onChange={(v) => patch({ model: v })} />
+          <ModelInput id={`rc-${role}-cli`} value={draft.model} hints={hints} disabled={busy} title={lock ?? undefined} placeholder={t('留空 = 用 CLI 自己的缺省模型')} onChange={(v) => patch({ model: v })} />
         </div>
       ) : draft.mode === 'api' ? (
         <div className="flex flex-col gap-2">
           <div>
             <div className="mb-1 text-[10.5px] text-muted-foreground">{t('连接')}</div>
             <Select value={draft.connectionId ?? undefined} onValueChange={onConnection} disabled={busy}>
-              <SelectTrigger size="sm" className="h-7 w-full text-[12px]">
+              <SelectTrigger size="sm" className="h-7 w-full text-[12px]" title={lock ?? undefined}>
                 <SelectValue placeholder={t('选一个连接,或新建一个')} />
               </SelectTrigger>
               <SelectContent>
@@ -374,6 +378,7 @@ export function RoleCard({ role, view }: { role: ModelRole; view: ModelsView }) 
             value={draft.model}
             hints={hints}
             disabled={busy}
+            title={lock ?? undefined}
             placeholder={role === 'decision' ? DECISION_DEFAULT_MODEL : t('模型 id,可手打')}
             onChange={(v) => patch({ model: v })}
           />
@@ -386,10 +391,13 @@ export function RoleCard({ role, view }: { role: ModelRole; view: ModelsView }) 
 
       {/* 操作 */}
       <div className="flex items-center gap-1.5">
+        <JudgeLock feature="model_connection_edit">
         <Button size="xs" disabled={!dirty || busy || Boolean(problem)} title={problem ?? undefined} onClick={() => save.mutate()}>
           {save.isPending ? <Loader2 className="size-3 animate-spin" /> : <Save />}
           {t('保存')}
         </Button>
+        </JudgeLock>
+        <JudgeLock feature="model_connection_edit">
         <Button
           size="xs"
           variant="outline"
@@ -400,6 +408,7 @@ export function RoleCard({ role, view }: { role: ModelRole; view: ModelsView }) 
           {runTest.isPending ? <Loader2 className="size-3 animate-spin" /> : <PlugZap />}
           {runTest.isPending ? t('测试中…') : dirty ? t('保存并测试') : t('测试连接')}
         </Button>
+        </JudgeLock>
         {dirty && !busy ? <span className="text-[10.5px] text-warn">{problem ?? t('未保存')}</span> : null}
       </div>
 
@@ -410,7 +419,7 @@ export function RoleCard({ role, view }: { role: ModelRole; view: ModelsView }) 
           <span className="font-semibold">{shownTest.ok ? t('测试通过') : t('测试失败')}</span>
           {shownTest.latency_ms != null ? <span> · {shownTest.latency_ms}ms</span> : null}
           <span className="text-muted-foreground"> · {relativeTime(shownTest.at, now)}</span>
-          {shownTest.detail ? <div className="mt-0.5 break-words text-muted-foreground">{shownTest.detail}</div> : null}
+          {shownTest.detail ? <div className="mt-0.5 break-words text-muted-foreground">{friendlyError(shownTest.detail)}</div> : null}
         </div>
       ) : null}
     </div>

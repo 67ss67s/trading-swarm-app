@@ -11,19 +11,20 @@ import { BIAS_LABEL, REGIME_LABEL, fmtDateTime, relativeTime, useNow } from '@/l
 import { cn } from '@/lib/utils';
 import { t } from '@/lib/i18n';
 
+type HistoryState = Pick<MarketState, 'id' | 'as_of' | 'bias' | 'regime' | 'summary' | 'error'>;
 interface FlipNode {
-  state: MarketState;
-  prev: MarketState | null;
+  state: HistoryState;
+  prev: HistoryState | null;
 }
 
-export function BiasTimeline({ history }: { history: MarketState[] }) {
+export function BiasTimeline({ history }: { history: HistoryState[] }) {
   const now = useNow();
   const [openId, setOpenId] = useState<string | null>(null);
 
   const flips = useMemo<FlipNode[]>(() => {
     const asc = [...history].sort((a, b) => a.as_of - b.as_of);
     const out: FlipNode[] = [];
-    let prev: MarketState | null = null;
+    let prev: HistoryState | null = null;
     for (const state of asc) {
       if (!prev || prev.bias !== state.bias) out.push({ state, prev });
       prev = state;

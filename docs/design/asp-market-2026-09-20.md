@@ -1,12 +1,12 @@
 # 信号市场(Signal Market · OKX.AI ASP)— 页面重做 + ASP Agent 设计稿
 
-日期 2026-09-20。仓库 `~/Desktop/trading-swarm-okx`(分支 okx-devday,dev 18811/5191)。
+日期 2026-09-20。仓库 `<repo>`(分支 okx-devday,dev 18811/5191)。
 前置:`okx-atk-2026-09-20.md`(ATK 执行通道)、`okx-asp-follow-2026-09-20.md`(方案 A,已落地 e5aa709)、
 `okx-asp-wallet-proposal-2026-09-20.md`(A→B 拍板)。本文**取代**方案 A 的前端部分,并把「跟单」页整页重做。
 
 Jacky 的要求(原话要点):跟单页去掉 8794 / bridge 的所有痕迹,改成完整的 ASP 适配;参考 okx.ai/tutorial、
 dev-docs、okx.ai/agents;信号 relay 参考 bridge console;用户可以订 ASP 信号自动交易,也可以让 agent 按研究好的
-策略跑,做判断时 relay 一份到 ASP 卖订阅;再加一个专管 ASP 的 agent 和对应 skill。后端 外部评审写,
+策略跑,做判断时 relay 一份到 ASP 卖订阅;再加一个专管 ASP 的 agent 和对应 skill。后端 astra(Codex medium)写,
 前端主线写。
 
 ## 0. 结论先行
@@ -93,7 +93,7 @@ interface MarketSettings {
 }
 ```
 
-- `copy` = 「订阅信号自动交易」。**仍然过 trading-swarm 自己的全部闸**(preflight、名义上限、每日开仓上限、止损必需、
+- `copy` = 「订阅信号自动交易」。**仍然过 trade-gate 自己的全部闸**(preflight、名义上限、每日开仓上限、止损必需、
   新鲜度、反向敞口、重复开仓),仍然零 OKX autotrade consent。首发 `copy` 只对 `open` 生效,管理动作按现行 §6 收缩规则进 review_only。
 - `gated` = agent 把关(现有 scan episode 路径,trigger `trader_signal`)。
 - `evidence` = 只进判断账本。
@@ -104,7 +104,7 @@ interface MarketSettings {
 - 搜索框(关键词,默认 `信号 signal 合约 perp`)+ 筛选:只看 A2A 订阅制 / 有试用 / 价格上限;分页用 `searchAfter`。
 - 服务卡(照 okx.ai/agents 的信息密度):ASP 名 + 在线点、评分 ★ + 好评率 + 已售、服务名、类型徽标、价格(`20 USDT/月` 或 `1 USDT/次`)、试用徽标、描述前 160 字、`isSubscribing` 时显示「已订阅」。
 - 动作:「详情」抽屉(profile + service-list + feedback-list,评价原文当不可信文本渲染)、「试用」/「订阅」→ 确认弹窗:
-  标题/描述自动填(`trading-swarm 订阅 · <服务名>`)、自动续费开关(默认关)、本地模式(默认 `evidence`,想 copy 要手动选并看到闸门说明)、权重、费用与钱包余额一行、
+  标题/描述自动填(`trade-gate 订阅 · <服务名>`)、自动续费开关(默认关)、本地模式(默认 `evidence`,想 copy 要手动选并看到闸门说明)、权重、费用与钱包余额一行、
   「本机将成为接收设备」提示 → 确认 → 网关 `create-subscribe`(不带 autotrade)→ 成功后 `subscribe-device-update` 确保本机在接收集合 → 写本地订阅配置 → 跳订阅栏。
 - 余额不够:CLI 会回 `fundingNoticeCommand`,前端展示充值地址与二维码(网关跑 `funding-notice`)。
 
@@ -176,7 +176,7 @@ ASP 订阅整条链路是**靠 Agentic Wallet 跑起来的**:买家身份(User #
 {"deliveryId":"tg_<event_id>","signal_type":"order","signalTime":1789890000000,
  "symbol":"BTC-USDT-SWAP","action":"LONG","price":"64120","stop_loss":"63400","take_profit":["65200","66100"],
  "leverage":null,"sz":null,"valid_until":1789890180000,"is_executable":true,
- "reason":"<agent 一句话依据>","source":"trading-swarm","thread_id":"…","realized_r":null,"backend":"okx","paper":false}
+ "reason":"<agent 一句话依据>","source":"trade-gate","thread_id":"…","realized_r":null,"backend":"okx","paper":false}
 ```
   平仓:`action:"CLOSE"`,带 `realized_r`、`exit_reason`;analysis:`is_executable:false`,`can_enter:false`。
   文本部分中英双语一行,不许出现「保证 / 稳赚」类词(发布前过一个本地敏感词表,`validate-listing` 的那份词表抄过来)。
@@ -198,7 +198,7 @@ ASP 订阅整条链路是**靠 Agentic Wallet 跑起来的**:买家身份(User #
 
 ## 5. Skill:`skills/asp-agent/SKILL.md`
 
-给 host agent(Claude Code / Codex 会话,或 agent_mcp 那条通道)用的操作手册,和 `skills/trading-swarm/SKILL.md` 同款风格:HTTP 优先、CLI 兜底。内容骨架:
+给 host agent(Claude Code / Codex 会话,或 agent_mcp 那条通道)用的操作手册,和 `skills/trade-gate/SKILL.md` 同款风格:HTTP 优先、CLI 兜底。内容骨架:
 
 1. 角色定义与红线:只经网关 `/api/market/*` 操作;不直接跑 `onchainos agent deliver`/`create-subscribe`(网关有幂等与账本);永不转发买来的信号;永不写「保证收益」;不传 `--autotrade-*`。
 2. 读状态:`GET /api/market/status`、`/subscriptions`、`/inbox`、`/asp`、`/asp/deliveries`。
@@ -208,7 +208,7 @@ ASP 订阅整条链路是**靠 Agentic Wallet 跑起来的**:买家身份(User #
 6. 故障手册:守护没跑(`okx-a2a daemon start` 后必须补代理,见 okx-signal-lab/fix-daemon-proxy.sh)、钱包未登录、本机不在接收集合、CLI 超时、`fundingNoticeCommand`。
 7. OKX 官方 `okx-ai` 技能与本 skill 的分工:平台原生对话流程(评审、争议投票、A2A 聊天)留给官方技能;交易信号买卖走本 skill。
 
-## 6. 后端接口契约(给 外部评审;同步抄进 `docs/demo/v3-ui-contract.md` §9.39)
+## 6. 后端接口契约(给 astra;同步抄进 `docs/demo/v3-ui-contract.md` §9.39)
 
 命名空间 `/api/market/*`;现有 `/api/follow/signals*`、`/api/follow/stats` 保留供信号栏用,`/api/follow`(设置)改为返回 `MarketSettings`。
 
@@ -248,7 +248,7 @@ ASP 订阅整条链路是**靠 Agentic Wallet 跑起来的**:买家身份(User #
 
 ## 8. 分工与顺序
 
-- **外部评审— 后端**:§2.1 账本与 transport、§2.2 设置、§3.3 发布器、§4 asp_agent 目录与角色接线、§6 全部路由与迁移、测试。改动范围 `packages/gateway`、`packages/contracts`(类型)、`docs/demo/v3-ui-contract.md` §9.39。**不碰** `packages/webui`。
+- **astra(Codex medium)— 后端**:§2.1 账本与 transport、§2.2 设置、§3.3 发布器、§4 asp_agent 目录与角色接线、§6 全部路由与迁移、测试。改动范围 `packages/gateway`、`packages/contracts`(类型)、`docs/demo/v3-ui-contract.md` §9.39。**不碰** `packages/webui`。
 - **主线 — 前端**:`pages/market.tsx` 四栏 + 组件、nav 改名、`api/types.ts` 与 `client.ts` 对齐契约、i18n、删 follow 页;`skills/asp-agent/SKILL.md`。
-- 顺序:契约 §6 先冻结(本文)→ 两边并行 → 前端先用契约 mock 接口 → 合并 → tester 跑全量 → 外部评审对抗复审 → 重编 dist → 重启 18811。
+- 顺序:契约 §6 先冻结(本文)→ 两边并行 → 前端先用契约 mock 接口 → 合并 → tester 跑全量 → Codex 对抗复审 → 重编 dist → 重启 18811。
 - 参赛演示路径:注册 ASP(Jacky 本人过目文案)→ 用 User #13529 订自己的服务不行(同钱包),改订 #8136 试用做「买」的演示 → 发布器开着,agent 判断实时 relay 到市场 → 页面上看到订阅者与投递账本。

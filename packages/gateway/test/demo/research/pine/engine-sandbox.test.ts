@@ -1,5 +1,5 @@
 /**
- * 真引擎(@trading-swarm/pine-engine + PineTS)在 Node 权限模型下:
+ * 真引擎(@trade-gate/pine-engine + PineTS)在 Node 权限模型下:
  *   - 正常 Pine 脚本能跑,并在「合成 + 仿真实行情」两套数据上过准入(因果 / 确定性);
  *   - 脚本里写文件、起子进程、发网络请求、拿网关 env、杀父进程,全部被拒,且没有副作用。
  * 需要根目录 npm install 过(pinets 在 node_modules);装不上时整组跳过而不是假绿。
@@ -8,7 +8,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { existsSync, mkdtempSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { ResearchBar } from '@trading-swarm/contracts';
+import type { ResearchBar } from '@trade-gate/contracts';
 import { PineEngineHost, setPineEngineHost, pineEnginePackageDir, sandboxReadDirs } from '../../../../src/demo/research/pine/engine-host.js';
 import { runPine, clearPineCache } from '../../../../src/demo/research/pine/client.js';
 import { admitScript, syntheticSuite, type AdmissionSuite } from '../../../../src/demo/research/pine/admission.js';

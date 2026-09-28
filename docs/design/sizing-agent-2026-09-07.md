@@ -24,7 +24,7 @@ split_entries 只是执行规划建议，落库但本期不实际拆单；任何
 
 ## 验证
 
-数学测试覆盖倍率、最小手风险、2 倍边界、名义/流动性上限与组合上限；stub runtime 验证三模式、垃圾/越界/数字泄漏/超时回退及持久化。gateway 全量 vitest、tsc -b，webui tsc。按 AGENTS.md 由 tester 工作线复验并对抗 review；不调用付费模型、不提交、不重启 18800，不编辑用户列明的并行 UI 文件。
+数学测试覆盖倍率、最小手风险、2 倍边界、名义/流动性上限与组合上限；stub runtime 验证三模式、垃圾/越界/数字泄漏/超时回退及持久化。gateway 全量 vitest、tsc -b，webui tsc。按 AGENTS.md 由 tester 子代理复验并对抗 review；不调用付费模型、不提交、不重启 18800，不编辑用户列明的并行 UI 文件。
 
 ## 对抗审查后的补强
 

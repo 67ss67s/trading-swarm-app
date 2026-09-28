@@ -23,15 +23,15 @@ Jacky 09-12 下午的要求,原话要点:agent 现在只跑 breakout_retest,其�
 
 | 包 | 谁 | worktree / 分支 | 独占文件 |
 |---|---|---|---|
-| P1 策略执行器 + 无偏回放 + 判断回放 | 工作线 | `tg-wt-strategy-engine` / `wt/strategy-engine` | 新 `strategy-signals.ts`、新 `replay-stats.ts`、funnel.ts、strategy-lab.ts、outcome.ts、backtest.ts、strategy-hypothesis.ts、strategies.ts(只动 gate 常量段与 stats 类型)、migration **0019**、scripts/lab-*.mjs、对应测试 |
-| P5 事件研究闭环 | 工作线 | `tg-wt-event-research` / `wt/event-research` | events.ts、events-calendar.ts、新 `calendar-feed.ts`、新 `research.ts`、routes-events.ts、info.ts、runtime.ts(只动事件/信息员段)、migration **0020**、webui `pages/events.tsx` + 新 research 组件、事件 SSE |
-| P2 策略切换与自动轮换 | 主线 | `tg-wt-strategy-switch` / `wt/strategy-switch` | workflow.ts、strategy-council.ts、strategy-loop.ts(新增 allocator 段)、routes-strategies.ts(active/allocator 端点)、webui 策略页顶部切换区 + 设置页(议会/入场/探针队列开关)、migration **0021** |
-| P3 自定义证据编辑器 + 减黑盒 | 主线 | `tg-wt-evidence-editor` / `wt/evidence-editor` | strategies.ts(只动 evidence 校验函数)、context.ts、routes-strategies.ts(`PUT /api/strategies/:id/evidence`)、routes-judgment.ts(证据来源明细)、webui 策略抽屉新组件 `EvidenceEditor.tsx`、判断记录页证据来源标记 |
-| P6 收尾 | 工作线 | `tg-wt-closeout` / `wt/closeout` | 账本分页(routes-judgment.ts 分页参数 + 复盘页)、撤单退当日开仓额(runtime.ts 撤单段)、agent_mcp 限价 CID 回读比价(execution-agent.ts)、迁移 0016 重复编号处理方案(只写文档不改文件) |
+| P1 策略执行器 + 无偏回放 + 判断回放 | **Codex astra(medium)** | `tg-wt-strategy-engine` / `wt/strategy-engine` | 新 `strategy-signals.ts`、新 `replay-stats.ts`、funnel.ts、strategy-lab.ts、outcome.ts、backtest.ts、strategy-hypothesis.ts、strategies.ts(只动 gate 常量段与 stats 类型)、migration **0019**、scripts/lab-*.mjs、对应测试 |
+| P5 事件研究闭环 | **Codex astra(medium)** | `tg-wt-event-research` / `wt/event-research` | events.ts、events-calendar.ts、新 `calendar-feed.ts`、新 `research.ts`、routes-events.ts、info.ts、runtime.ts(只动事件/信息员段)、migration **0020**、webui `pages/events.tsx` + 新 research 组件、事件 SSE |
+| P2 策略切换与自动轮换 | opus | `tg-wt-strategy-switch` / `wt/strategy-switch` | workflow.ts、strategy-council.ts、strategy-loop.ts(新增 allocator 段)、routes-strategies.ts(active/allocator 端点)、webui 策略页顶部切换区 + 设置页(议会/入场/探针队列开关)、migration **0021** |
+| P3 自定义证据编辑器 + 减黑盒 | opus | `tg-wt-evidence-editor` / `wt/evidence-editor` | strategies.ts(只动 evidence 校验函数)、context.ts、routes-strategies.ts(`PUT /api/strategies/:id/evidence`)、routes-judgment.ts(证据来源明细)、webui 策略抽屉新组件 `EvidenceEditor.tsx`、判断记录页证据来源标记 |
+| P6 收尾 | sonnet | `tg-wt-closeout` / `wt/closeout` | 账本分页(routes-judgment.ts 分页参数 + 复盘页)、撤单退当日开仓额(runtime.ts 撤单段)、agent_mcp 限价 CID 回读比价(execution-agent.ts)、迁移 0016 重复编号处理方案(只写文档不改文件) |
 
 主线只做合并、全量测试、重编 dist、交接。**三条铁律**:不 `git add -A`;不重启 18801(Jacky 放行才动);diff 只覆盖自己独占的文件,共用文件只改自己那一段、不重排不重格式化。
 
-## 2. P1 策略执行器与无偏回放
+## 2. P1 策略执行器与无偏回放(astra)
 
 ### 2.1 目标
 让每一条策略都能被**确定性地、独立地**量出来,并且量出来的数字经得起「学术/实战」的质疑:扣了成本、有样本外、对多重检验做了校正、不吃幸存者偏差、不偷看未来。这是「自动找策略→回测→晋升」的地基,没有它,自动化只是把噪声自动化。
@@ -72,7 +72,7 @@ Jacky 09-12 下午的要求,原话要点:agent 现在只跑 breakout_retest,其�
 - 代码 + vitest(每族 setup 至少 3 个正例 3 个反例;成本模型;walk-forward 切窗;bootstrap CI;DSR;universe 选择;保守限价成交);`npm run lab` 一条命令跑全策略并打印表;`docs/design/strategy-engine-v3-2026-09-12.md`(方法、公式、引用、与线上一致/不一致的边界);契约 `docs/demo/v3-ui-contract.md` §9.32(lab_stats 新字段:oos/net/ci/dsr/trial_count/regime 桶/universe_rule)。
 - 学术依据(已在 docs/research/strategy-construction-2026-09-05.md 列出):Bailey & López de Prado *Deflated Sharpe Ratio*;White *Reality Check*;López de Prado *AFML*(purged CV / embargo / backtest overfitting);Pardo *walk-forward*;Harris *Trading and Exchanges*(成本)。
 
-## 3. P5 事件研究闭环
+## 3. P5 事件研究闭环(astra)
 
 ### 3.1 目标
 Jacky 的画面:事件页像一张宏观日历——昨天 PPI、今天 CPI、明天利率决议;agent **自己**查出发布时间并核对;到点自动去拿一手数据(实际值 vs 预期);用户能指派「研究 X」,agent 自己规划来源、抓取、提炼、写成简报,简报进证据,复盘回填影响;事件能作为议会里的一票(通过 P1 的 event_driven 族,本包只留接口)。
@@ -106,25 +106,25 @@ ResearchTask { id; kind: 'event_prep'|'event_release'|'topic'|'calendar_refresh'
 - 模型仍然不能直接下单;事件成为票的路径只留 `SignalFn` 接口给 P1 的 event_driven 族。
 - 不给模型 WebSearch;所有抓取是服务端确定性代码按计划里的 URL 做,计划本身由便宜大脑出、由白名单过滤。
 
-## 4. P2 策略切换与自动轮换(工作线,等复审「多策略轮换后端还缺什么」清单出来后再派)
+## 4. P2 策略切换与自动轮换(opus,等 astra 复审「多策略轮换后端还缺什么」清单出来后再派)
 - `workflow.active_mode: 'manual'|'auto'`。auto 下 allocator 每天一次:候选 = paper+ 策略;按 regime 分桶取最近 30 天 net 期望(P1 字段)排名,选前 `active_strategies_max` 条且每族最多 1 条;变更写 strategy_events 与告警 `active_set_changed`(info)。
 - 在途线程钉 `strategy_refs` 不受影响(已有);退化自动移出(已有)。
 - 前端:策略页顶部「当前票池」加「手动/自动」切换、每条为什么在/不在票池的一句话(读 strategy_events);设置页补议会/入场/探针队列开关。
 - 不做:让模型选票池。
 
-## 5. P3 自定义证据编辑器 + 减黑盒
+## 5. P3 自定义证据编辑器 + 减黑盒(opus)
 - `PUT /api/strategies/:id/evidence`:校验 indicators id ⊆ INDICATOR_SETS、tf 合法、events ⊆ TriggerKind;写成新版本 draft(evidence 进 hash,所以必须走 createVersion),不改旧版本。
 - 编辑器:指标库多选(按分类分组、按 tf 分列)、事件多选、info_topics 输入;保存即出草稿并跳到时间线。
 - 减黑盒:判断记录页每条证据标 `required_by` 与来源(indicator/event/research/news);「模型看到了什么」= 当时 evidencePlan 的快照存进 episode(新增 `evidence_plan_hash` + 明细),前端可展开。
 
-## 6. P6 收尾
+## 6. P6 收尾(sonnet)
 - 判断账本分页(`?limit&cursor`,复盘页「加载更多」)。
 - 撤单成功(零成交且终态)退当日开仓额(09-09 待办④),带用例。
 - agent_mcp 限价发单后按 CID 回读一次比对 price,不一致告警(09-09 待办⑤)。
 - 迁移 0016 重复编号:只写 `docs/handoff` 里的处理建议,不改文件。
 
 ## 7. 顺序
-1. 现在:P1、P5、P3、P6 分派;四个 worktree 并行。
-2. 合并复审报告落地后:派 P2。
-3. 逐包:tester 全量 vitest + tsc → 主线合并 → dist 重编 → 交接;对抗复审一次(合并后)。
+1. 现在:P1、P5 派 astra;P3、P6 派 opus/sonnet;四个 worktree 并行。
+2. astra 合并复审报告落地后:派 P2。
+3. 逐包:tester 全量 vitest + tsc → 主线合并 → dist 重编 → 交接;Codex 对抗复审一次(合并后)。
 4. 重启 18801 由 Jacky 放行。

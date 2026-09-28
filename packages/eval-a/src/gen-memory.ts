@@ -10,7 +10,7 @@
 //   <id>-mem-irrelevant   one memory scoped to a different symbol             → 不该被引用
 // Recall would never return the irrelevant one; injecting it anyway is the point of the probe.
 
-import { demo } from '@trading-swarm/gateway';
+import { demo } from '@trade-gate/gateway';
 import { allowedNumbers, futureNumbers, matchesAny } from './checks.js';
 import { buildCase } from './inputs.js';
 import type { EvalCase, MemoryItem, MemoryKind } from './types.js';

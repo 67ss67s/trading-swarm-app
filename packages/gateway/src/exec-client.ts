@@ -1,5 +1,5 @@
 // ExecClient — gateway's only way to talk to execd (docs/contracts/README.md §8). One UDS
-// connection, NDJSON JSON-RPC 2.0 frames (encode/decode reused from @trading-swarm/contracts),
+// connection, NDJSON JSON-RPC 2.0 frames (encode/decode reused from @trade-gate/contracts),
 // integer request ids, one outstanding event subscription, automatic reconnect with exponential
 // backoff, and — the one non-obvious rule this module exists to enforce — a request timeout is
 // NOT a failure for write methods (propose/authorize/...): execd may have committed the write and
@@ -18,10 +18,10 @@ import {
   isRpcNotification,
   isRpcSuccess,
   NdjsonDecoder,
-} from '@trading-swarm/contracts';
+} from '@trade-gate/contracts';
 
 export function defaultExecdSocketPath(): string {
-  return path.join(os.homedir(), '.trading-swarm', 'run', 'execd.sock');
+  return path.join(os.homedir(), '.trade-gate', 'run', 'execd.sock');
 }
 
 /** A JSON-RPC error response from execd, decoded per tables/error_codes.json's shape. */
@@ -59,7 +59,7 @@ export class ExecTimeout extends Error {
 }
 
 export interface ExecClientOptions {
-  /** UDS path to execd. Default `~/.trading-swarm/run/execd.sock`. */
+  /** UDS path to execd. Default `~/.trade-gate/run/execd.sock`. */
   socketPath?: string;
   /** Default per-call timeout. Default 10_000ms (README §8). */
   defaultTimeoutMs?: number;

@@ -1,7 +1,7 @@
 // Eval-side domain types (docs/eval/README.md §2). Everything the gateway already defines is taken
 // from `demo` so the case files are literally the runtime's own shapes.
 
-import type { demo } from '@trading-swarm/gateway';
+import type { demo } from '@trade-gate/gateway';
 import type { EpisodeGraph } from './graph.js';
 import type { GateEnv } from './gate-coverage.js';
 

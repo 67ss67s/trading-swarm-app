@@ -3,7 +3,7 @@ import type {
   LoopContext,
   LoopPlanStep,
   LoopConcept,
-} from "@trading-swarm/contracts";
+} from "@trade-gate/contracts";
 import type { ToolContext, ToolRegistry } from "./tools.js";
 import { check } from "./schema.js";
 import { resolveConcepts, type ConceptResolution } from "./concepts.js";

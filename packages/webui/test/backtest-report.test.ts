@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { BacktestReport, BacktestTrade } from '@trading-swarm/contracts';
+import type { BacktestReport, BacktestTrade } from '@trade-gate/contracts';
 import { BacktestReportView, type BacktestReportViewProps } from '../src/components/backtest-report/report-view';
 import { FIXTURE_DATA_MISSING, FIXTURE_FULL, FIXTURE_NO_TRADES, makeFixtureReplay } from '../src/components/backtest-report/fixture';
 import { ALL_ASSETS, buildPnlSeries } from '../src/components/backtest-report/series';

@@ -1,5 +1,7 @@
+import { t, tmap } from '@/lib/i18n';
+
 /** Presentation only: retain raw values and units; never change stored research results. */
-export const METRIC_LABELS: Record<string, string> = {
+export const METRIC_LABELS: Record<string, string> = tmap({
   price_change: '价格变化', oi_change: '持仓量变化', funding_avg: '平均资金费率', funding_last: '最近一期资金费率',
   funding_pctile_vs_window: '最近费率在历史窗口的位置', liquidation_count: '已记录强平事件',
   buy_and_hold_return: '直接持有收益', strategy_net_return: '策略扣费后收益', close: '价格', price: '价格',
@@ -10,7 +12,7 @@ export const METRIC_LABELS: Record<string, string> = {
   research: '本次研究', symbol: '资产', beta: '大盘敏感度 β', alpha_annualized: '年化超额收益',
   residual_sharpe: '剔除大盘后的风险收益比', r_squared: '大盘解释比例', raw_return: '区间收益',
   return: '区间收益', max_drawdown: '最大回撤', residual_return: '剔除大盘后的收益', ts: '时间', close_time: '时间', oi_contracts: '未平仓合约数',
-};
+});
 export const humanMetricName = (name: string): string => {
   if (METRIC_LABELS[name]) return METRIC_LABELS[name];
   const assetMetric = /^(okx:(?:spot|perp):[^:]+):([^:]+)$/.exec(name);
@@ -20,30 +22,30 @@ export function formatValue(value: unknown, unit?: string): string {
   if (value === null || value === undefined || value === '') return '—';
   const v = Number(value);
   if (!Number.isFinite(v)) return typeof value === 'string' ? value : '—';
-  if (unit === 'fraction_per_year') return `${(v * 100).toFixed(2)}% / 年`;
+  if (unit === 'fraction_per_year') return t('{v}% / 年', { v: (v * 100).toFixed(2) });
   if (unit?.startsWith('fraction_per_')) return `${(v * 100).toFixed(4)}% / ${unit.slice('fraction_per_'.length)}`;
   if (unit === 'fraction') return `${(v * 100).toFixed(2)}%`;
   if (unit === '%' || unit === 'percent') return `${v.toFixed(2)}%`;
-  if (unit === 'count') return `${v.toLocaleString('zh-CN')} 条`;
+  if (unit === 'count') return t('{n} 条', { n: v.toLocaleString('zh-CN') });
   if (unit === 'USD') return `$${v.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
   if (unit === 'bps') return `${v.toFixed(2)} bps`;
   return v.toLocaleString('zh-CN', { maximumFractionDigits: 4 });
 }
 export function describeIssue(metric: string, availability: string, note?: string | null): { label: string; message: string; technical: boolean } {
   const raw = note ?? '';
-  if (/BUDGET_EXHAUSTED/i.test(raw)) return { label: '预算已用完', message: '这一步没有完成，已有的结果仍可查看。', technical: true };
-  if (/dependency_failed/i.test(raw)) return { label: '未执行', message: '前置步骤未完成，因此这一步尚未运行。', technical: true };
+  if (/BUDGET_EXHAUSTED/i.test(raw)) return { label: t('预算已用完'), message: t('这一步没有完成，已有的结果仍可查看。'), technical: true };
+  if (/dependency_failed/i.test(raw)) return { label: t('未执行'), message: t('前置步骤未完成，因此这一步尚未运行。'), technical: true };
   if (/invalid_contract|SCHEMA_MISMATCH|schema|unmapped_required|must have|must NOT|unknown_field/i.test(raw)) return {
-    label: '未完成', message: metric === 'compile_strategy' ? '策略规则暂时未通过检查，本轮没有执行这套策略。' : metric === 'render_artifact' ? '这张图的数据格式暂时不兼容，其余结果仍可查看。' : '执行参数未通过检查，这一步没有完成。', technical: true,
+    label: t('未完成'), message: metric === 'compile_strategy' ? t('策略规则暂时未通过检查，本轮没有执行这套策略。') : metric === 'render_artifact' ? t('这张图的数据格式暂时不兼容，其余结果仍可查看。') : t('执行参数未通过检查，这一步没有完成。'), technical: true,
   };
-  if (/TIMEOUT/i.test(raw)) return { label: '暂未完成', message: '处理超时，已有结果已保留。', technical: true };
-  if (/CANCELLED/i.test(raw)) return { label: '已取消', message: '已停止后续研究，已完成的结果保留。', technical: true };
+  if (/TIMEOUT/i.test(raw)) return { label: t('暂未完成'), message: t('处理超时，已有结果已保留。'), technical: true };
+  if (/CANCELLED/i.test(raw)) return { label: t('已取消'), message: t('已停止后续研究，已完成的结果保留。'), technical: true };
   const truncated = /truncated_to_recent_(\d+)/.exec(raw);
-  if (truncated) return { label: '部分覆盖', message: `仅覆盖最近 ${truncated[1]} 条记录，不能代表整个研究窗口或全市场。`, technical: false };
-  if (availability === 'not_applicable') return { label: '不适用', message: raw || '这项分析不适用于当前资产类型。', technical: false };
-  if (availability === 'partial') return { label: '部分覆盖', message: raw || '只有部分时段或市场的数据，结论限于已有覆盖。', technical: false };
-  if (availability === 'stale') return { label: '数据已过期', message: raw || '目前只能查看上次快照，不能作为最新市场状态。', technical: false };
-  return { label: '数据暂缺', message: raw || '尚未接入所需数据，本次不生成这项分析。', technical: false };
+  if (truncated) return { label: t('部分覆盖'), message: t('仅覆盖最近 {n} 条记录，不能代表整个研究窗口或全市场。', { n: truncated[1] }), technical: false };
+  if (availability === 'not_applicable') return { label: t('不适用'), message: raw || t('这项分析不适用于当前资产类型。'), technical: false };
+  if (availability === 'partial') return { label: t('部分覆盖'), message: raw || t('只有部分时段或市场的数据，结论限于已有覆盖。'), technical: false };
+  if (availability === 'stale') return { label: t('数据已过期'), message: raw || t('目前只能查看上次快照，不能作为最新市场状态。'), technical: false };
+  return { label: t('数据暂缺'), message: raw || t('尚未接入所需数据，本次不生成这项分析。'), technical: false };
 }
 
 /** Irregular/sparse series must be compared by timestamp, never by array index. */
@@ -70,5 +72,5 @@ export function unitLabel(unit?: string): string {
 
 /** Primary rule copy; exact parameters stay in the expandable original text. */
 export function readableRuleText(text: string): string {
-  return text.replace(/（[a-z_]+ [^）]*）$/, '').replace(/\bATR\b/g, '近期平均波动幅度').replace(/\bR\b/g, '初始止损距离的倍数').trim();
+  return text.replace(/（[a-z_]+ [^）]*）$/, '').replace(/\bATR\b/g, t('近期平均波动幅度')).replace(/\bR\b/g, t('初始止损距离的倍数')).trim();
 }

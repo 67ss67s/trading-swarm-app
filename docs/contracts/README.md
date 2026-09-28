@@ -1,12 +1,12 @@
 # 契约(packages/contracts)—— 唯一契约源与两语言对拍规则
 
-> 设计依据:`docs/design/trading-swarm-design-v1-2026-09-02.md` §2(硬规则②"契约只有一份")、§5.1(六种执行记录)、§6.2(AccountSnapshot)、§10(policy)、§12(失败矩阵)。本文是实施口径,schema 文件本身是最终裁判。
+> 设计依据:`docs/design/trade-gate-design-v1-2026-09-02.md` §2(硬规则②"契约只有一份")、§5.1(六种执行记录)、§6.2(AccountSnapshot)、§10(policy)、§12(失败矩阵)。本文是实施口径,schema 文件本身是最终裁判。
 
 ## 1. 布局
 
 ```
 packages/contracts/
-  schema/            JSON Schema 2020-12(源)。$id = https://trading-swarm.dev/schema/<name>.json,跨文件用相对 $ref
+  schema/            JSON Schema 2020-12(源)。$id = https://trade-gate.dev/schema/<name>.json,跨文件用相对 $ref
     common.json        共享基础类型与全部枚举
     intent.json        Intent(params 按 kind 判别:open/close/cancel_order/protect/transfer)
     plan.json          ExecutableOrderPlan(economic 进哈希,basis 不进)
@@ -84,7 +84,7 @@ crates/contracts-rs/ Rust 包:手写 serde 结构(与 schema 逐字段对拍)+ �
 
 ## 8. RPC 框架约定(rpc.json)
 
-- 传输:UDS `~/.trading-swarm/run/execd.sock`(0600),NDJSON,每帧一行,≤4 MiB;gateway 是唯一客户端(v1 不做多客户端鉴权,靠文件权限)。
+- 传输:UDS `~/.trade-gate/run/execd.sock`(0600),NDJSON,每帧一行,≤4 MiB;gateway 是唯一客户端(v1 不做多客户端鉴权,靠文件权限)。
 - 请求 `id` 由 gateway 生成(字符串 uuid 或自增整数);execd 按到达顺序处理,可并发,响应无序。
 - 通知:execd → gateway `{"jsonrpc":"2.0","method":"exec.event","params":<ExecEvent>}`;订阅后先补发 `since_seq` 之后的历史事件,再实时推。
 - 错误:`error.code` 按 `tables/error_codes.json`;`error.data.kind` 是 `ErrorKind`;`retryable` 由服务端给出(默认见表)。

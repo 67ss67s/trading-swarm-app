@@ -1,6 +1,6 @@
 // 批量研究:切段/资产池/基准/波动率目标/筛资产/冠军/Deflated Sharpe/随机入场可复现(合成数据,只做工程验证)
 import { describe, expect, it } from 'vitest';
-import { validate } from '@trading-swarm/contracts';
+import { validate } from '@trade-gate/contracts';
 import { allVariants, irVariants } from '../../../../src/demo/research/batch/families.js';
 import { sliceAsset, poolScore, volTargetEquity, evaluateIrVariant, trainValWindow, DAY, type AssetSlice } from '../../../../src/demo/research/batch/evaluate.js';
 import { screenAssets, familyChampions, withDeflated, withGates, leaderboard, rowsFor, type BatchRow } from '../../../../src/demo/research/batch/study.js';

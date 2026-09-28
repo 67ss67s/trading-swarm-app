@@ -10,9 +10,9 @@ import type { FrozenSeries, FundingPoint } from './data.js';
 import type { Decision, FrozenPrompt, PromptMode } from './judge.js';
 import type { Bar, JrEvent, Venue } from './types.js';
 
-const LIVE_DBS = [join(homedir(), '.trading-swarm/demo/state.sqlite'), join(homedir(), '.trading-swarm-okx/demo/state.sqlite'), join(homedir(), '.trading-swarm/research/market-cache.sqlite')];
+const LIVE_DBS = [join(homedir(), '.trade-gate/demo/state.sqlite'), join(homedir(), '.trade-gate-okx/demo/state.sqlite'), join(homedir(), '.trade-gate/research/market-cache.sqlite')];
 
-export const defaultJrDb = (): string => process.env['TG_JR_DB'] ?? join(homedir(), '.trading-swarm-okx/research/judgment-replay/jr.sqlite');
+export const defaultJrDb = (): string => process.env['TG_JR_DB'] ?? join(homedir(), '.trade-gate-okx/research/judgment-replay/jr.sqlite');
 
 export function refuseLiveDb(path: string): void {
   const real = existsSync(path) ? realpathSync(path) : resolve(path);

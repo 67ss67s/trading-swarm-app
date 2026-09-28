@@ -1,6 +1,6 @@
 /** R14/R19 离线 G4：同段历史、同成交事实；不访问运行端口/交易所/模型。 */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { StrategyIR } from '@trading-swarm/contracts';
+import type { StrategyIR } from '@trade-gate/contracts';
 import { openStateDb } from '../../src/state-db.js';
 import { ResearchStore } from '../../src/demo/research/store.js';
 import { StrategyStore } from '../../src/demo/research/strategies/store.js';
@@ -23,6 +23,14 @@ const H = 3600000, T = Date.UTC(2026, 8, 1), cleanup: (() => Promise<void>)[] = 
 afterEach(async () => { while (cleanup.length) await cleanup.pop()!(); });
 const bar = (i: number, price: number, range = 1): Kline => ({ open_time: T + i * H, close_time: T + (i + 1) * H - 1, open: String(price), high: String(price + range), low: String(price - range), close: String(price), volume: '100' });
 const history = (n = 640, side: 'long' | 'short' = 'long') => Array.from({ length: n }, (_, i) => bar(i, (side === 'long' ? 100 : 1000) + (side === 'long' ? 1 : -1) * Math.max(0, i - 99) * 0.3 + Math.sin(i / 3) * 0.4));
+
+/** 模拟「每笔确认」下线前就建好的运行:现在新建和修改都不接受 confirm,但老运行照常跑,这些用例测的是老运行的行为。 */
+function allowLegacyConfirm(runner: StrategyRunner): void {
+  const r = runner as unknown as { validate: (raw: unknown, create: boolean) => Record<string, unknown> };
+  const orig = r.validate.bind(runner);
+  r.validate = (raw, create) => { const b = raw as Record<string, unknown>; return b?.['mode'] === 'confirm' ? { ...orig({ ...b, mode: 'auto' }, create), mode: 'confirm' } : orig(raw, create); };
+}
+
 function irOf(exit: StrategyIR['exit'] = [], side: 'long' | 'short' = 'long'): StrategyIR {
   const ir = policyToIR(SYNTH_POLICY); delete ir.compatibility;
   ir.exit = exit; ir.order = { market: side === 'short' ? 'perp' : 'spot', direction: side, on_new_signal: { unfilled: 'replace', filled: 'ignore' }, take_profits: [{ source: node('fixed_r_target', { r: 50 }) }] };
@@ -53,7 +61,7 @@ function fixture(ir = irOf()) {
     // 复审 High-4 后缺 add 接线是 blocker:夹具默认给一个,需要的测试再覆盖
     add: vi.fn(async () => ({ outcome: 'rejected' as const, reason: 'fixture default add' })),
     filter: vi.fn(async () => ({ decision: 'follow', reason: 'fixture' })), publish: vi.fn(async () => ({})), emit: vi.fn() };
-  const runner = new StrategyRunner(deps); cleanup.push(async () => { await runner.stop(); state.close(); });
+  const runner = new StrategyRunner(deps); allowLegacyConfirm(runner); cleanup.push(async () => { await runner.stop(); state.close(); });
   return { state, runner, deps, service, s, threads, positions, create: (x = {}) => runner.create({ strategy_id: s.id, market: ir.order?.market ?? 'spot', ...x }),
     step: (n: number) => { now = T + n * H + 5000; ks = history(n); }, setBars: (x: Kline[]) => { ks = x; }, signal: (x: RunCandidate | null) => { signal = x; } };
 }

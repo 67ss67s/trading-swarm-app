@@ -4,7 +4,7 @@
  */
 import { define,n,type PrimitiveContext } from './registry.js';
 import { confirmedPivots } from './signals.js';
-import type { ResearchBar } from '@trading-swarm/contracts';
+import type { ResearchBar } from '@trade-gate/contracts';
 type Bars=ResearchBar[];
 const N=(x:unknown)=>Number(x);
 const near=(a:number,b:number,tolPct:number)=>a>0&&Math.abs(a-b)/a<=tolPct/100;

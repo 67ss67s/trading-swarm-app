@@ -17,12 +17,14 @@
  * 按当根 open 计名义值;多付空收(rate>0)。没有序列 → funding_status=missing、funding_pct=null,不当 0。资金费走现金,不移动强平价。
  * 强平:逐仓,强平价 = 均价×(1∓1/杠杆±mmr);按标记价 K 线判定(缺失退回成交价并记 flag);与止损同根时离开盘价更近者先;强平损失整份剩余保证金(差额记进 fees)。
  */
-import type { BacktestPlan, BacktestPlanEvent, BacktestPlanLevel, BacktestPlanStats, BacktestTrade, BacktestEquityPoint, OrderExitReason, BacktestPlanEventKind } from '@trading-swarm/contracts';
+import type { BacktestPlan, BacktestPlanEvent, BacktestPlanLevel, BacktestPlanStats, BacktestTrade, BacktestEquityPoint, OrderExitReason, BacktestPlanEventKind } from '@trade-gate/contracts';
 import { entryLimitFill, stopFill, takeProfitFill, liquidationPrice, clampToBar } from './fills.js';
 import type { OrderBar, PlanIntent, OrderExecParams, OrderSimResult, Manager, Side, MmrTier, NewSignalPolicy } from './types.js';
 import { planStats } from './stats.js';
 import { firstLegMargin, fundedLeg, tighterStop, newSignalAction } from './shared.js';
 import { drainSync, drainAsync } from './drain.js';
+import { ExecutionTally, executionCheck } from '../execution-gate.js';
+import { blendedTarget } from '../../execution-policy.js';
 export const ORDERS_ENGINE_VERSION = 'research-orders-v1';
 /** 结构口径(2026-09-23):不按盈亏比拦单、止损太近(<k×ATR)不做、不按 R 补止盈;统计带 blocked_by */
 export const ORDERS_ENGINE_VERSION_V2 = 'research-orders-v2';
@@ -69,6 +71,7 @@ export function* simulateSteps(bars: OrderBar[], intents: (PlanIntent | null)[],
   const funding = perp ? params.funding ?? null : null, fpoints = funding ? [...funding.points].sort((a, b) => a.ts - b.ts) : [];
   const plans: BacktestPlan[] = [], trades: BacktestTrade[] = [], equity: BacktestEquityPoint[] = [], flags = new Set<string>();
   const counters = { ignored: 0, blocked: 0, added: 0, spot_short: 0, blocked_by: {} as Record<string, number> };
+  const execTh = params.execution_thresholds ?? null, tally = execTh ? new ExecutionTally(execTh) : null;
   let cash = params.initial_cash, peak = cash, seq = 0, live: Live | null = null, fi = 0, markFallback = 0;
   if (perp && !funding) flags.add('funding_missing');
   while (fi < fpoints.length && bars.length && fpoints[fi]!.ts <= bars[0]!.open_time) fi++;
@@ -98,6 +101,13 @@ export function* simulateSteps(bars: OrderBar[], intents: (PlanIntent | null)[],
     if (it.min_stop_atr != null && it.atr != null && it.atr > 0 && Math.abs(risk) < it.min_stop_atr * it.atr - EPS) return { ...fail('stop_too_close', `止损离${limit ? '挂单价' : '入场参考价'} ${(Math.abs(risk) / it.atr).toFixed(2)}×ATR(14) < ${it.min_stop_atr}×ATR,不做`), tps };
     if (it.min_rr !== null && plan.planned_rr === null) return { ...fail('no_target', '有最小盈亏比约束但没有有效止盈'), tps };
     if (it.min_rr !== null && plan.planned_rr! < it.min_rr - 1e-9) return { ...fail('min_rr', `计划盈亏比 ${plan.planned_rr!.toFixed(2)} < 最小 ${it.min_rr}`), tps };
+    // 执行层:用实盘同一套阈值再判一次,前面的检查都过了才判。参考价和上面一样,市价单用信号收盘价,限价单用挂单价。
+    // 多档止盈按各档仓位比例折成一个等效目标再算净盈亏比,和实盘一样
+    if (execTh) {
+      const x = executionCheck(it.side, ref, it.stop.price, blendedTarget(valid.map((t, i) => ({ price: t.price, size: tps[i]!.weight }))), it.atr ?? null, execTh);
+      tally!.add(params.symbol, b.close_time, x);
+      if (x.blocks.length) return { ...fail(x.blocks[0]!, `执行层:${x.reason}`), tps };
+    }
     return { plan, tps, blocked: null, note };
   }
   function place(it: PlanIntent, signal_index: number, built = build(it, signal_index)): void {
@@ -280,5 +290,5 @@ export function* simulateSteps(bars: OrderBar[], intents: (PlanIntent | null)[],
   if (markFallback) flags.add(`mark_fallback:${markFallback}`);
   plans.sort((a, c) => a.placed_at - c.placed_at || Number(a.id.slice(prefix.length)) - Number(c.id.slice(prefix.length)));
   const { blocked_by, ...legacyCounters } = counters;
-  return { engine_version: params.structure ? ORDERS_ENGINE_VERSION_V2 : ORDERS_ENGINE_VERSION, plans, equity, trades, stats: params.structure ? { ...planStats(plans, legacyCounters), blocked_by } : planStats(plans, legacyCounters), flags: [...flags] };
+  return { engine_version: params.structure ? ORDERS_ENGINE_VERSION_V2 : ORDERS_ENGINE_VERSION, plans, equity, trades, stats: params.structure ? { ...planStats(plans, legacyCounters), blocked_by } : planStats(plans, legacyCounters), flags: [...flags], ...(tally ? { execution_gate: tally.stats() } : {}) };
 }

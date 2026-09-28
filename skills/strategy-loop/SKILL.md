@@ -9,13 +9,13 @@ license: MIT
 
 # strategy-loop skill
 
-Trading Swarm turns "I want to trade X" into a strategy the
+Trading Swarm (repo identifiers still say trade-gate) turns "I want to trade X" into a strategy the
 agent actually runs. The loop is code-first: recommendations, backtests, gates and the holdout test
 are deterministic; a **decision model** (Jev, OpenRouter `typesafe/jev-1.13`, typed probabilities, no
 text) is only used as the *judge* element inside a strategy (follow / skip a code candidate), and the
 same `judgeCandidate` runs in backtest and live, so the two cannot drift.
 
-The gateway (default `http://127.0.0.1:18800`, started by `scripts/dev.sh`) owns every ledger. **Always go through it**; never compute a strategy by
+The gateway (default `http://127.0.0.1:18800`, started with `npm run dev`, see `scripts/dev.sh`) owns every ledger. **Always go through it**; never compute a strategy by
 hand and paste it into "my strategies".
 
 Design and acceptance: `docs/design/chat-to-strategy-loop-2026-09-25.md`. Contract:

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://trading-swarm.local/schema/research-improve.json",
+  "$id": "https://trade-gate.local/schema/research-improve.json",
   "title": "ResearchImproveObject",
   "description": "策略自动改进与复验环(Improver)第一阶段:POST/GET /api/research/improve 的请求与响应,SSE 事件 research.improve。设计见 docs/research/improver-design-2026-09-23.md。",
   "anyOf": [

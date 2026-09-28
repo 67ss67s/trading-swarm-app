@@ -10,7 +10,7 @@
  *  4. 能用现有原语表达的规则转成 StrategyIR(入场 next_open_market,止损/离场沿用标签的机械管理),过零模型 checkIR。
  * 真回测(验证段)不在这里做:改进环主体按自己的门槛评估候选;独立研究脚本 scripts/research-oracle/study.ts 另跑验证段。
  */
-import type { StrategyIR, StrategyPrimitive } from '@trading-swarm/contracts';
+import type { StrategyIR, StrategyPrimitive } from '@trade-gate/contracts';
 import type { CandidateGenerator, FrozenData, GeneratorContext, Candidate } from '../types.js';
 import { computeFeatures, featureDefs, type Condition, type FeatureDef, type AssetFeatures } from './features.js';
 import { labelSeries, labelHorizon, DEFAULT_MECHANICS, type Mechanics, type Side } from './labels.js';

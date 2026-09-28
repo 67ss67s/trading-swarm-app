@@ -149,7 +149,7 @@ describe('DirectAgentReads', () => {
   });
 
   it('missing Rust helper fails closed without launching a model', async () => {
-    await expect(rustReadBridge('/nonexistent/trading-swarm-test-direct-read-bin')({ op: 'account' })).rejects.toThrow(/不会回退到模型/);
+    await expect(rustReadBridge('/nonexistent/trade-gate-test-direct-read-bin')({ op: 'account' })).rejects.toThrow(/不会回退到模型/);
   });
 });
 

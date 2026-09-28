@@ -1,5 +1,5 @@
 import { afterEach,describe,expect,it,vi } from 'vitest';
-import type { StrategyIR } from '@trading-swarm/contracts';
+import type { StrategyIR } from '@trade-gate/contracts';
 import { generateRunCandidate } from '../../../../src/demo/strategy-run-orders.js';
 import { StrategyRunner, type StrategyRunDeps } from '../../../../src/demo/strategy-run.js';
 import { candidateSnapshot,judgeDecimal } from '../../../../src/demo/research/judge/candidate.js';
@@ -70,7 +70,8 @@ describe('G4 确定性与盲性（离线）',()=>{
  });
 });
 describe('IR judge 与运行模式解耦',()=>{
- it.each(['auto','agent','confirm','signal_only'] as const)('%s 都执行 judge；skip 不开单也不发布',async mode=>{
+ // 「每笔确认」已下线,不能再新建 confirm 运行;换成 jev:带 IR judge 块时 jev 模式也只按 judge 块判断,不再问一遍 Jev
+ it.each(['auto','agent','jev','signal_only'] as const)('%s 都执行 judge；skip 不开单也不发布',async mode=>{
   const f=fixture(),x=ir(true),data=bars(305),service=new StrategyService(new StrategyStore(f.state.db),new ResearchStore(f.state.db),null),s=service.create({name:'g4',symbol:'BTCUSDT',timeframe:'4h',strategy_ir:x});
   const now=data.at(-1)!.close_time+5001;const deps:StrategyRunDeps={db:f.state.db,strategies:service,environment:()=>({execution:{backend:'paper',profile:null,label:'paper'},execution_key:'paper',watchlist:['BTCUSDT'],risk_pct:1,leverage_cap:1,asp:{id:'x',identity:true,active:true,publisher_enabled:false}}),blocked:()=>null,bars:async()=>data,threads:()=>[],open:vi.fn(async()=>({outcome:'opened',reason:'fixture'})),close:async()=>{},filter:vi.fn(async()=>({decision:'follow',reason:'legacy'})),publish:vi.fn(async()=>({event_id:'fixture'})),emit:vi.fn(),now:()=>now,judge:()=>f.runtime};
   // take=0 强制 skip，所有模式必须走同一调用/落库。

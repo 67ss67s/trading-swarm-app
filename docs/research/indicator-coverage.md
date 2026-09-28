@@ -126,6 +126,6 @@
 1. 在 `INDICATORS` 里加一行:`{name, cn, aliases, category, args, outputs, warmup, compute}`;
    参数键只能从 `period / period_2 / period_3 / fast / slow / signal / multiple / step / max_step` 里选(schema 的 `args` 对象就是这九个)。
 2. `warmup` 必须是**紧的**:`indicators.test.ts` 会验证"恰好 warmup 根有值、少一根至少一条输出是 NaN"。
-3. 在 `research.json` 的六个 `indicator` / `compare_indicator` 枚举里加上名字,跑 `npm run generate --workspace @trading-swarm/contracts`
+3. 在 `research.json` 的六个 `indicator` / `compare_indicator` 枚举里加上名字,跑 `npm run generate --workspace @trade-gate/contracts`
    (`indicators.test.ts` 里有枚举与 `INDICATOR_NAMES` 的一致性断言,漏改会红)。
 4. 加一条数值测试:线性行情上多数指标有闭式解(见 `indicators.test.ts` 的"闭式解"几节),这是最省事的校验方式。

@@ -3,7 +3,7 @@
 // graph itself is never redefined here, it is read from `demo.JUDGMENT_GRAPH` through
 // nodeFor / edgeFor / eventEdgeFor / guardsFromGates so eval and runtime can never drift apart.
 
-import { demo } from '@trading-swarm/gateway';
+import { demo } from '@trade-gate/gateway';
 import type { Action, EpisodeRecord, EvalCase } from './types.js';
 
 /** What `run` writes into every episode; older runs (pi-v1, pi-v3) have no such field and get it back-filled. */

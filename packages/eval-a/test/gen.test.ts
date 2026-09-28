@@ -1,4 +1,4 @@
-import { demo } from '@trading-swarm/gateway';
+import { demo } from '@trade-gate/gateway';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_DAILY_BARS, SCORED_TRIGGER_KINDS, triggerTags } from '../src/index.js';
 import { loadCases } from '../src/run.js';

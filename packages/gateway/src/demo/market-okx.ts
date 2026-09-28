@@ -20,18 +20,71 @@ function describeNetError(e: unknown, path: string, timeoutMs: number): Error {
   return Object.assign(new Error(`${path} 网络错误 ${code}`), { transient: true });
 }
 
+// ---------------------------------------------------------------- 出网节流(令牌桶)
+// OKX 公共行情按 IP×端点限频(candles 约 40 次/2s、history-candles 约 20 次/2s、ticker 类约 20 次/2s)。
+// 事件触发会在同一毫秒对观察列表十来个币 × 几个周期同时拉 K 线(09-26 评审版:30ms 内 6 个币 → 429 → 持仓计划缺 ATR 建不起来),
+// 缓存按币去重帮不上,熔断只能事后止血。这里每个端点一个令牌桶:突发时排队等令牌,把峰值摊平,而不是直接撞限频。
+// 令牌可以透支成负数 = 预约排队(先到先得);预计等待超过上限就不排了,直接按限频失败(别把调用方挂几分钟)。
+interface Bucket { tokens: number; at: number }
+const buckets = new Map<string, Bucket>();
+function rateFor(path: string): number {
+  const candles = /\/market\/(?:history-)?candles/.test(path);
+  const v = Number(process.env[candles ? 'TG_OKX_RATE_CANDLES' : 'TG_OKX_RATE_DEFAULT']);
+  return Number.isFinite(v) && v >= 0 ? v : candles ? 8 : 10;
+}
+function maxQueueWaitMs(): number {
+  const v = Number(process.env['TG_OKX_RATE_MAX_WAIT_MS']);
+  return Number.isFinite(v) && v >= 0 ? v : 30_000;
+}
+/** 取一个出网令牌;rate=0 不限。突发容量 = 1 秒的量(rate 个)。 */
+async function acquireOkxSlot(endpoint: string, path: string): Promise<void> {
+  const rate = rateFor(path);
+  if (rate <= 0) return;
+  const now = Date.now();
+  const b = buckets.get(endpoint) ?? { tokens: rate, at: now };
+  b.tokens = Math.min(rate, b.tokens + ((now - b.at) * rate) / 1000);
+  b.at = now;
+  const wait = b.tokens >= 1 ? 0 : Math.ceil(((1 - b.tokens) * 1000) / rate);
+  if (wait > maxQueueWaitMs()) {
+    buckets.set(endpoint, b);
+    throw Object.assign(new Error(`${path} -> HTTP 429(本机节流:排队预计 ${Math.ceil(wait / 1000)}s,超过上限)`), { transient: false, rate_limited: true });
+  }
+  b.tokens -= 1;
+  buckets.set(endpoint, b);
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+}
+
+/** 端点(基址 + 路径,不含 query)→ 熔断到期时刻。 */
+const rateLimited = new Map<string, number>();
+/** 429 之后同一端点停打多久;TG_OKX_429_COOLDOWN_MS 可调(默认 10s,OKX 公共行情的限频窗口是 2s 级)。 */
+function rateLimitCooldownMs(): number {
+  const v = Number(process.env['TG_OKX_429_COOLDOWN_MS']);
+  return Number.isFinite(v) && v >= 0 ? v : 10_000;
+}
+
 /**
  * 一次 GET + 网络级失败重试一次(与 market.ts 同策略:HTTP 错误不重试,别在限频时加倍捶)。
  * OKX v5 统一包 `{code,data,msg}`;code 非 '0' 当业务错误抛(不重试)。
  */
 export async function okxGet<T>(path: string, timeoutMs = 8000, retries = 1): Promise<T> {
   configureOkxProxy();
+  // 429 熔断:OKX 按 IP×端点限频,限频期间再打只会延长封禁;同一端点在窗口内直接失败,不出网(上层有缓存的会沿用旧数据)
+  const endpoint = `${okxBase()}${path.split('?')[0]}`;
+  const openUntil = rateLimited.get(endpoint) ?? 0;
+  if (openUntil > Date.now()) {
+    throw Object.assign(new Error(`${path} -> HTTP 429(限频熔断中,${Math.ceil((openUntil - Date.now()) / 1000)}s 后再试)`), { transient: false, rate_limited: true });
+  }
   let lastErr: Error | null = null;
   for (let attempt = 0; attempt <= retries; attempt++) {
+    await acquireOkxSlot(endpoint, path);
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
       const res = await fetch(`${okxBase()}${path}`, { signal: ctrl.signal });
+      if (res.status === 429) {
+        rateLimited.set(endpoint, Date.now() + rateLimitCooldownMs());
+        throw Object.assign(new Error(`${path} -> HTTP 429`), { transient: false, rate_limited: true });
+      }
       if (!res.ok) throw Object.assign(new Error(`${path} -> HTTP ${res.status}`), { transient: false });
       const body = (await res.json()) as { code?: string; msg?: string; data?: T };
       if (body && typeof body === 'object' && 'code' in body && String(body.code) !== '0') {
@@ -89,7 +142,7 @@ export function contractsToQtySync(sz: string | number, symbol: string): string 
 
 /**
  * 内部 timeframe → OKX bar(§3)。**≥6H 的档位必须用 UTC 版**:OKX 不带 `utc` 后缀的
- * `6H/12H/1D/1W` 按香港时间(UTC+8)分桶,策略与指标全系统按 UTC 切(review #15)。
+ * `6H/12H/1D/1W` 按香港时间(UTC+8)分桶,策略与指标全系统按 UTC 切(codex-review #15)。
  * `1m…4H` 没有 utc 变体 —— 这些档位在两种时区下的边界本来就重合,原样发。
  */
 export function tfToBar(tf: string): string {
@@ -126,6 +179,47 @@ type RawCandle = [string, string, string, string, string, string, string, string
  * 所以一旦某页空了或不足,就切到 `/market/history-candles` 继续往前翻(单页 100)。
  */
 export async function fetchKlinesOkx(symbol: string, tf: string, limit: number, endTime?: number, market: Market = 'perp'): Promise<Kline[]> {
+  // 短 TTL 缓存 + single-flight:图表 / 指标叠加每个访客标签页 5s 轮询一次,后台判断也在拉同一批 K 线;
+  // 同一 (币, 周期, 根数, 截止) 在 TTL 内只出网一次,并发请求合并。OKX 失败(含 429 熔断)时 STALE 窗口内沿用上一份。
+  const key = `${okxBase()}|${market}|${symbol}|${tf}|${Math.max(1, Math.floor(limit))}|${endTime ?? ''}`;
+  const now = Date.now();
+  const hit = klineCache.get(key);
+  if (hit && now - hit.at < klineTtlMs()) return copyKlines(hit.rows);
+  const running = klineInflight.get(key);
+  if (running) return running.then(copyKlines);
+  const p = fetchKlinesOkxUncached(symbol, tf, limit, endTime, market)
+    .then((rows) => {
+      klineCache.delete(key);
+      klineCache.set(key, { at: Date.now(), rows });
+      while (klineCache.size > KLINE_CACHE_MAX) klineCache.delete(klineCache.keys().next().value!);
+      return rows;
+    })
+    .catch((e) => {
+      if (hit && Date.now() - hit.at < KLINE_STALE_MS) return hit.rows;
+      throw e;
+    })
+    .finally(() => klineInflight.delete(key));
+  klineInflight.set(key, p);
+  return p.then(copyKlines);
+}
+
+const klineCache = new Map<string, { at: number; rows: Kline[] }>();
+const klineInflight = new Map<string, Promise<Kline[]>>();
+/** 缓存条目上限(按插入顺序淘汰最老的):观察列表几十个币 × 几个周期 × 几种根数,500 足够 */
+const KLINE_CACHE_MAX = 500;
+/** OKX 出错时沿用旧数据的最长时限:超过就如实报错,别拿几分钟前的 K 线冒充最新 */
+const KLINE_STALE_MS = 60_000;
+/** TTL 默认 4s(前端最快 5s 轮询一次);TG_OKX_KLINE_TTL_MS=0 关缓存 */
+function klineTtlMs(): number {
+  const v = Number(process.env['TG_OKX_KLINE_TTL_MS']);
+  return Number.isFinite(v) && v >= 0 ? v : 4_000;
+}
+/** 调用方可能改数组(排序 / 截取 / 追加字段),每次给一份浅拷贝,缓存里的原件不被污染 */
+function copyKlines(rows: Kline[]): Kline[] {
+  return rows.map((k) => ({ ...k }));
+}
+
+async function fetchKlinesOkxUncached(symbol: string, tf: string, limit: number, endTime: number | undefined, market: Market): Promise<Kline[]> {
   const instId = symbolToInstId(symbol, market);
   const bar = tfToBar(tf);
   const span = tfMs(tf);
@@ -324,6 +418,10 @@ export async function fetchExchangeInfoOkx(market: Market = 'perp'): Promise<Sym
 
 /** 测试用:丢掉 exchangeInfo 缓存。 */
 export function resetOkxMarketCaches(): void {
+  klineCache.clear();
+  klineInflight.clear();
+  rateLimited.clear();
+  buckets.clear();
   infoCaches.clear();
   instrumentsInflight.clear();
   batchCache.clear();

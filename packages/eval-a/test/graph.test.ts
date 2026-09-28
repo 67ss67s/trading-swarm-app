@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { demo } from '@trading-swarm/gateway';
+import { demo } from '@trade-gate/gateway';
 import { analyzeRow, computeMetrics, edgeCoverage, firstAction, graphOf, graphRow, guardHits, runEpisode, triggerPrecision, type EpisodeRecord, type EvalCase, type GraphRow } from '../src/index.js';
 import { synthCases } from './helpers/synthetic.js';
 

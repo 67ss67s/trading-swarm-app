@@ -1,6 +1,6 @@
 # 策略库:不可变版本 + 归因闭环(v3.5,2026-09-05)
 
-> 落地 `docs/research/scan-and-strategy-decision-2026-09-05.md` §2 的 **E**(先加多周期对齐与波动压缩→扩张)和 **F**(不可变版本对象 + 晋升门),数据模型沿用 外部评审`docs/research/strategy-construction-2026-09-05.md` Part 2。接口契约见 `docs/demo/v3-ui-contract.md` §9.11。
+> 落地 `docs/research/scan-and-strategy-decision-2026-09-05.md` §2 的 **E**(先加多周期对齐与波动压缩→扩张)和 **F**(不可变版本对象 + 晋升门),数据模型沿用 Codex `docs/research/strategy-construction-2026-09-05.md` Part 2。接口契约见 `docs/demo/v3-ui-contract.md` §9.11。
 
 ## 1. 为什么
 
@@ -62,7 +62,7 @@ Jacky 描述的那套美股 agent 流程有六步:①按规则扫出错价 → �
 - 离场:确认周期仍同向 HOLD;转向 EXIT;浮盈 ≥ 1R 且 15m 收在 EMA20 另一侧 REDUCE。
 - 仓位:止损在触发周期 swing 之外(≥ 0.8 ATR),第一止盈 ≥ 1.5R。
 - 参数:`confirm_tf_count`=2 [1,3] · `veto_atr`=1 ATR [0.3,3] · `chase_atr_max`=1.5 ATR [0.5,3]
-- 额外清单证据:**没有**(同上,复用扫描清单的 `trend_agree` / `dist_to_break_atr`)。它是 meta-strategy,不是独立 alpha —— 4h 只当否决项,正是 调研里那条「不要让 `confidence_floor` 代替趋势规则」。
+- 额外清单证据:**没有**(同上,复用扫描清单的 `trend_agree` / `dist_to_break_atr`)。它是 meta-strategy,不是独立 alpha —— 4h 只当否决项,正是 Codex 调研里那条「不要让 `confidence_floor` 代替趋势规则」。
 
 ### 3.3 `vol_compression_expansion` — 波动压缩→扩张(volatility,backtest)
 
@@ -169,7 +169,7 @@ draft → backtest → shadow → paper → live_capped        (retire 随时,�
 | `shadow → paper` | `expectancy_r > 0` |
 | `paper → live_capped` | 人工确认 `confirm: true` |
 
-只准往前**一格**。这是 外部评审提案的简化版:它要求 shadow 门用「≥ 200 次独立触发 + 样本外 + Deflated Sharpe + 费用/滑点」,我们现在的回测量级还够不着那个门槛,所以先立一个**能被现有数据判定**的门,并把差距写进下面的「还没做」。`retire` 之后想复活,只能生成新版本 —— 退役是终态。
+只准往前**一格**。这是 Codex 提案的简化版:它要求 shadow 门用「≥ 200 次独立触发 + 样本外 + Deflated Sharpe + 费用/滑点」,我们现在的回测量级还够不着那个门槛,所以先立一个**能被现有数据判定**的门,并把差距写进下面的「还没做」。`retire` 之后想复活,只能生成新版本 —— 退役是终态。
 
 ## 9. 文件
 

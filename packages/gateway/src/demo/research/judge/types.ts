@@ -1,8 +1,8 @@
-import type { StrategyJudge } from '@trading-swarm/contracts';
+import type { StrategyJudge } from '@trade-gate/contracts';
 import type { DecisionClient, DecisionResult } from '../../decisions.js';
 
-export type { FrozenModelProfile, JudgeCandidateSnapshot, JudgeStateV1, NormalizedAnswer, PredicateEvaluation, JudgeResult } from '@trading-swarm/contracts';
-import type { FrozenModelProfile, JudgeCandidateSnapshot, JudgeStateV1 } from '@trading-swarm/contracts';
+export type { FrozenModelProfile, JudgeCandidateSnapshot, JudgeStateV1, NormalizedAnswer, PredicateEvaluation, JudgeResult } from '@trade-gate/contracts';
+import type { FrozenModelProfile, JudgeCandidateSnapshot, JudgeStateV1 } from '@trade-gate/contracts';
 export interface JudgeInput {
   candidate: JudgeCandidateSnapshot; state: JudgeStateV1; spec: StrategyJudge;
   execution_spec_hash: string; model_profile: FrozenModelProfile; decision_key: string;

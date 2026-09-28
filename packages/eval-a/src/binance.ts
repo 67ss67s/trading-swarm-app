@@ -7,7 +7,7 @@
 
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { demo } from '@trading-swarm/gateway';
+import { demo } from '@trade-gate/gateway';
 import type { Kline } from './types.js';
 import { readJson, writeJson } from './util.js';
 

@@ -10,6 +10,7 @@ import type { TfFeatures } from './market.js';
 import { tfToMs } from './market.js';
 import { describeIndicators, indicatorSnapshot, trendStrengthOf, type IndicatorSnapshot } from './indicators.js';
 import type { Kline } from './types.js';
+import { flagLabel, noWord, yesWord } from './output-language.js';
 
 /** Same decimals rule context.ts uses for structure evidence. */
 export function priceDecimals(p: number): number {
@@ -92,7 +93,12 @@ export interface ScanChecklist {
   /** 1h and 4h EMA20-vs-EMA50 pointing the same way ('long' = both EMA20>EMA50), null when they disagree or data is missing. */
   trend_agree: 'long' | 'short' | null;
   trend_note: string;
-  /** Distance from the last close to the breakout level in the agreed direction, in ATR. */
+  /**
+   * Distance from the last close to the breakout level in the agreed direction, in ATR. The level is the
+   * 20-bar extreme BEFORE the last bar (`swing_high_20_prev` / `swing_low_20_prev`) — the same level the
+   * breakout test and entry-policy's chase gate use; features recorded before `_prev` existed fall back to
+   * the inclusive `swing_high_20` / `swing_low_20`.
+   */
   dist_to_break_atr: number | null;
   within_chase: boolean;
   retest_confirmed: boolean;
@@ -161,15 +167,20 @@ export function scanChecklist(features: TfFeatures[], klines?: readonly Kline[],
   const h4 = byTf(features, trendTfs[1]!);
   const dirText = (x: TfFeatures | null, tf: string): string => (x ? `${tf} ${x.ema20 > x.ema50 ? 'EMA20>EMA50(偏多)' : 'EMA20<EMA50(偏空)'}` : `${tf} 数据缺失`);
   const trendNote = agree === null ? `${dirText(h1, trendTfs[0]!)}、${dirText(h4, trendTfs[1]!)} → 不一致` : `${dirText(h1, trendTfs[0]!)}、${dirText(h4, trendTfs[1]!)} → 同向(${agree === 'long' ? '偏多' : '偏空'})`;
-  const level = agree === 'long' ? base.swing_high_20 : agree === 'short' ? base.swing_low_20 : null;
-  const distAtr = level !== null && base.atr14 > 0 ? Math.abs(base.last_close - level) / base.atr14 : null;
-  const within = distAtr !== null && distAtr <= chaseMax;
   // The level a close is compared AGAINST must not contain that close's own bar, or the test is
   // arithmetically impossible (close ≤ high ≤ swing_high_20) and "回踩确认" can never fire — which is
   // exactly why three eval rounds and 668 live judgments produced zero PROPOSE
   // (docs/research/zero-propose-funnel-2026-09-05.md §1). triggers.ts always used the previous window;
   // this now does too, falling back to the old field only for features recorded before it existed.
   const breakLevel = agree === 'long' ? (base.swing_high_20_prev ?? base.swing_high_20) : agree === 'short' ? (base.swing_low_20_prev ?? base.swing_low_20) : null;
+  // The chase distance is measured to the SAME level (09-27). It used to be measured to the inclusive
+  // swing_high_20 / swing_low_20, which on a breakout bar is that bar's own extreme — so the distance read
+  // ~0 exactly when price had run furthest past the level, and the chase limit could never bite there.
+  // entry-policy.ts `distToBreakAtr` already measured to `_prev`; now the checklist, the breakout test and
+  // the chase gate agree. Same fallback: features without `_prev` keep the old inclusive field.
+  const level = breakLevel;
+  const distAtr = level !== null && base.atr14 > 0 ? Math.abs(base.last_close - level) / base.atr14 : null;
+  const within = distAtr !== null && distAtr <= chaseMax;
   const beyond = breakLevel !== null && (agree === 'long' ? base.last_close > breakLevel : base.last_close < breakLevel);
   const beyondRecent = beyond || (breakWindow > 1 && agree !== null && klines ? brokeWithin(klines, agree, breakWindow) : false);
   const retest = beyondRecent && base.vol_ratio_20 >= volMin;
@@ -191,7 +202,7 @@ export function scanChecklist(features: TfFeatures[], klines?: readonly Kline[],
           `RSI14 ${f(snap.rsi14, 1)}`,
           `ADX14 ${f(adxValue, 1)}(${strength ? strengthLabel[strength] : 'n/a'})`,
           `BB宽 ${bbRank === null ? 'n/a' : `${Math.round(bbRank)} 分位`}`,
-          `挤压 ${squeezeOn === null ? 'n/a' : squeezeOn ? `是(${squeezeBars} 根)` : '否'}`,
+          `${flagLabel('挤压', ' ')}${squeezeOn === null ? 'n/a' : squeezeOn ? `${yesWord()}(${squeezeBars} 根)` : noWord()}`,
           `距VWAP ${vwapAtr === null ? 'n/a' : `${vwapAtr >= 0 ? '+' : ''}${vwapAtr.toFixed(2)}`} ATR`,
         ].join(',');
 
@@ -199,11 +210,11 @@ export function scanChecklist(features: TfFeatures[], klines?: readonly Kline[],
     `周期 ${base.tf}`,
     `ATR% ${f(atrPct, 2)}%(门槛 ${floor.toFixed(2)}% → ${atrOk ? '达标' : '不足'})`,
     trendNote,
-    agree === null ? `突破位:${trendTfs.join('/')} 不同向,不取` : `${agree === 'long' ? '上方 20 根高' : '下方 20 根低'} ${f(level, d)},距 ${f(distAtr, 2)} ATR(上限 ${chaseMax.toFixed(1)} → ${within ? '在射程内' : '已超出'})`,
-    `${breakWindow > 1 ? `近 ${breakWindow} 根内` : '最近一根'}${beyondRecent ? '已' : '尚未'}收破突破位 ${f(breakLevel, d)};量比 ${f(base.vol_ratio_20, 2)}(门槛 ${volMin.toFixed(2)})→ 回踩确认 ${retest ? '是' : '否'}`,
+    agree === null ? `突破位:${trendTfs.join('/')} 不同向,不取` : `${agree === 'long' ? '突破位(前 20 根高,不含当根)' : '突破位(前 20 根低,不含当根)'} ${f(level, d)},距 ${f(distAtr, 2)} ATR(上限 ${chaseMax.toFixed(1)} → ${within ? '在射程内' : '已超出'})`,
+    `${breakWindow > 1 ? `近 ${breakWindow} 根内` : '最近一根'}${beyondRecent ? '已' : '尚未'}收破突破位 ${f(breakLevel, d)};量比 ${f(base.vol_ratio_20, 2)}(门槛 ${volMin.toFixed(2)})→ ${flagLabel('回踩确认', ' ')}${retest ? yesWord() : noWord()}`,
     `价在 EMA20 ${base.last_close > base.ema20 ? '上' : '下'}`,
     ...(indicatorLine ? [indicatorLine] : []),
-    `watch_eligible=${watch ? '是' : '否'}(${trendTfs.join('/')} 同向 且 距突破位 ≤ ${chaseMax.toFixed(1)} ATR 且 回踩未确认)`,
+    `watch_eligible=${watch ? yesWord() : noWord()}(${trendTfs.join('/')} 同向 且 距突破位 ≤ ${chaseMax.toFixed(1)} ATR 且 回踩未确认)`,
   ].join(';');
   return {
     tf: base.tf,
@@ -386,13 +397,13 @@ export function reviewMetrics(inp: ReviewMetricsInput): ReviewMetrics | null {
   parts.push(
     invPrice === null
       ? '失效价:线程未给可比价位'
-      : `失效价 ${f(invPrice, d)}:${beyondInv ? `已越过,连续 ${barsBeyond} 根,深度 ${depthAtr === null ? 'n/a' : `${depthAtr.toFixed(2)} ATR`}` : '未越过'}(确认口径:连续 ≥ ${confirmBars} 根且深度 ≥ ${bufferAtr.toFixed(2)} ATR;距入场 ${entry !== null && atr ? `${(Math.abs(entry - invPrice) / atr).toFixed(2)} ATR` : 'n/a'}${entry !== null && risk ? `=${(Math.abs(entry - invPrice) / risk).toFixed(2)}R` : ''}) → 失效确认=${invConfirmed === null ? 'n/a' : invConfirmed ? '是' : '否'}`,
+      : `失效价 ${f(invPrice, d)}:${beyondInv ? `已越过,连续 ${barsBeyond} 根,深度 ${depthAtr === null ? 'n/a' : `${depthAtr.toFixed(2)} ATR`}` : '未越过'}(确认口径:连续 ≥ ${confirmBars} 根且深度 ≥ ${bufferAtr.toFixed(2)} ATR;距入场 ${entry !== null && atr ? `${(Math.abs(entry - invPrice) / atr).toFixed(2)} ATR` : 'n/a'}${entry !== null && risk ? `=${(Math.abs(entry - invPrice) / risk).toFixed(2)}R` : ''}) → ${flagLabel('失效确认')}${invConfirmed === null ? 'n/a' : invConfirmed ? yesWord() : noWord()}`,
   );
   const trendText = agree === null ? `${hp ? `${hp.timeframe}/${hp.confirm}` : '1h/4h'} 不同向` : `${hp ? `${hp.timeframe}/${hp.confirm}` : '1h/4h'} 同向(${agree === 'long' ? '偏多' : '偏空'}),与本线程方向${againstTrend ? '相反' : '一致'}`;
   const emaText = base ? `价在 EMA20 ${base.last_close > base.ema20 ? '上' : '下'}(对${long ? '多' : '空'}${againstEma ? '不利' : '有利'})` : '价 vs EMA20 n/a';
-  parts.push(`结构:${trendText};${emaText} → 结构转弱=${structureAgainst ? '是' : '否'}`);
+  parts.push(`结构:${trendText};${emaText} → ${flagLabel('结构转弱')}${structureAgainst ? yesWord() : noWord()}`);
   parts.push(
-    `论点趋势:${hp?.timeframe ?? '15m'} ${dirLabel(trendNow15m)}、${hp?.confirm ?? '1h'} ${dirLabel(trendNowH1)},本线程${long ? '做多' : '做空'}(按当前方向与持仓是否相反判,不代表入场以来发生交叉) → 论点趋势翻转=${thesisFlipped ? '是' : '否'}`,
+    `论点趋势:${hp?.timeframe ?? '15m'} ${dirLabel(trendNow15m)}、${hp?.confirm ?? '1h'} ${dirLabel(trendNowH1)},本线程${long ? '做多' : '做空'}(按当前方向与持仓是否相反判,不代表入场以来发生交叉) → ${flagLabel('论点趋势翻转')}${thesisFlipped ? yesWord() : noWord()}`,
   );
 
   return {

@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import type { LoopChart } from '@trading-swarm/contracts';
+import type { LoopChart } from '@trade-gate/contracts';
 import { ResearchChart, formatChartValue, isResearchChart } from '../src/components/research-workbench/research-chart';
 import { ArtifactBody } from '../src/components/research-workbench/artifacts';
 vi.mock('@/components/markdown', () => ({ Markdown: ({ text }: { text: string }) => text }));

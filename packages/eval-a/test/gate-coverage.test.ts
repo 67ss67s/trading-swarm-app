@@ -5,7 +5,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { demo } from '@trading-swarm/gateway';
+import { demo } from '@trade-gate/gateway';
 import { ALL_GATE_ROWS, EXTENSION_GATE_INVENTORY, GATE_INVENTORY, evalStubBrain, gateCoverage, generateGateCases, runCases, writeGateReport, writeJson } from '../src/index.js';
 
 async function runGateSet(): Promise<{ dir: string; casesDir: string }> {

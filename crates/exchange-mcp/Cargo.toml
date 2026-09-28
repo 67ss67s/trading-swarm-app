@@ -27,5 +27,5 @@ axum.workspace = true
 tempfile.workspace = true
 
 [[bin]]
-name = "tswarm-mcp-probe"
-path = "src/bin/tswarm-mcp-probe.rs"
+name = "tgate-mcp-probe"
+path = "src/bin/tgate-mcp-probe.rs"

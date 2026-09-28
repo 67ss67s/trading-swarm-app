@@ -1,5 +1,5 @@
 // 回测报告测试用的确定性合成行情(几何随机游走 + 周期趋势),只做工程验证,不是经济证据
-import type { ResearchBar, ResearchDataset, StrategyIR } from '@trading-swarm/contracts';
+import type { ResearchBar, ResearchDataset, StrategyIR } from '@trade-gate/contracts';
 import { node } from '../../../src/demo/research/strategy.js';
 export function synthBars(n: number, step: number, seed = 7, start = Date.UTC(2019, 0, 1), base = 100): ResearchBar[] {
   let s = seed >>> 0; const rnd = () => { s = (Math.imul(1664525, s) + 1013904223) >>> 0; return s / 4294967296; };

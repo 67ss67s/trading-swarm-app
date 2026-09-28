@@ -13,7 +13,7 @@
  * v3(2026-09-23 晚):每笔平均收益旁边给中位数与截尾均值(两端各截 10%,笔数 <10 不截尾),按退出方式的平均也带中位/截尾;
  *   均值 > 0 而中位数或截尾均值 ≤ 0 时单列一条「均值靠少数几笔撑起」(几何实验室 8/19 一簇行情撑起整个平均值的教训)。
  */
-import type { BacktestAsset, BacktestReport, StrategyIR, StrategyPrimitive } from "@trading-swarm/contracts";
+import type { BacktestAsset, BacktestReport, StrategyIR, StrategyPrimitive } from "@trade-gate/contracts";
 import { centerStats, centerText, tailDriven } from "../analyzer.js";
 
 export interface DiagnosisFinding { key: string; severity: "high" | "medium" | "info"; text: string }

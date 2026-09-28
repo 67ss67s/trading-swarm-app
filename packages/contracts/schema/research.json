@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://trading-swarm.local/schema/research.json",
+  "$id": "https://trade-gate.local/schema/research.json",
   "title": "ResearchContract",
   "oneOf": [
     {
@@ -1030,6 +1030,16 @@
         },
         "diagnostics": {
           "$ref": "#/$defs/ResearchDiagnostics"
+        },
+        "execution_gate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExecutionGateStats"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -2437,6 +2447,27 @@
           "type": "integer",
           "minimum": 2,
           "maximum": 100
+        }
+      },
+      "required": [
+        "count"
+      ]
+    },
+    "PrimitiveParamsCandleStreak": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 20
+        },
+        "direction": {
+          "type": "string",
+          "enum": [
+            "up",
+            "down"
+          ]
         }
       },
       "required": [
@@ -4872,6 +4903,17 @@
           "minimum": 0,
           "maximum": 10,
           "description": "结构口径(2026-09-23):止损离入场(市价=信号收盘价,限价=挂单价)不到 min_stop_atr×ATR(14,Wilder) 的单子直接不做(blocked stop_too_close),代码不会把止损挪远;缺省 0.5。字段存在(非 null)即启用结构口径:不再用盈亏比拦单(只认 IR 的 order.min_rr)、不放宽止损、不按 R 倍数补止盈"
+        },
+        "execution_thresholds": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExecutionGateThresholds"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "执行层阈值快照(2026-09-27):存在(非 null)= 回测在下单决策时刻按与实盘同一套执行层阈值挡单(止损距离上下限 / ATR 下限 / 净盈亏比,只在策略自身闸通过后判),被挡的候选不下单;缺字段或 null = 旧口径,不套执行层(旧 manifest 重放逐字不变)"
         }
       },
       "required": [
@@ -7675,6 +7717,137 @@
         "cost_usd",
         "cost_status",
         "reason_codes"
+      ]
+    },
+    "ExecutionGateThresholds": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "§9.56 执行层阈值快照(与 gateway execution-policy.ts 的 ExecutionThresholds 同形):回测/研究 run 创建时从 workflow 读当前值冻结进来,重放按冻结值,不再读 workflow",
+      "properties": {
+        "min_stop_pct": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "max_stop_pct": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "min_stop_atr": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "min_net_rr": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "round_trip_cost_bps": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,8})?$"
+        }
+      },
+      "required": [
+        "min_stop_pct",
+        "max_stop_pct",
+        "min_stop_atr",
+        "min_net_rr",
+        "round_trip_cost_bps"
+      ]
+    },
+    "ExecutionGateStats": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "回测在下单决策时刻套执行层阈值(stopGeometry + netRrCheck)的统计;null / 缺字段 = 旧口径(不套执行层)",
+      "properties": {
+        "version": {
+          "const": "exec-gate-v1"
+        },
+        "thresholds": {
+          "$ref": "#/$defs/ExecutionGateThresholds"
+        },
+        "checked": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "进入执行层判定的候选数(已通过策略自身闸,按决策 bar 去重)"
+        },
+        "rejected": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "被执行层挡掉的去重候选数"
+        },
+        "rejected_by_execution": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "按原因计数,一个候选可命中多条",
+          "properties": {
+            "stop_distance": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "stop_atr": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "stop_too_wide": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "min_net_rr": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "stop_distance",
+            "stop_atr",
+            "stop_too_wide",
+            "min_net_rr"
+          ]
+        },
+        "examples": {
+          "type": "array",
+          "maxItems": 5,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "symbol": {
+                "type": "string",
+                "maxLength": 80
+              },
+              "at": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "reason": {
+                "type": "string",
+                "maxLength": 400
+              }
+            },
+            "required": [
+              "symbol",
+              "at",
+              "reason"
+            ]
+          }
+        }
+      },
+      "required": [
+        "version",
+        "thresholds",
+        "checked",
+        "rejected",
+        "rejected_by_execution"
       ]
     }
   },

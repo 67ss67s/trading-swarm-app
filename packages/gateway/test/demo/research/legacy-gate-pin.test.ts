@@ -1,7 +1,7 @@
 // 旧口径重放钉子(2026-09-23 结构止盈止损改造前实测):冻结了旧 order_gate(min_rr 1.5 / 成本下限放宽 / 2R 兜底)的请求,
 // 改造后逐字节同一结果——engine v3、engine v4 快路径、订单周期执行核三条路径各钉一个哈希。哈希变了 = 旧 manifest 重放不再一致。
 import { describe, it, expect } from 'vitest';
-import type { ResearchRequest, StrategyIR } from '@trading-swarm/contracts';
+import type { ResearchRequest, StrategyIR } from '@trade-gate/contracts';
 import { runReplay } from '../../../src/demo/research/engine.js';
 import { runOrderPath } from '../../../src/demo/research/orders/index.js';
 import { LEGACY_ORDER_GATE, orderGateFor } from '../../../src/demo/research/order-gate.js';

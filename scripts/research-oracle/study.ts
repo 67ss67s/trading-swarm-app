@@ -4,13 +4,13 @@
  *  2. 可表达的只做多规则(≤3 条)+ 「不加过滤、有空就进」的基线,用 backtest-report 的公开入口 runBacktestReport 在验证段真回测
  *     (scratch sqlite,不碰 18811 的库;K 线只给到验证段末);
  *  3. 随机入场基线:同一套机械管理、各资产与规则同样的成交笔数,随机挑进场根(非重叠),200 次;
- *  4. 结果写 ~/.trading-swarm-okx/research-oracle/study-result.json,由 publish.ts 落库、报告手写进 docs/research/oracle-study-2026-09-23.md。
+ *  4. 结果写 ~/.trade-gate-okx/research-oracle/study-result.json,由 publish.ts 落库、报告手写进 docs/research/oracle-study-2026-09-23.md。
  * 零模型。独立进程跑,不在网关里跑。
  * 用法:node --experimental-transform-types --no-warnings --import ./scripts/research-oracle/register.mjs scripts/research-oracle/study.ts
  */
 import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
-import type { BacktestReport, StrategyIR } from '@trading-swarm/contracts';
+import type { BacktestReport, StrategyIR } from '@trade-gate/contracts';
 import { loadFrozen, DATA_DIR } from './frozen.ts';
 import { mineOracle, ruleToIR, computeFeatures, labelSeries, DEFAULT_MECHANICS, type OracleResult, type OracleRule, type PermutationMode } from '../../packages/gateway/src/demo/research/improve/oracle/index.ts';
 import { holds, rng } from '../../packages/gateway/src/demo/research/improve/oracle/mine.ts';
@@ -113,7 +113,7 @@ for (const r of longPicks) {
 }
 out.baseline = { validation: baseVal, simulator: { trades: baseSim.trades.length, expectancy: baseSim.trades.reduce((a, b) => a + b, 0) / Math.max(1, baseSim.trades.length) } };
 out.validations = validations;
-// 做空版:只给 IR 草稿与检查结果,不回测不落库(做空执行由订单周期工作线在接)
+// 做空版:只给 IR 草稿与检查结果,不回测不落库(做空执行由订单周期子代理在接)
 const shortBase = simulate(() => true, 'short');
 out.short_baseline_sim = { trades: shortBase.trades.length, expectancy: meanOf(shortBase.trades) };
 out.short_drafts = primary.sides.find((s) => s.side === 'short')!.picks.map((r) => { const sim = ruleSim(r, 'short'); return { rule: r.text, conditions: r.conditions, ir: r.ir ?? null, check_ok: r.check_ok ?? null, check_failed: r.check_failed ?? [], train: r.train, test: r.test, p_perm: r.p_perm, validation_label: labelCheck(r.conditions, 'short'), validation_sim: { trades: sim.trades.length, expectancy: meanOf(sim.trades), win_rate: sim.trades.length ? sim.trades.filter((x) => x > 0).length / sim.trades.length : null } }; });

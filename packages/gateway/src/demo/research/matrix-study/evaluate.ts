@@ -10,7 +10,7 @@
  *   交易统计只含段内成熟交易);code_judge 臂经 EvalEnv.judge 走 judge/ 的 judgeWithBars(订单核在意图产生后、模拟成交前过滤),
  *   全部候选(含 skip / error / uncertain)写 research_study_candidates。
  */
-import type { StrategyIR } from '@trading-swarm/contracts';
+import type { StrategyIR } from '@trade-gate/contracts';
 import type { DatabaseSync } from 'node:sqlite';
 import { ResearchStore } from '../store.js';
 import type { AssetExecutor, BarsLoader } from '../backtest-report.js';
@@ -131,6 +131,12 @@ function slicesFor(p: RunPair, data: FrozenData, v: MatrixVariantRef, segs: Reco
   return Object.fromEntries(Object.entries(segs).map(([k, w]) => [k, sliceAsset(a.symbol, samples, sSamples, trades, w, start)]));
 }
 export const signOf = (ir: StrategyIR): 1 | -1 => (ir.order?.direction === 'short' ? -1 : 1);
+/** 段内成熟交易单笔收益的盈亏因子:盈利合计 / |亏损合计|;没有亏损(或没有交易)时 null —— 与 analyzer.ts 同口径,不写无穷大 */
+export function profitFactorOf(returns: number[]): number | null {
+  let win = 0, loss = 0;
+  for (const r of returns) { if (r > 0) win += r; else if (r < 0) loss += r; }
+  return loss < 0 ? win / -loss : null;
+}
 
 /** 开发视图上评估一个变体(单资产):训练 + 选择段 */
 export async function evaluateDev(data: FrozenData, g: TimeframeSegments, v: MatrixVariantRef, o: { check: () => void; executorFor?: (ir: StrategyIR) => AssetExecutor; judge: JudgeRuntime | null; onCandidate?: (c: CandidateLog) => void; train_only?: boolean }): Promise<DevResult> {
@@ -148,6 +154,7 @@ export async function evaluateDev(data: FrozenData, g: TimeframeSegments, v: Mat
   return {
     train: slim(tr), selection: slim(se), selection_returns: se.returns, selection_days: sl.selection!.days,
     selection_fees: fees, selection_gross: se.total_return + fees / POOL_CASH,
+    selection_profit_factor: profitFactorOf(sl.selection!.trade_returns), train_profit_factor: profitFactorOf(sl.train!.trade_returns),
     diagnosis, judge: judgeStats(p.candidates, !!v.ir.judge), warnings: p.run.warnings.slice(0, 10), engine: p.run.engine_version,
   };
 }

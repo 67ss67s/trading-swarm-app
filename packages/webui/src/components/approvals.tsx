@@ -18,6 +18,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { backendLabel, directionLabel, fmtPrice, fmtQty, relativeTime, useNow } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { t as tr, tmap } from '@/lib/i18n';
+import { st } from '@/lib/server-text-en';
 
 // ---------------------------------------------------------------- 计数
 
@@ -37,7 +38,7 @@ export function useNeedsYou(): NeedsYou {
   const now = useNow(1000);
   const intents = (intentsQ.data ?? []).filter((i) => i.status === 'pending_approval' && !(i.principal === 'agent' && now - i.at < 5_000));
   const proposals = (proposalsQ.data?.proposals ?? []).filter((p) => p.status === 'pending');
-  const recovery = (riskQ.data?.alerts ?? []).filter((a) => a.recovery_ready && (a.severity === 'high' || a.severity === 'critical')).map((a) => ({ id: a.id, title: a.title }));
+  const recovery = (riskQ.data?.alerts ?? []).filter((a) => a.recovery_ready && (a.severity === 'high' || a.severity === 'critical')).map((a) => ({ id: a.id, title: st(a.title) }));
   const memories = memQ.data?.counts?.proposed ?? memQ.data?.items?.length ?? 0;
   return { intents, proposals, recovery, memories, total: intents.length + proposals.length + recovery.length + memories };
 }

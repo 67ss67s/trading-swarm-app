@@ -10,6 +10,7 @@ import { AgentSide } from '@/components/agent-side';
 import { AgentStatusBar } from '@/components/agent-status-bar';
 import { ChatPanel } from '@/components/chat-panel';
 import { Pane, Workspace } from '@/components/pane';
+import { StatusTag } from '@/components/tour/status-tag';
 import { t } from '@/lib/i18n';
 
 export function AgentPage() {
@@ -17,9 +18,12 @@ export function AgentPage() {
     <div className="grid h-full min-h-0 grid-cols-1 gap-3 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_21rem] lg:overflow-hidden">
       <Workspace className="flex min-h-[36rem] flex-col lg:min-h-0">
         <AgentStatusBar />
-        <Pane title={t('对话')} className="min-h-0 flex-1" contentClassName="min-h-0">
-          <ChatPanel />
-        </Pane>
+        {/* data-tour:评审版新手引导第 2 步指向这里 */}
+        <div data-tour="agent-chat" className="flex min-h-0 flex-1 flex-col">
+          <Pane title={t('对话')} badge={<StatusTag kind="live" />} className="min-h-0 flex-1" contentClassName="min-h-0">
+            <ChatPanel />
+          </Pane>
+        </div>
       </Workspace>
       <AgentSide />
     </div>

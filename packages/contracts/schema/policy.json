@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://trading-swarm.dev/schema/policy.json",
+  "$id": "https://trade-gate.dev/schema/policy.json",
   "title": "ExecPolicy",
-  "description": "execd 持有的 policy 子集(设计 §10):模式、authority、上限。gateway 的 gate v2 与 execd 的重闸读同一份;改动需 policy.set + confirm 回填。金丝雀期默认值取评审建议的保守值(§17.2),向导里显式输入。",
+  "description": "execd 持有的 policy 子集(设计 §10):模式、authority、上限。gateway 的 gate v2 与 execd 的重闸读同一份;改动需 policy.set + confirm 回填。金丝雀期默认值取 Codex 保守值(§17.2),向导里显式输入。",
   "type": "object",
   "additionalProperties": false,
   "required": [

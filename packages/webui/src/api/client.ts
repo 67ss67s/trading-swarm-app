@@ -1,6 +1,9 @@
 import type { ResearchRevisionCommand, ResearchRevisionContext } from './research-types';
-import type { BacktestReplay, BacktestReport, BacktestReportSummary, ResearchStrategy, ResearchStrategyBacktestRequest, ResearchStrategyCreate, ResearchStrategyDetail, ResearchStrategyList, ResearchStrategyPatch, ResearchStrategyTransition, StrategyBindingResponse } from '@trading-swarm/contracts';
+import type { BacktestReplay, BacktestReport, BacktestReportSummary, ResearchStrategy, ResearchStrategyBacktestRequest, ResearchStrategyCreate, ResearchStrategyDetail, ResearchStrategyList, ResearchStrategyPatch, ResearchStrategyTransition, StrategyBindingResponse } from '@trade-gate/contracts';
 import { useEffect, useRef, useState } from 'react';
+import { getLang, t } from '../lib/i18n';
+import { friendlyError, TOO_MANY_REQUESTS } from '../lib/edition';
+import type { AgentDetailResponse, AgentsResponse, AspMonitor, AspMonitorPush, AspMonitorTaskDetail } from './types';
 import type {
   AccountView,
   ActivityResponse,
@@ -168,21 +171,34 @@ class ApiRequestError extends Error {
   /** 完整的错误响应体(§9.52 删除连接 409 还带 roles[]);老调用点不传就是 undefined。 */
   body?: unknown;
   constructor(status: number, code: string, message: string, body?: unknown) {
-    super(message);
+    // 评审版:ENOENT / spawn / CLI 路径这类技术报错换成友好文案(原文 dev 下进 console);默认版原样
+    super(friendlyError(message));
     this.code = code;
     this.status = status;
     this.body = body;
   }
 }
 
-const GATEWAY_DOWN_MESSAGE = '网关暂时连不上(多半在重启),恢复后自动刷新';
+const gatewayDownMessage = (): string => t('网关暂时连不上(多半在重启),恢复后自动刷新');
 
 /** 网关没起来 / 正在重启 / 代理连不上:这类错误要自动重试,不该当成业务错误摆给用户。 */
 export function isGatewayUnavailable(err: unknown): boolean {
   return err instanceof ApiRequestError && err.code === 'gateway_unavailable';
 }
 
+/**
+ * 评审版公网访客:仅所有者可读的接口(/api/execution、/api/models、/api/brains、/api/wallet …)第一次回 judge_locked 之后,
+ * 本页面生命周期内同一路径的 GET 不再出网,直接抛同样的错——很多查询带 refetchInterval,不拦的话访客每几秒白打一轮 403。
+ * 所有者不会拿到 judge_locked,集合永远是空的;重新登录 / 换身份后整页刷新即清空。
+ */
+const lockedPaths = new Set<string>();
+const pathKey = (path: string) => path.split('?')[0]!;
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const method = (init?.method ?? 'GET').toUpperCase();
+  if (method === 'GET' && lockedPaths.has(pathKey(path))) {
+    throw new ApiRequestError(403, 'judge_locked', 'Locked in the review demo: account, wallet, model and execution details are owner-only.');
+  }
   let res: Response;
   try {
     res = await fetch(path, {
@@ -192,7 +208,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     });
   } catch (e) {
     if (e instanceof DOMException && e.name === 'AbortError') throw e;
-    throw new ApiRequestError(0, 'gateway_unavailable', GATEWAY_DOWN_MESSAGE);
+    throw new ApiRequestError(0, 'gateway_unavailable', gatewayDownMessage());
   }
   const text = await res.text();
   let body: unknown = null;
@@ -205,17 +221,40 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   if (!res.ok) {
     const err = body && typeof body === 'object' ? (body as ApiError) : null;
+    if (method === 'GET' && err?.error?.code === 'judge_locked') lockedPaths.add(pathKey(path));
+    // 我们自己的限频(nginx limit_req 回 HTML、网关访客限频回 demo_rate_limited):请求没被处理,和交易所无关,给一句可重试的说明
+    if (res.status === 429) throw new ApiRequestError(429, err?.error?.code ?? 'rate_limited', TOO_MANY_REQUESTS, body);
     // 代理层的 502/504(网关自己不会回这两个)也按「网关不可用」处理。
     const down = !err?.error?.code && (res.status === 502 || res.status === 504);
     throw new ApiRequestError(
       res.status,
       err?.error?.code ?? (down ? 'gateway_unavailable' : 'unknown'),
-      err?.error?.message ?? (down ? GATEWAY_DOWN_MESSAGE : res.statusText || `HTTP ${res.status}`),
+      err?.error?.message ?? (down ? gatewayDownMessage() : res.statusText || `HTTP ${res.status}`),
       body,
     );
   }
-  if (typeof body === 'string') throw new ApiRequestError(res.status, 'bad_response', `网关返回的不是 JSON:${body.slice(0, 80)}`, body);
+  if (typeof body === 'string') throw new ApiRequestError(res.status, 'bad_response', t('网关返回的不是 JSON:{body}', { body: body.slice(0, 80) }), body);
+  // 评审版公网访客:仅所有者可读的接口(模型 / 执行通道 / 钱包 …)回 200 + {locked:true, code:'judge_locked'} 占位。
+  // 按错误抛出,调用方走各自的「没取到数据」分支;当成正常数据往下传会在 view.connections.filter 这类地方整页崩掉(09-26 评审版首页黑屏)。
+  if (isJudgeLockedBody(body)) {
+    if (method === 'GET') lockedPaths.add(pathKey(path));
+    throw new ApiRequestError(res.status, 'judge_locked', body.message ?? 'Locked in the review demo.', body);
+  }
   return body as T;
+}
+
+/** 公网演示模式下「仅所有者可见」的占位(gateway public-gate.ts ownerOnlyRead) */
+export function isJudgeLockedBody(body: unknown): body is { locked: true; code: 'judge_locked'; message?: string } {
+  return !!body && typeof body === 'object' && (body as { locked?: unknown }).locked === true && (body as { code?: unknown }).code === 'judge_locked';
+}
+
+export function isJudgeLocked(err: unknown): boolean {
+  return err instanceof ApiRequestError && err.code === 'judge_locked';
+}
+
+/** 测试用:清空已记住的锁定路径 */
+export function resetLockedPaths(): void {
+  lockedPaths.clear();
 }
 
 function post<T>(path: string, payload?: unknown): Promise<T> {
@@ -260,7 +299,7 @@ export const api = {
     return request<IndicatorsResponse>(`/api/market/indicators?${qs.toString()}`);
   },
   indicatorSets: () => request<IndicatorSetsResponse>('/api/market/indicators/sets'),
-  logs: (limit = 200) => request<LogsResponse>(`/api/logs?limit=${limit}`),
+  logs: (limit = 200, beforeId?: number) => request<LogsResponse>(`/api/logs?limit=${limit}${beforeId ? `&before_id=${beforeId}` : ''}`),
   runNow: () => post<{ episode_id: string }>('/api/run-now'),
   pause: () => post<LoopView>('/api/pause'),
   resume: (confirm?: 'RESUME') => post<LoopView>('/api/resume', confirm ? { confirm } : undefined),
@@ -280,7 +319,7 @@ export const api = {
   rejectProposal: (id: string) => post<{ proposal: WorkflowProposal }>(`/api/workflow/proposals/${encodeURIComponent(id)}/reject`),
   patchWorkflow: (patch: Partial<Workflow>) => post<WorkflowPatchResponse>('/api/workflow', patch),
   marketState: () => request<MarketState>('/api/market-state'),
-  marketStateHistory: (limit = 20) => request<MarketStateHistoryResponse>(`/api/market-state/history?limit=${limit}`),
+  marketStateHistory: (limit = 20) => request<MarketStateHistoryResponse>(`/api/market-state/history?limit=${limit}&view=summary`),
   infoRunNow: () => post<InfoRunNowResponse>('/api/info/run-now'),
   infoEvents: (limit = 100) => request<InfoEventsResponse>(`/api/info/events?limit=${limit}`),
   /** 信息源与采集状态(只读;网关未提供时 404,页面标「网关未提供来源状态」) */
@@ -317,10 +356,13 @@ export const api = {
   createChatSession: (title?: string, role?: BotRole) => post<{ session: ChatSession }>('/api/chat/sessions', { ...(title ? { title } : {}), ...(role ? { role } : {}) }),
   updateChatSession: (id: string, patch: { title?: string; archived?: boolean; can_execute?: boolean }) => post<{ session: ChatSession }>(`/api/chat/sessions/${encodeURIComponent(id)}`, patch),
   deleteChatSession: (id: string) => request<void>(`/api/chat/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  // ---- §9.55 九个 agent 的名册 / 详情(身份 AGENT.md、循环图、最近运行、交接)
+  agents: () => request<AgentsResponse>('/api/agents'),
+  agent: (role: BotRole) => request<AgentDetailResponse>(`/api/agents/${encodeURIComponent(role)}`),
 
   // ---- v3(docs/demo/v3-ui-contract.md):复盘 / 活动流 / 行情状态 --------------
   history: (limit = 200) => request<HistoryResponse>(`/api/history?limit=${limit}`),
-  activity: (limit = 200, before?: number) => request<ActivityResponse>(`/api/activity?limit=${limit}${before ? `&before=${before}` : ''}`),
+  activity: (limit = 200, before?: number, beforeId?: string) => request<ActivityResponse>(`/api/activity?limit=${limit}${before ? `&before=${before}` : ''}${beforeId ? `&before_id=${encodeURIComponent(beforeId)}` : ''}`),
   regime: (symbol: string) => request<RegimeResponse>(`/api/market/regime?symbol=${encodeURIComponent(symbol)}`),
 
   // ---- v3:大脑选择 / 判断图 --------------------------------------------------
@@ -562,6 +604,14 @@ export const api = {
   reconcileFollowSignal: (id: string) => post<FollowSignalActionResponse>(`/api/follow/signals/${encodeURIComponent(id)}/reconcile`, {}),
   skipFollowSignal: (id: string, note?: string) => post<FollowSignalActionResponse>(`/api/follow/signals/${encodeURIComponent(id)}/skip`, note ? { note } : {}),
 
+  /** ASP 运行监视器快照;lang=en 给评审站英文,fresh 跳过 10 分钟缓存立刻重查上架 */
+  aspMonitor: (lang?: 'zh' | 'en', fresh?: boolean) => request<AspMonitor>(`/api/asp-services/monitor${qs({ lang: lang === 'en' ? 'en' : undefined, fresh: fresh ? 1 : undefined })}`),
+  aspMonitorPushes: (serviceId: string, hours: number, name?: string) =>
+    request<{ items: AspMonitorPush[] }>(`/api/asp-services/monitor/pushes${qs({ service_id: serviceId, hours, name, lang: getLang() === 'en' ? 'en' : undefined })}`),
+  aspMonitorTask: (jobId: string) => request<AspMonitorTaskDetail>(`/api/asp-services/monitor/tasks/${encodeURIComponent(jobId)}${qs({ lang: getLang() === 'en' ? 'en' : undefined })}`),
+  aspMonitorRetryPushes: () => post<{ expedited: number }>('/api/asp-services/monitor/retry-pushes', {}),
+  /** 交付失败/结果未知的订单重新交付(沿用原交付文本) */
+  aspProviderTaskRetry: (jobId: string) => post<unknown>(`/api/asp-services/provider-tasks/${encodeURIComponent(jobId)}/retry`, {}),
   // ---- /api/market/*:网关透传 OKX CLI 的 data 原样,这里过一遍 market-adapt 映射成视图类型 ----
   marketStatus: async (fresh?: boolean): Promise<MarketStatus> => {
     const [raw, settings] = await Promise.all([request<unknown>(`/api/market/status${fresh ? '?fresh=1' : ''}`), request<unknown>('/api/market/settings')]);
@@ -691,6 +741,8 @@ const EVENT_NAMES: (keyof ServerEventMap)[] = [
   'market_state.updated',
   'thread.changed',
   'chat.message',
+  // §9.55
+  'chat.status',
   'queue.state',
   'workflow.changed',
   'activity',
@@ -890,7 +942,7 @@ export const researchApi = {
   cancel: (id: string) => post<ResearchRunSummary>(`/api/research/runs/${encodeURIComponent(id)}/cancel`, {}),
   replay: (id: string) => post<ResearchReplayResponse>(`/api/research/runs/${encodeURIComponent(id)}/replay`, {}),
   chat: (message: string, run_id: string | undefined, max_rounds = 6) => post<ResearchChatResponse>('/api/research/chat', { message, ...(run_id ? { run_id } : {}), max_rounds }),
-  // ---- 第二轮(research round 2):资产池 / screen / 原语 / IR 编译 / 归因
+  // ---- 第二轮(round2-spec):资产池 / screen / 原语 / IR 编译 / 归因
   universes: () => request<{ items: ResearchUniverse[] }>('/api/research/universes'),
   universe: (id: string) => request<ResearchUniverse>(`/api/research/universes/${encodeURIComponent(id)}`),
   createUniverse: (body: { symbols: string[]; timeframe: string; from_ms: number; to_ms: number; market_factor: { kind: string; symbols: string[] } }) => post<ResearchUniverse>('/api/research/universes', body),
@@ -898,7 +950,7 @@ export const researchApi = {
   primitives: () => request<{ items: ResearchPrimitive[] }>('/api/research/primitives'),
   compileStrategy: (body: { text?: string; ir?: StrategyIR; timeframe: string; dataset_id?: string; execution?: ResearchExecution; order_gate?: OrderGateParams }) => post<ResearchCompileResponse>('/api/research/strategies/compile', body),
   attribution: (runId: string) => request<ResearchAttributionResponse>(`/api/research/runs/${encodeURIComponent(runId)}/attribution`),
-  // ---- 第三轮(research round 3):研究沙箱产物、chat 详情、策略体检
+  // ---- 第三轮(round3-spec):研究沙箱产物、chat 详情、策略体检
   artifact: (id: string) => request<ResearchArtifact>(`/api/research/artifacts/${encodeURIComponent(id)}`),
   chatDetail: (id: string) => request<ResearchChatDetail>(`/api/research/chats/${encodeURIComponent(id)}`),
   chatWithRounds: (message: string, run_id: string | undefined, max_rounds = 16) => post<ResearchChatResponse>('/api/research/chat', { message, ...(run_id ? { run_id } : {}), max_rounds }),

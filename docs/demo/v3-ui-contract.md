@@ -155,7 +155,7 @@ type ActivityKind =
 
 ### 9.6 执行后端(含 agent_mcp)与币安 MCP 连接(v3.3,2026-09-04 下午)
 
-**Backend 取值扩成五个**:`paper | demo | cli | agent_mcp | mcp`(`packages/gateway/src/demo/types.ts` 的 `Backend`)。前端 `api/types.ts` 里的 `Backend` 要同步扩,并且**注意一处语义变化**:官方 binance-cli 后端过去在 `LoopView.backend` / `AccountView.backend` 里谎报成 `demo`,现在如实报 `cli`;所有 `backend === 'demo' ? 'Binance 模拟盘' : '纸面模拟'` 的三元式都要改成查表,否则 cli/agent_mcp/mcp 会被显示成"纸面模拟"。建议文案:`paper` 纸面模拟、`demo` Binance 模拟盘(tswarm-demo-exec)、`cli` Binance 模拟盘(官方 binance-cli)、`agent_mcp` 币安官方 MCP(agent CLI 驱动)、`mcp` 币安 MCP 直连(网关自己调)。`mcp` 的完整语义、工具映射与路由见 §9.9。
+**Backend 取值扩成五个**:`paper | demo | cli | agent_mcp | mcp`(`packages/gateway/src/demo/types.ts` 的 `Backend`)。前端 `api/types.ts` 里的 `Backend` 要同步扩,并且**注意一处语义变化**:官方 binance-cli 后端过去在 `LoopView.backend` / `AccountView.backend` 里谎报成 `demo`,现在如实报 `cli`;所有 `backend === 'demo' ? 'Binance 模拟盘' : '纸面模拟'` 的三元式都要改成查表,否则 cli/agent_mcp/mcp 会被显示成"纸面模拟"。建议文案:`paper` 纸面模拟、`demo` Binance 模拟盘(tgate-demo-exec)、`cli` Binance 模拟盘(官方 binance-cli)、`agent_mcp` 币安官方 MCP(agent CLI 驱动)、`mcp` 币安 MCP 直连(网关自己调)。`mcp` 的完整语义、工具映射与路由见 §9.9。
 
 **agent_mcp 是什么**:每一个写操作(开仓 / 止损 / 止盈 / 平仓 / 减仓 / 撤单 / 撤单一笔 / 改杠杆 / 改保证金模式)= 启动一次 agent CLI(`claude` 或 `codex`),给它一份**只做这一件事**的任务 JSON,要求它只用币安官方 MCP 服务器(`https://agent.binance.com/mcp/agentic`)的工具,最后只回一个 JSON。工具名和参数**没有写死**,由 agent 自己发现,所以币安改工具不用改网关。网关不持有任何币安 API key,也不持有 OAuth token —— token 在 CLI 自己的登录态里。
 
@@ -224,7 +224,7 @@ type ActivityKind =
 | GET | `/api/backtest?limit=50` | → `{ runs: BacktestRun[], running: string \| null }`(倒序) |
 | GET | `/api/backtest/:id` | → `{ run, steps, trades }` |
 | POST | `/api/backtest/:id/cancel` | → `{ cancelled: boolean }`(在两步之间生效) |
-| GET | `/api/market/klines/history?symbol&interval&from&to` | 回放图的历史 K 线,单页 ≤ 1500 根,落盘缓存到 `~/.trading-swarm/demo/klines/<symbol>-<tf>.json`,重复回放不再请求币安 |
+| GET | `/api/market/klines/history?symbol&interval&from&to` | 回放图的历史 K 线,单页 ≤ 1500 根,落盘缓存到 `~/.trade-gate/demo/klines/<symbol>-<tf>.json`,重复回放不再请求币安 |
 
 ```jsonc
 // GET /api/backtest/estimate
@@ -539,7 +539,7 @@ Jacky 的问题「多少资金进去还能放止损 / 还有几条新策略的�
 
 ### 9.19 人批 = 一次性确认 token;对话改设置只到提议(v3.10,2026-09-06 傍晚)
 
-背景:设计稿 §A/§C.3——「会话开关 + 模型一句话」不等于人批。**自动交易路径不受影响**(PROPOSE → 代码闸 → intent → 执行,从不经过这里);这里只管本来就要人点的东西。
+背景:Codex 派单设计稿 §A/§C.3——「会话开关 + 模型一句话」不等于人批。**自动交易路径不受影响**(PROPOSE → 代码闸 → intent → 执行,从不经过这里);这里只管本来就要人点的东西。
 
 - **模型工具里不再有 approve_intent / reject_intent**(`EXECUTE_TOOLS` 为空;模型调了返回 ok:false)。新工具 `request_execution{id}`:不下单,只推一张确认卡(activity `chat_action`,`data.intent_id` + `data.confirm:'ui'`,并重发 SSE `intent.changed`)。`ChatSession.can_execute` 字段保留,语义降为「这个会话的意图卡是否显示执行按钮」的前端偏好,后端不再据它放行任何东西;UI 文案「开了 agent 就会执行」必须删掉。
 - **批准意图两步**:①`POST /api/intents/:id/confirm-token` → `{ nonce, expires_at, fingerprint, intent:{id,kind,symbol,direction,quantity,entry,limit_price|null,stop_price|null,take_profit_price|null,backend} }`(意图必须是 pending_approval,否则 409);②`POST /api/intents/:id/approve {nonce}` → 原响应。缺 nonce → **428** `confirm_required`;nonce 用过/不存在 → 409 `confirm_unknown`;超 120 秒 → 409 `confirm_expired`;意图内容在取 token 后变了 → 409 `confirm_mismatch`(重新取)。**token 一次性**。`reject` 不需要 token。建议 UI:点「执行」先取 token 并展示四项(symbol/方向/数量/止损)+ 倒计时,再点一次「确认执行」才发 approve;两次点击都在同一张卡上。
@@ -581,7 +581,7 @@ Jacky 的问题「多少资金进去还能放止损 / 还有几条新策略的�
 
 ### 9.21 Agent 辅助仓位（2026-09-07）
 
-- `GET/PATCH /api/workflow` 新增 `sizing_agent: 'off' | 'advise' | 'apply'`，缺省及旧配置为 `advise`；非法值返回校验错误。UI 标签“自动仓位”，选项“关 / 只建议 / 采用”。
+- `GET/PATCH /api/workflow` 新增 `sizing_agent: 'off' | 'advise' | 'apply'`，默认 `apply`：旧配置缺这个字段按 `apply`，存了认不出的值按 `advise`（只给建议、不改仓位）；写入非法值返回校验错误。UI 标签“自动仓位”，选项“关 / 只建议 / 采用”。2026-09-27 起也可以通过 `PATCH /api/execution-policy` 修改（§9.56），`POST /api/workflow {sizing_agent}` 继续可用。
 - off 不调用仓位模型；advise 每次可开仓 PROPOSE 使用 `cheap_brain` / `cheap_brain_model` 调用一次，只记录；apply 采用合法意见。10 秒硬超时，无重试，失败或数字泄漏回退基准风险预算。
 - `GET /api/intents` 的 `sizing.agent` 和 `GET /api/episodes/:id` 的 `sizing.agent` / `intent.sizing.agent` 为可选对象：`{ multiplier:number, overshoot:boolean, split:number, reason:string, applied:boolean }`。multiplier 0.25–2；split 1–3；reason ≤40 Unicode 字符；applied 表示是否用于代码 sizing，不代表订单通过硬闸或成交。历史记录/off 没有 agent。失败记录 multiplier=1、overshoot=false、split=1、applied=false 及回退理由。
 - episode 新增可选 `sizing_evidence`，保存代码构建的 setup checklist、confidence、日线 regime/ATR%、权益、持仓和风险簇、容量行、当日 UTC 本通道平仓实现盈亏及允许控制数字。金额沿用十进制字符串。模型不得输出 qty、price、leverage 或其他额外字段；任何输出数字必须在证据数字集合中。
@@ -632,7 +632,7 @@ Jacky 的问题「多少资金进去还能放止损 / 还有几条新策略的�
 - 议会的模型票**计入该 episode 的 `usage`**（并行、每条 30 秒超时、每次最多 4 条）；`daily_judgment_cap` 数的仍是 episode 数，不数议会调用。
 - 复查 episode 也带 `strategy_council`，但票池被刻意缩小成「开仓时同意的那几条 + 线程钉住的策略」，不是当前全部启用策略；复查的结构化结果在 `Episode.council_review`（`{ still_agree[], flipped[], gone_neutral[], text }`，可为 null）。
 
-补正三(2026-09-12,按 内部评审记录 §B4/§B7/§D 修):
+补正三(2026-09-12,按 `.codex-reports/council-entry-review.md` §B4/§B7/§D 修):
 
 - **共识闸改 fail closed,钳降删除**。`consensus` 新增字段:
   - `required`:**用户设的 `council_min_agree` 原样**(不再钳到「能投票的策略数」);前端显示它就是真门槛。
@@ -811,7 +811,7 @@ Jacky 拍板:议会的策略表态只回答**方向是否成立**(突破有效 /
 
 ### 9.31 保护腿凭证:有期限,按「通道 × 交易对」(2026-09-12)
 
-背景(复审):v3.11 的 `protection_verified:<backend>` 是**声明**不是**证明**——一次性标记、没有效期,一个月前验过的通道和昨天验过的在闸眼里一样;而且「从来没验证过」和「验过但最近一次真挂止损失败」是同一个处理(都降成 warn 不挡开仓)。现在它是一张**有期限的凭证**,按通道 × 交易对存。
+背景(Codex 复审):v3.11 的 `protection_verified:<backend>` 是**声明**不是**证明**——一次性标记、没有效期,一个月前验过的通道和昨天验过的在闸眼里一样;而且「从来没验证过」和「验过但最近一次真挂止损失败」是同一个处理(都降成 warn 不挡开仓)。现在它是一张**有期限的凭证**,按通道 × 交易对存。
 
 - **凭证**(demo_kv 一行 `protection_credentials`,JSON 数组):`{ channel, symbol: string|null, verified_at, expires_at, last_probe_at, last_probe_ok, last_error, last_auto_at }`。`symbol=null` 是 v3.11 迁移来的**通道级兜底**凭证,给还没有自己凭证的交易对用。判定用的过期时刻按**当前** `protection_ttl_days` 从 `verified_at` 现算(把 ttl 改小,旧凭证立刻过期)。
 - **新 workflow 字段** `protection_ttl_days`(整数 1–30,默认 **7**,`GET/POST /api/workflow` 一起出入)。只有人能改:对话里的 `set_workflow` 把它归到拒绝档。
@@ -1046,7 +1046,7 @@ lab_stats: {
 
 ### 9.35 策略自动轮换 allocator + `active_mode`(2026-09-12)
 
-设计 `docs/design/strategy-research-v3-and-event-research-2026-09-12.md` §4;复审 内部评审记录 §4 第 7 条
+设计 `docs/design/strategy-research-v3-and-event-research-2026-09-12.md` §4;Codex 复审 `.codex-reports/merge-review-0912.md` §4 第 7 条
 (「自动晋到 paper **不会**自动添加 active;这条缺失不能靠把模型直接接 setWorkflow 弥补」)。
 
 **`workflow.active_mode: 'manual' | 'auto'`,默认 `manual`。**
@@ -1110,7 +1110,7 @@ POST /api/strategies/allocator/rollback  {}              → { active, previous,
 
 ### 9.36 议会票池冻结与 min_bars 聚合(P1-06,2026-09-12)
 
-内部评审记录 P1-06 四条,逐条口径:
+Codex `.codex-reports/merge-review-0912.md` P1-06 四条,逐条口径:
 
 1. **K 线深度按 tf 聚合取 max**:`klinePlan()`(strategy-council.ts)把「票池全集(active ∪ shadow ∪ Radar 候选)各自的 `checklist.min_bars`」
    与「evidence plan 里每个周期请求的指标」合成 `Record<tf, bars>`,**同一 tf 取 max**。runtime 按这张表拉,不再用
@@ -1362,7 +1362,7 @@ TS 进程里不得出现 API key/secret,写进 gateway 自己的库就是在 TS 
 ```jsonc
 {
   "enabled": false,
-  "bridge_url": "https://<bridge-domain>",
+  "bridge_url": "https://bridge.example.com",
   "stats_url": "http://127.0.0.1:8794",
   "freshness_s": 180,                      // live 信号超龄只能 evidence
   "default_mode": "gated",                 // copy | gated | evidence
@@ -1398,7 +1398,7 @@ TS 进程里不得出现 API key/secret,写进 gateway 自己的库就是在 TS 
 ```jsonc
 {
   "id": "tsig_<signal_id>", "signal_id": "sig_123", "record_id": 1204,
-  "trader": "交易员A", "symbol": "BTCUSDT", "side": "long",        // side 可为 null(管理动作可能没方向)
+  "trader": "TraderB", "symbol": "BTCUSDT", "side": "long",        // side 可为 null(管理动作可能没方向)
   "action": "open",            // open|add|reduce|close|cancel|stop_loss_update|take_profit_update|stopped_out|analysis_only|unknown
   "entry_kind": "limit",       // market|limit|zone|ladder|unknown(zone=区间按方向取一侧挂一张;ladder=多档,本实现执行不了 → review_only 转人工)
   "entry_prices": ["77000"], "stop": "76000", "tps": [{ "price": "79000", "pct": null }],
@@ -1505,7 +1505,7 @@ GET `/api/market/asp/:agentId` 合并三次 CLI data，缓存 5 分钟：
 **订阅**：POST `/api/market/subscribe` 请求：
 
 ```json
-{"service_id":"svc-1","provider_agent_id":"8136","fee_amount":"10","fee_token_address":"0x...","use_trial":true,"auto_renew":false,"title":"trading-swarm 订阅 · 服务名","description":"接收研究信号","mode":"evidence","weight":0.5}
+{"service_id":"svc-1","provider_agent_id":"8136","fee_amount":"10","fee_token_address":"0x...","use_trial":true,"auto_renew":false,"title":"trade-gate 订阅 · 服务名","description":"接收研究信号","mode":"evidence","weight":0.5}
 ```
 
 provider_agent_id/title/description 可省略；mode 缺省 default_mode、weight 缺省 0。顺序为 create-subscribe → my-subscriptions 取 thisDeviceId → subscribe-device-update 保留原接收者并加入本机 → 本地配置。deviceList=null（原本所有设备接收）时先查询 device-list 得到设备集合。成功、余额不足、创建成功但设备更新失败三个响应分别为：
@@ -1603,7 +1603,7 @@ decision 为 agree_refund/dispute，dispute 必须带非空 reason；仅唯一�
 **出站**：GET `/api/market/asp/deliveries?limit=100`：
 
 ```json
-{"deliveries":[{"event_id":"event-1","created_at":1800000000000,"event":{"event_id":"event-1","kind":"entry_filled","signal_time":1800000000000,"symbol":"BTCUSDT","direction":"long","price":"64120","stop_loss":"63400","take_profit":["65200"],"reason":"研究判断","thread_id":"thread-1","realized_r":null,"backend":"okx_atk","paper":false},"subscribers":["job-1"],"text":"交易信号 / Trade signal · BTC-USDT-SWAP LONG: 研究判断\n{...完整JSON...}","payload":{"deliveryId":"tg_event-1","signal_type":"order","signalTime":1800000000000,"symbol":"BTC-USDT-SWAP","action":"LONG","price":"64120","stop_loss":"63400","take_profit":["65200"],"leverage":null,"sz":null,"valid_until":1800000180000,"is_executable":true,"reason":"研究判断","source":"trading-swarm","thread_id":"thread-1","realized_r":null,"backend":"okx_atk","paper":false},"refusal":null,"jobs":[{"event_id":"event-1","job_id":"job-1","status":"delivered","attempts":1,"error":null,"updated_at":1800000000000,"result":{}}]}]}
+{"deliveries":[{"event_id":"event-1","created_at":1800000000000,"event":{"event_id":"event-1","kind":"entry_filled","signal_time":1800000000000,"symbol":"BTCUSDT","direction":"long","price":"64120","stop_loss":"63400","take_profit":["65200"],"reason":"研究判断","thread_id":"thread-1","realized_r":null,"backend":"okx_atk","paper":false},"subscribers":["job-1"],"text":"交易信号 / Trade signal · BTC-USDT-SWAP LONG: 研究判断\n{...完整JSON...}","payload":{"deliveryId":"tg_event-1","signal_type":"order","signalTime":1800000000000,"symbol":"BTC-USDT-SWAP","action":"LONG","price":"64120","stop_loss":"63400","take_profit":["65200"],"leverage":null,"sz":null,"valid_until":1800000180000,"is_executable":true,"reason":"研究判断","source":"trade-gate","thread_id":"thread-1","realized_r":null,"backend":"okx_atk","paper":false},"refusal":null,"jobs":[{"event_id":"event-1","job_id":"job-1","status":"delivered","attempts":1,"error":null,"updated_at":1800000000000,"result":{}}]}]}
 ```
 
 event kind 另有 thread_closed/sl_hit/tp_hit/reduce_filled/decision_record；可选 transport/confidence/reduce_pct/exit_reason。payload action 为 LONG/SHORT/FLAT/CLOSE/REDUCE；CLOSE 增 `exit_reason`，REDUCE 增 `reduce_pct` 字符串；analysis 增 `can_enter:false` 并 `is_executable:false`。paper 强制 analysis 且 paper:true；外部 okx_asp 或 trader 来源线程不发布。内容与 subscriber set 创建后冻结，同 event 不补发新订阅者。jobs status 为 pending/delivered/failed；失败率严格大于 50% 时 handoff。重启遗留 pending 隔离为 failed 并标记结果未知，必须人工核实后再重发。
@@ -1656,11 +1656,11 @@ spot 或 perp 任一侧拉不到 → 404 `basis_unavailable`,body `{error, missi
 
 ### 9.41 研究工作台(Horizon 式 A/B/C 回放,2026-09-21)
 
-后端设计见 `docs/research/architecture-and-evaluation.md`;前端页 `#/research`(`packages/webui/src/pages/research.tsx`),侧栏「回顾 · 研究工作台」。所有接口前缀 `/api/research`,复用网关端口与 Vite proxy;**只读 + 发起实验,没有任何交易所写入口**。比例一律小数(0.02 = 2%),价格/金额/数量十进制字符串;前端只在展示时格式化。
+后端由 astra 交付(`docs/research/architecture-and-evaluation.md`、`docs/research/claude-frontend-handoff.md`,提交 0238af9 的补丁已合入);前端页 `#/research`(`packages/webui/src/pages/research.tsx`),侧栏「回顾 · 研究工作台」。所有接口前缀 `/api/research`,复用网关端口与 Vite proxy;**只读 + 发起实验,没有任何交易所写入口**。比例一律小数(0.02 = 2%),价格/金额/数量十进制字符串;前端只在展示时格式化。
 
 **对象链**:`Dataset → Study → Policy → RunManifest → Job → Result → Decision/Trade → Draft → ChildRun`。改数据 / 策略 / 成本 / 区间 / 模型任一项 = 新 run,前端不在旧图上改标题。臂 id 形如 `a_rules:0` / `b_agent:1` / `c_filter:0`,A 只跑一次作共同基准,repeat 不能合成组合。
 
-**接口**:`GET capabilities|schema|datasets|runs|runs/:id|runs/:id/result|runs/:id/events?after=|runs/:id/evidence?offset=|runs/:id/export|studies/:id`;`POST datasets|studies|estimate|runs(202)|runs/:id/cancel|runs/:id/replay|tools|chat`。**Claude 追加**:`POST /api/research/datasets/from-market` body `{symbol, timeframe:'15m'|'1h'|'4h'|'1d', from_ms, to_ms}` → 201 `{id, bars, symbol, timeframe, first_at, last_at}`,从当前行情通道(OKX)拉**现货**已收盘 K 线冻结成 dataset,`source` 写成 `okx:spot:1h:market/candles+history-candles`,`available_at = close_time`;超 50,000 根 → `range_exceeds_50000_bars`,不足 10 根 → `too_few_bars`。
+**接口**(完整表见 handoff §3):`GET capabilities|schema|datasets|runs|runs/:id|runs/:id/result|runs/:id/events?after=|runs/:id/evidence?offset=|runs/:id/export|studies/:id`;`POST datasets|studies|estimate|runs(202)|runs/:id/cancel|runs/:id/replay|tools|chat`。**Claude 追加**:`POST /api/research/datasets/from-market` body `{symbol, timeframe:'15m'|'1h'|'4h'|'1d', from_ms, to_ms}` → 201 `{id, bars, symbol, timeframe, first_at, last_at}`,从当前行情通道(OKX)拉**现货**已收盘 K 线冻结成 dataset,`source` 写成 `okx:spot:1h:market/candles+history-candles`,`available_at = close_time`;超 50,000 根 → `range_exceeds_50000_bars`,不足 10 根 → `too_few_bars`。
 
 **注册顺序**:`researchRoutes` 必须排在 `eventRoutes` 之前(后者有老的 `/api/research/:id` 信息员研究任务路由,先注册先匹配)。
 
@@ -1674,7 +1674,7 @@ spot 或 perp 任一侧拉不到 → 404 `basis_unavailable`,body `{error, missi
 
 **幂等**:抽屉打开时生成一个 `idempotency_key`,同 key 重试复用,改请求换 key;`idempotency_conflict`(409)时前端自动换 key 并提示重点;`research_busy:<id>` 提示已有实验。
 
-**§9.41 第二轮追加(2026-09-21 下午)**:后端接口见 `packages/webui/src/api/research-types.ts`。前端:左栏实验列表上方两个入口切换右栏视图——「宇宙筛选」(`components/research-workbench/screen-panel.tsx`:冻结多币宇宙 → `GET /universes/:id/screen`,β/α/R²/α 占比/raw 与残差指标/趋势/名次,可排序,一键带进新实验)与「策略构建」(`strategy-builder.tsx`:自然语言 → `POST /strategies/compile` → IR + 六项检查 + unmapped;IR JSON 可改后零模型重检;原语目录侧栏;检查全过才允许「用这条策略新建实验」)。实验详情新增「诊断」分页(`diagnostics.tsx`:出场原因、R 直方图、MAE/MFE、成本占比、因子归因、分币贡献、父子逐段消融 `GET /runs/:id/attribution`;老 run 无 diagnostics 时前端按交易表兜底并明示)。新建实验抽屉:数据源单资产/多资产宇宙(`max_positions`、`allocation`),策略预置模板/IR,`model_call_timeout_ms`(秒输入,10–300),同 study 再跑或候选实验必须勾适应性搜索确认(`adaptive_search_ack_required`)。深链 `#research?run=<id>`。宇宙的 study 用 universe id 当 `dataset_id`,边界取自 `aligned_close_times`。
+**§9.41 第二轮追加(2026-09-21 下午)**:后端接口见 `docs/research/claude-frontend-handoff.md`「第二轮接口」与 `round2-report.md`。前端:左栏实验列表上方两个入口切换右栏视图——「宇宙筛选」(`components/research-workbench/screen-panel.tsx`:冻结多币宇宙 → `GET /universes/:id/screen`,β/α/R²/α 占比/raw 与残差指标/趋势/名次,可排序,一键带进新实验)与「策略构建」(`strategy-builder.tsx`:自然语言 → `POST /strategies/compile` → IR + 六项检查 + unmapped;IR JSON 可改后零模型重检;原语目录侧栏;检查全过才允许「用这条策略新建实验」)。实验详情新增「诊断」分页(`diagnostics.tsx`:出场原因、R 直方图、MAE/MFE、成本占比、因子归因、分币贡献、父子逐段消融 `GET /runs/:id/attribution`;老 run 无 diagnostics 时前端按交易表兜底并明示)。新建实验抽屉:数据源单资产/多资产宇宙(`max_positions`、`allocation`),策略预置模板/IR,`model_call_timeout_ms`(秒输入,10–300),同 study 再跑或候选实验必须勾适应性搜索确认(`adaptive_search_ack_required`)。深链 `#research?run=<id>`。宇宙的 study 用 universe id 当 `dataset_id`,边界取自 `aligned_close_times`。
 
 ### 9.42 盈亏比硬门改成「先放置再判定」+ 日线结构方向门(2026-09-21 晚)
 
@@ -1694,7 +1694,7 @@ spot 或 perp 任一侧拉不到 → 404 `basis_unavailable`,body `{error, missi
 
 ### 9.43 策略规范 Strategy Spec v1 + 每笔期望单位修复 + Horizon 式研究页 P0(2026-09-22)
 
-**为什么**:Horizon 对标调研P0:研究页从实验控制台改成「问题 → 答案」;两处可疑经代码证实——`每笔期望 -143.15%` 是 `engine.ts` 乘了 100 前端再乘 100;诊断文案因果过强。另外「策略有效性」的根因:成本/盈亏比/ATR 约束只喂给 compile,B/C/研究代理不知道。
+**为什么**:交接包 `horizon-claude-handoff-2026-09-22`(Codex 产出,Horizon 对标)P0:研究页从实验控制台改成「问题 → 答案」;两处可疑经代码证实——`每笔期望 -143.15%` 是 `engine.ts` 乘了 100 前端再乘 100;诊断文案因果过强。另外「策略有效性」的根因:成本/盈亏比/ATR 约束只喂给 compile,B/C/研究代理不知道。
 
 **后端契约增量**(`packages/contracts/schema/research.json`):
 - `ResearchMetrics.expectancy_pct` / `per_trade_return_pct.{avg,median,std,best,worst}` / `trade_return_histogram.bins` 改为小数(0.0143 = 1.43%)。**旧 run 存的仍是百分数**,前端按 `manifest.request.spec_version` 缺失判旧口径(÷100,标「旧口径」)。
@@ -1709,7 +1709,7 @@ spot 或 perp 任一侧拉不到 → 404 `basis_unavailable`,body `{error, missi
 
 ### 9.44 研究会话与研究 loop(自然语言研究工作台,2026-09-22 晚)
 
-**为什么**:Horizon 对标调研 v1.2要的不是实验控制台改版,而是「提问 → 系统定任务与计划 → 真调工具 → 有来源的图表/表格/结论 → 追问 → 刷新后恢复」。现有 `POST /api/research/chat` 是模型在沙箱里写脚本分析一个已跑完的 run,不能回答市场问题。§9.41–9.43 的实验、策略构建、资产筛选全部保留为高级入口;本节新增一套独立的领域对象,不改旧表、不迁移旧数据。
+**为什么**:交接包 `horizon-claude-handoff-2026-09-22-v1.2`(CLAUDE_HANDOFF / 08 / 09)要的不是实验控制台改版,而是「提问 → 系统定任务与计划 → 真调工具 → 有来源的图表/表格/结论 → 追问 → 刷新后恢复」。现有 `POST /api/research/chat` 是模型在沙箱里写脚本分析一个已跑完的 run,不能回答市场问题。§9.41–9.43 的实验、策略构建、资产筛选全部保留为高级入口;本节新增一套独立的领域对象,不改旧表、不迁移旧数据。
 
 #### 对象链
 
@@ -1818,7 +1818,7 @@ v1 工具(名字固定,前端按名字翻步骤标题):
 
 ### 9.47 StrategyBinding 编译 + 内置策略导入 + 策略库并进「我的策略」(2026-09-23)
 
-契约源:`packages/contracts/schema/research-binding.json`(StrategyBinding、BindingRoleSlice、BindingRule、BindingUnmapped、StrategyBindingResponse、BuiltinImportResult)。规范依据:`docs/design/strategy-apply-spec-2026-09-23.md` §3(含 复审修订);合并计划:`docs/research/strategy-merge-plan-2026-09-23.md`。**字段名定稿后保持稳定**,实盘侧(radar 唤醒、候选生成、holding-policy、gates)按这里消费。本节只有只读编译与研究台内导入,**没有**写实盘注册表的 apply 接口(等 Jacky 放行后由实盘侧做)。
+契约源:`packages/contracts/schema/research-binding.json`(StrategyBinding、BindingRoleSlice、BindingRule、BindingUnmapped、StrategyBindingResponse、BuiltinImportResult)。规范依据:`docs/design/strategy-apply-spec-2026-09-23.md` §3(含 Codex 复审修订);合并计划:`docs/research/strategy-merge-plan-2026-09-23.md`。**字段名定稿后保持稳定**,实盘侧(radar 唤醒、候选生成、holding-policy、gates)按这里消费。本节只有只读编译与研究台内导入,**没有**写实盘注册表的 apply 接口(等 Jacky 放行后由实盘侧做)。
 
 **接口**(前缀 `/api/research/strategies`):
 - `GET /:id/binding[?version=]` → `StrategyBindingResponse {strategy_id, version, lab_strategy_id, binding: StrategyBinding|null, unmapped}`。缺省当前版本;没有 IR(规则未编码的导入草稿)时 `binding=null`、`version=null`,`unmapped` 说明缺什么。版本不存在 404,version 非正整数 400。不落库、不下发。
@@ -2086,7 +2086,7 @@ interface ModelsView {
 - `PUT /api/models/bindings/:role` `{connection_id|null, model|null}` → `ModelsView`。`decision` 只能绑 openrouter(Decisions API)或 null;其余角色不能绑 decision-only 模型(model id 以 `typesafe/` 或 `~typesafe/` 开头即 decision-only)。
 - SSE `models.changed`(data=ModelsView)。
 
-存储:连接元数据进状态库新表 `model_connections` / `model_role_bindings`(迁移 0045);**密钥单独存** `<状态库目录>/secrets/model-keys.json`(目录 700、文件 600,`{[connection_id]: api_key}`),不进库、不进日志(走 `log()` 脱敏)、不进任何 API 响应。启动时若存在 `~/.trading-swarm-okx/openrouter.env` 且还没有 openrouter 连接,自动导入为一条 `openrouter` 连接(label「OpenRouter(导入)」),并把 `decision` 绑到 `~typesafe/jev-latest`。
+存储:连接元数据进状态库新表 `model_connections` / `model_role_bindings`(迁移 0045);**密钥单独存** `<状态库目录>/secrets/model-keys.json`(目录 700、文件 600,`{[connection_id]: api_key}`),不进库、不进日志(走 `log()` 脱敏)、不进任何 API 响应。启动时若存在 `~/.trade-gate-okx/openrouter.env` 且还没有 openrouter 连接,自动导入为一条 `openrouter` 连接(label「OpenRouter(导入)」),并把 `decision` 绑到 `~typesafe/jev-latest`。
 
 执行语义:
 - `runtime.brainForRole(role)`:有绑定 → HTTP brain 或 CLI brain;无绑定 → `chat/judge/research` 回退 `mainBrain()`,`filter/reviewer/utility` 回退 `cheapBrain()`。现有 `mainBrain()/cheapBrain()` 调用点逐个换成对应 role(对照表见上)。
@@ -2305,7 +2305,7 @@ judgeFilter(ir: StrategyIR, runtime: JudgeRuntime):
 
 `BEGIN IMMEDIATE` 内同时预留最大费用/调用数并 claim；响应和实际费用同事务落库。未知费用保留预留；供应商实际超过上界时照实记账并封锁后续调用。决策中的运营成本必须由上层账户评测计入，不能把累计查询费用当作单笔成交费。§9.52 最小接口只有解析后的 DecisionResult，因此此时钉住的是 **client 首次响应**；可选 `raw_response/provider_request_id` 扩展才提供供应商原文/对账 ID，缺少记 null，不伪造。judge 首版不新增 HTTP 路由，沿用策略 IR 保存/运行接口并供 matrix 服务内部调用；matrix 路由见 B。
 
-**2026-09-25 外部评审修订（仅 C）**：改为显式 IR v2 保持 v1 哈希；问题数组/字段白名单/概率谓词替代自由 features 与 score 数值比较；删除 fail-open 与未校准 DEFAULT_JUDGE；新增 immutable profile、灰区、首次响应与决策双层去重、原子预算四表、recorded_only/request_once；统一所有运行模式而非仅 agent；明确原始响应、重试、funding 与模型版本的首版限制。A 推荐资产及 B matrix 由对应实现者维护。
+**2026-09-25 astra 修订（仅 C）**：改为显式 IR v2 保持 v1 哈希；问题数组/字段白名单/概率谓词替代自由 features 与 score 数值比较；删除 fail-open 与未校准 DEFAULT_JUDGE；新增 immutable profile、灰区、首次响应与决策双层去重、原子预算四表、recorded_only/request_once；统一所有运行模式而非仅 agent；明确原始响应、重试、funding 与模型版本的首版限制。A 推荐资产及 B matrix 由对应实现者维护。
 
 ##### 2026-09-25 Jev 适配 v2
 
@@ -2349,3 +2349,323 @@ interface AgentStrategyView {
 前端:
 - Agent 页顶部与楼层顶栏:「当前策略:<名字> v<版本> · <运行状态>」胶囊 + 「切换」弹层(自由判断 / 我的策略列表里能运行的策略,选中后显示预检 blockers/warnings 与运行参数,一键切换)。
 - 楼层每张角色桌:悬停 / 点开显示它拿到的 binding 片(标题、summary、前 5 条规则 + 执行者标签:代码 / 决策模型 / LLM)。角色映射:radar 片 → radar 桌;judge 片 → thread_manager 桌;geometry + risk 片 → risk_sentinel 桌与 portfolio_manager 桌;holding 片 → thread_manager 桌第二栏;execution 片 → executor 桌。free 时桌上写「自由判断(playbook)」。
+
+### 高级页面读取性能补充（2026-09-25）
+
+- `/api/market/status`、`asp`、`subscriptions`、`search`、目录/ASP 详情的 GET 不等待外网：立即返回已有数据与 `cache: { fetched_at, stale, refreshing, state, error }`。时间为 unix 毫秒；首次无缓存 `fetched_at=null,state=loading`，失败保留旧成功快照并报告错误。刷新单飞、失败至少间隔 15 秒；展示缓存不参与订阅或交易授权，写入口仍实时核实。写操作、订阅/发布事件让展示缓存失效。
+- 市场状态各远端区块独立刷新，另带 `sections` 元数据。目录主体沿用既有 `fetched_at/building/errors`，`cache` 指其订阅标记；`subscriptions_known=false` 表示尚无法确认订阅状态，前端不把它当作“未订阅”，禁用目录上的订阅/试用按钮。
+- `GET /api/market-state/history?view=summary` 只返回时间线需要的 `id/as_of/bias/regime/summary/error`；不传 `view` 仍返回完整旧形状。
+- `GET /api/logs?limit=100&before_id=<id>` 增加逐条 `id` 和响应 `next_before_id`（无下一页为 null）。游标来自折叠前原始末行，重复告警折叠不会导致翻页重复。
+- `GET /api/activity?limit=50&before=<at>&before_id=<id>` 增加 `next_before: {at,id}|null`，按 `(at,id)` 倒序翻页，保留旧的仅 `before` 调用。日志页两块独立加载、限制单页渲染，关键词/组别筛选范围为当前页；最新页每 5 秒更新，历史页固定。
+- 不轮转、不删除历史记录。本次只补查询索引与增量回填进度；历史存储的长期归档可另行制定。
+
+### 9.55 Agent 名册、身份、循环与规范线程(2026-09-25)
+
+设计 docs/design/agent-roster-chat-2026-09-25.md。九个 agent = `BOT_ROLES`;每个 agent 一条规范线程,楼层对话框与 Agent 页读写同一个 session id,靠现有 SSE `chat.message` 同步。
+
+```ts
+type AgentChatState = 'idle' | 'queued' | 'thinking' | 'tool' | 'error';
+type LoopNodeKind = 'trigger' | 'read' | 'code' | 'model' | 'gate' | 'handoff' | 'output' | 'human';
+
+interface AgentCard {
+  role: BotRole;                 // 九个之一,顺序 = 注册表顺序
+  name: string;                  // "ASP Agent"
+  callsign: string;              // HELM RADAR THREAD LAB BOOK SENTINEL AUDIT EXEC MARKET
+  tagline: string;               // 一句话「我是谁」
+  enabled: boolean;              // bot profile 开关
+  session_id: string;            // gate_captain → "default";其余 → "agent:<role>"
+  message_count: number;
+  last_message_at: number | null;   // 可为 null
+  last_text: string | null;         // 可为 null
+  chat: { state: AgentChatState; tool: string | null; since: number | null };
+  loop: {
+    cadence: string;             // 人话:「每 30 分钟」「事件触发」
+    status: 'idle' | 'running' | 'paused' | 'disabled' | 'error';
+    current_node: string | null; // running 时 = graph 节点 id
+    last_run: { id: string; routine: string; status: string; started_at: number; finished_at: number | null; summary: string | null } | null;
+    next_run_at: number | null;  // 可为 null(算不出)
+    pending_handoffs_in: number;
+  };
+  tools: { name: string; group: 'read' | 'research' | 'act' | 'config'; summary: string }[];
+}
+
+interface AgentGraph {
+  entry: string;
+  nodes: { id: string; label: string; kind: LoopNodeKind; to_role?: BotRole | null }[];
+  edges: { from: string; to: string; label?: string | null }[];
+}
+```
+
+- `GET /api/agents` → `{ agents: AgentCard[] }`(恒 9 条)。
+- `GET /api/agents/:role` → `{ agent: AgentCard, agent_md: string, graph: AgentGraph, recent_runs: AgentCard['loop']['last_run'][], handoffs: { in: BotHandoff[], out: BotHandoff[] } }`;未知 role → 404 `unknown_role`。`agent_md` 的固定二级标题:我是谁 / 我负责 / 我不负责(找谁) / 红线 / 我的循环 / 我能调的工具 / 口径。
+- `POST /api/chat/sessions { role }` → 幂等返回该 agent 的规范会话(不再新建)。不带 role 照旧新建自由会话。
+- `ChatSession` 增加 `canonical: boolean`;规范会话归档/删除 → 409 `canonical_session`,只能 `POST /api/chat/reset { session }` 清空。
+- SSE 新事件 `chat.status`:`{ session_id: string, role: BotRole | null, state: AgentChatState, tool: string | null, at: number }`。
+- 白名单外工具调用 → 工具结果 `{ error: "not_my_tool: <tool> 属于 @<CALLSIGN>" }`(模型会转述给用户)。
+- 新增 ASP 只读工具(只给 asp_agent;gate_captain 只拿 get_asp_overview):get_asp_overview / list_asp_services / list_asp_tasks / list_asp_subscribers / list_market_inbox。前端 `toolAction` 需要这几个名字的中文动作。
+
+### 9.56 交易页三层：来源 / 判断 / 执行(2026-09-27)
+
+交易页按三层看一笔单子从哪来、谁决定做不做、代码怎么执行：
+
+1. **机会来源**：AI 扫盘（模型按 playbook 看盘）；策略运行（代码在收盘时扫出候选，可以同时开多条）。
+2. **判断层**：每个来源选一种。AI 扫盘固定是模型判断；策略运行的 `mode` 可选 `auto`（直接做）、`agent`（LLM 判断）、`jev`（Jev 判断）、`signal_only`（只发信号）。「每笔问我确认」（`confirm`）已下线。
+3. **执行层**：全部由代码执行，所有来源用同一套参数：每笔风险 × 组合经理倍率、止损底线（按百分比或按 ATR，见 9.56.11）、止损上限、净盈亏比、同币只开一条、同时持仓上限、每日开仓次数、日亏停、杠杆。
+
+执行层的阈值只有一个来源：`packages/gateway/src/demo/execution-policy.ts` 的 `executionThresholds(workflow)`。实盘开仓检查、策略运行开仓、运行预检、研究回测都读它，所以回测能下的单，实盘用同样的参数也能下。
+
+#### 9.56.1 workflow 新字段
+
+| 字段 | 类型 | 默认 | 人工可调 | 说明 |
+|---|---|---|---|---|
+| `stop_floor_mode` | `'pct'` \| `'atr'` | `'pct'` | pct / atr | 止损底线按百分比还是按 ATR 算（2026-09-27 下午新增，见 9.56.11） |
+| `stop_floor_atr_tf` | `'15m'` \| `'1h'` \| `'4h'` | `'1h'` | 三选一 | ATR 模式用哪个周期的 ATR14 |
+| `min_stop_pct` | number | 1.0（原 0.3） | 0.2–5 | 止损距离下限，入场价的百分比；**只在 pct 模式生效** |
+| `max_stop_pct` | number | 5 | 1–15 | 止损距离上限；两种模式都生效 |
+| `min_stop_atr` | number | 1.0（原 0.5） | 0–3 | 止损至少是 k × `stop_floor_atr_tf` 那根的 ATR14；**只在 atr 模式生效**，0 表示关掉下限（只剩上限） |
+| `min_net_rr` | number | 1.5 | 0.5–5 | 扣掉来回成本（12bps）后的盈亏比下限 |
+| `ai_scan_paused` | boolean | false | — | 只暂停 AI 扫盘，见 9.56.5 |
+
+- 越界时 `POST /api/workflow` 返回 errors，不会悄悄改成边界值；`min_stop_pct` 必须小于 `max_stop_pct`。
+- 老库缺这些字段或存了坏值，读出来是默认值。
+- 一次性迁移（网关启动时，见 9.56.11）：库里 `min_stop_pct` 恰好是旧默认 0.3、`min_stop_atr` 恰好是旧默认 0.5、而且没有 `stop_floor_mode` 的，改成 1.0；`playbook_text` 与旧出厂 playbook 逐字相同的换成新默认。人改过的值不动。
+- `max_open_threads` 可调上限从 6 放宽到 20，`max_opens_per_day` 从 12 放宽到 50。
+- `min_net_rr` 的优先级：执行层的值是下限。旧策略库里的 `params.min_net_rr` 只能把它调高，不能调低（取两者较大值）。§9.54 之后旧策略库已不再开仓，这条只影响已有的持仓计划。
+
+#### 9.56.2 `GET /api/execution-policy`
+
+```jsonc
+{
+  "values": {
+    "risk_pct": 0.5, "leverage": 3, "margin_mode": "cross",
+    "stop_floor_mode": "pct", "stop_floor_atr_tf": "1h",
+    "min_stop_pct": 1, "max_stop_pct": 5, "min_stop_atr": 1, "min_net_rr": 1.5,
+    "max_open_threads": 3, "max_opens_per_day": 4, "daily_loss_stop_pct": 3,
+    "sizing_agent": "apply"
+  },
+  "bounds": {
+    // 数值键
+    "min_stop_pct": { "min": 0.2, "max": 5, "step": 0.05, "agent_direct_min": 0.5, "agent_direct_max": 3, "integer": false },
+    // 枚举键
+    "margin_mode": { "values": ["cross", "isolated"], "agent_direct_values": ["cross", "isolated"] },
+    "stop_floor_mode": { "values": ["pct", "atr"], "agent_direct_values": ["pct", "atr"] },
+    "stop_floor_atr_tf": { "values": ["15m", "1h", "4h"], "agent_direct_values": ["15m", "1h", "4h"] }
+    // …每个 values 里的键都有一项
+  },
+  "backend": "paper",            // 当前执行通道
+  "execution_label": "纸面",
+  "live": false,                 // 是否真钱(纸面和交易所模拟盘都是 false)
+  "usage": { "open_threads": 1, "max_open_threads": 3, "opens_today": 2, "max_opens_per_day": 4, "daily_loss_hit": false },
+  "updated_at": 1790000000000,
+  // 2026-09-27 下午新增:止损百分比 ↔ ATR 换算,给「按 ATR 设止损」的界面显示折算和打到止损亏多少
+  "stop_conversions": [
+    { "symbol": "BTCUSDT", "price": "65000.1",
+      "atr_pct": { "15m": 0.21, "1h": 0.55, "4h": 1.3 },   // ATR14 占价格的百分比;取不到的是 null
+      "floor_pct": 1,          // 当前模式下这个币实际的最小止损百分比:pct 模式 = min_stop_pct;atr 模式 = min_stop_atr × atr_pct[stop_floor_atr_tf](取不到 ATR 时 null)
+      "as_of": 1790000000000,  // 这一行用到的 ATR 里最旧的那个的获取时间;都没有时 null
+      "stale": false }         // 价格或任一周期 ATR 缺失
+  ],
+  "stop_conversions_as_of": 1790000000000,
+  "stop_conversions_stale": false,   // 任一行 stale 就是 true
+  "risk_per_trade_usdt": "50.00"     // 权益 × risk_pct,打到止损大约亏多少(手续费和滑点另算);没有账户权益时 null
+}
+```
+
+- `stop_conversions` 覆盖 `watchlist` 里的每个币（永续），从网关已有的行情缓存算（AI 扫盘、K 线收盘触发器、止损底线检查顺手记下的 ATR；同一根 K 线收盘前复用）。缓存缺的在后台补拉，最多等 0.8 秒，等不到的记 `null` 并标 `stale`；整个计算超过 1 秒则 `stop_conversions: null`、`stop_conversions_stale: true`。接口不会因此明显变慢。
+- 价格优先用标记价缓存，没有时用 K 线收盘价。访客可读，没有敏感字段。
+
+`values` 里 `risk_pct`、`daily_loss_stop_pct` 是数字（workflow 里存的是字符串）。
+
+各键的边界：
+
+| 键 | 人工 min–max(step) | agent 直改区间 |
+|---|---|---|
+| risk_pct | 0.1–2 (0.05) | 0.1–2 |
+| leverage | 1–10 (1，整数) | 1–10 |
+| stop_floor_mode | pct / atr | 都可以 |
+| stop_floor_atr_tf | 15m / 1h / 4h | 都可以 |
+| min_stop_pct | 0.2–5 (0.05) | 0.5–3 |
+| max_stop_pct | 1–15 (0.5) | 2–10 |
+| min_stop_atr | 0–3 (0.1) | 0.3–2 |
+| min_net_rr | 0.5–5 (0.1) | 1.2–3 |
+| max_open_threads | 1–20 (1，整数) | 1–10 |
+| max_opens_per_day | 1–50 (1，整数) | 1–20 |
+| daily_loss_stop_pct | 0.5–20 (0.5) | 1–10 |
+| margin_mode | cross / isolated | 都可以 |
+| sizing_agent | off / advise / apply | 都可以 |
+
+#### 9.56.3 `PATCH /api/execution-policy`（人工修改）
+
+请求体：要改的键，外加实盘时的 `confirm`：`{ "min_stop_pct": 0.5, "min_net_rr": 1.8, "confirm": "LIVE" }`。
+
+- 按上表人工区间校验，有一个键不合法整单不生效，返回 400：`{ "error": { "code": "invalid_policy", "message": "…" }, "errors": [{ "key", "code", "message" }] }`。`errors[].code` 取值：`unknown_key`、`invalid_type`、`out_of_bounds`、`not_integer`、`invalid_range`（上下限颠倒）。
+- 实盘通道（`live: true`）必须带 `confirm: "LIVE"`，否则 409 `live_requires_confirm`。模拟盘带了也不影响。
+- 成功返回 200：`{ "policy": <同 GET>, "errors": [] }`，并推 SSE `workflow.changed`。
+- 权限和 `POST /api/workflow` 相同：写请求只接受本地页面来源，其它浏览器来源 403。本分支网关没有访客/owner 区分，公网演示版的只读由前端构建开关和评审分支处理。
+
+#### 9.56.4 agent 工具
+
+| 工具 | 分组 | 给谁 | 语义 |
+|---|---|---|---|
+| `get_execution_policy{}` | read | gate_captain、thread_manager、portfolio_manager、risk_sentinel、executor | 返回和 GET 一样的内容；`stop_conversions` 只读缓存、不补拉 |
+| `set_execution_policy{"patch":{…}}` | config | gate_captain、portfolio_manager、risk_sentinel | 见下 |
+
+`set_execution_policy` 的结果：
+
+- 模拟盘，且每个键都在 agent 直改区间内：直接生效，写日志和活动流，返回 `{ ok: true, applied: true, mode: "direct", errors: [], policy }`。
+- 超出直改区间，或当前是实盘：不生效，生成一张设置提议卡（和 `set_workflow` 同一套 `WorkflowProposal`，用户在界面上确认），返回 `{ ok: true, applied: false, mode: "proposal", reason: "outside_agent_direct" | "live_requires_human", outside_agent_direct: [键], proposal: { id, status, keys, before, after, errors } }`。
+- 参数不合法：`{ ok: false, applied: false, mode: "rejected", errors: [...] }`。
+
+`set_workflow` 仍然拒绝风险、杠杆、上限、止损、净盈亏比、日亏停、仓位倍率这些键，返回的 `note` 提示改用 `set_execution_policy`。`ai_scan_paused: true` 直接生效，`false` 要生成提议（和 `paused` 一样）。`set_execution_policy` 不进公网访客的对话工具白名单。
+
+#### 9.56.5 AI 扫盘单独暂停
+
+- `PATCH /api/trading/sources/ai_scan`，请求体只能是 `{ "paused": true | false }`，否则 400 `bad_request`。返回 `{ "source": <9.56.6 里的 ai_scan 对象> }`。权限同策略运行的暂停（`PATCH /api/strategy-runs/:id`），公网访客可以改。
+- 暂停后不再扫描找新机会（定时、心跳、急涨急跌、对话里的 run_scan 都不扫），排队中的扫描跑完也不开仓（开仓检查多一行「AI 扫盘已暂停」，code `ai_scan_paused`）。已有线程照常复查，策略运行不受影响。
+- 也可以用 `POST /api/workflow { "ai_scan_paused": true }`。`workflow.paused` 仍然是全部暂停。
+
+#### 9.56.6 `GET /api/trading/sources?since=<ms>`
+
+- `since` 默认今天 UTC 零点；必须是不晚于现在、不早于 31 天前的毫秒时间戳，否则 400 `bad_request`。
+- 只读、零模型、没有敏感字段，公网访客可读（不在 privateApi 列表里）。
+
+```jsonc
+{
+  "since": 1790000000000, "until": 1790030000000,
+  "shared": { "open_threads": 1, "max_open_threads": 3, "opens_today": 2, "max_opens_per_day": 4,
+              "daily_loss_hit": false, "halted": false, "paused": false },
+  "sources": [
+    {
+      "kind": "ai_scan", "id": "ai_scan", "name": "AI 扫盘",
+      "enabled": true,                // 没急停、没暂停、AI 扫盘没暂停、Thread Manager 开着、没被 agent 当前策略接管
+      "disabled_reason": null,        // enabled=false 时的原因文字
+      "paused": false,                // ai_scan_paused
+      "playbook": { "name": "突破-回踩(单一策略,v3)", "prompt_version": "demo-playbook-v11.1-ohlc", "custom": false },
+      "judge": "model", "timeframe": "15m", "symbols": ["BTCUSDT"], "scan_mode": "triggered",
+      "budget": { "judgments_used_today": 42, "judgment_cap": 300 },   // 全局每日判断额度(本地日)
+      "today": {
+        "judgments": 40,              // 窗口内 AI 扫盘调模型的次数
+        "actions": { "NO_TRADE": 30, "WATCH": 6, "PROPOSE": 4 },
+        "proposals": 4, "gate_rejected": 3, "orders": 1, "pending_approval": 0, "failed": 0
+      },
+      "last_event": { "at": 1790029000000, "symbol": "SOLUSDT", "action": "NO_TRADE", "summary": "…" },
+      "top_reasons": [ /* TopReason[],只有被挡的 */ ],
+      "not_taken": [ /* TopReason[],没做但不算被挡 */ ]
+    },
+    {
+      "kind": "strategy_run", "id": "run_…", "run_id": "run_…", "strategy_id": "rs_…", "name": "SOL 15m 回踩", "version": 3,
+      "symbols": ["SOLUSDT"], "timeframe": "15m",
+      "mode": "jev",                  // auto | agent | jev | confirm(老运行) | signal_only
+      "judge": "jev",                 // code(auto/confirm) | llm(agent) | jev | none(signal_only)
+      "status": "running", "enabled": true, "market": "perp", "risk_pct": 0.5, "max_open": 3,
+      "execution": { "backend": "paper", "profile": null, "label": "纸面" },
+      "today": { "scans": 12, "candidates": 4, "judged": { "follow": 2, "skip": 2 }, "gate_rejected": 2,
+                 "skipped": 1, "orders": 0, "open_threads": 0, "errors": 0 },
+      "last_event": { "at": 1790029000000, "kind": "order_rejected", "symbol": "SOLUSDT", "message": "…" },
+      "top_reasons": [], "not_taken": []
+    }
+  ]
+}
+```
+
+策略运行列出所有没停的运行，加上窗口内有事件的已停运行。
+
+`TopReason`：`{ layer: "judge" | "strategy" | "gate" | "execution", key: string, label: string, count: number, example: string }`，按 count 倒序，最多 8 条。`example` 是一条原文（最多 200 字）。
+
+原因码（`key`）：
+
+| layer | key | 含义 |
+|---|---|---|
+| gate | stop_distance | 止损距离低于 `min_stop_pct` |
+| gate | stop_atr | 止损小于 `min_stop_atr` × ATR |
+| gate | stop_too_wide | 止损距离超过 `max_stop_pct` |
+| gate | min_net_rr | 净盈亏比不够 |
+| gate | max_open_threads / max_opens_per_day / daily_loss_stop / symbol_open | 同时持仓满、今日开仓满、日亏停、同币已有线程或持仓 |
+| gate | portfolio_limit / risk_sentinel / sizing | 组合限额、风控告警、数量不可用 |
+| gate | stop_side / tp_side / stale / position_exists / confidence / spot_no_short / market_not_enabled | 止损或止盈方向错、行情过期、本币已有持仓、信心不足、现货不能做空、市场没开 |
+| gate | current_strategy / unknown_order / council / entry_style / event_blackout / tier_limit / holding_atr / invalidation / holding_plan / preflight / other_gate | 其它开仓检查 |
+| strategy | already_open / max_open / ambiguous_position / min_rr / position_unsettled / new_signal | 本运行已有该币、本运行持仓满、同币多条线程、候选盈亏比低于策略要求、同币线程待核对、新信号等旧单结束 |
+| judge | agent_skip | LLM 判断 agent 说跳过 |
+| judge | ir_judge_skip | 策略自带的判断要素（IR judge 块）说跳过 |
+| judge | jev_skip / jev_unavailable | jev 模式下 Jev 说跳过 / Jev 调不到、超时或预算用完 |
+| execution | execution_unknown / execution_error / model_failed | 回执未知、执行出错、模型调用失败 |
+| 任意 | `text:<去掉数字的原文>` | 旧事件认不出的原因，`label` 就是原文 |
+
+`not_taken` 用的 key（不算被挡）：`no_trade`、`watch`（模型判断不做/观察）、`halted`、`paused`、`ai_scan_paused`、`transient`（临时失败，稍后重试）、`screen_filter`、`bars_pending`（行情还没到）、`entry_expired`（限价单过期没成交）、`entry_unknown_not_found`。
+
+计数规则：一条 AI 提议同时没过几项检查，每个原因码各计一次；IR 判断要素跳过时运行器会记 `agent_skip` 和 `skip: ir_judge_skip` 两条事件，汇总只算一次。
+
+#### 9.56.7 事件里的结构化原因（源头写入）
+
+- 策略运行事件 `skip`、`agent_skip`、`agent_follow`、`order_rejected`、`error` 的 `data` 新增 `layer`、`code`；`order_rejected` 还带 `gates: GateResult[]`（原样，不拼成字符串）。`GateResult` 新增可选 `code`。
+- AI 扫盘：episode 的 `gates[]` 每一项带 `code`；活动流 `proposal_blocked` 的 `data` 新增 `layer: "gate"`、`code`（第一个没过的检查）、`gates`（没过的检查原样）。
+- 旧事件没有这些字段，`/api/trading/sources` 按文字归类。
+
+#### 9.56.8 判断层：运行模式
+
+- `POST /api/strategy-runs`、`PATCH /api/strategy-runs/:id`、`PUT /api/agent-strategy` 传 `mode: "confirm"` 返回 400 `mode_confirm_removed`。已经存在的 confirm 运行照常跑，也能改别的参数，不做迁移。
+- 新模式 `jev`（策略没有 IR judge 块时）：每个候选先问 Jev（默认题目 take + quality，和影子判断同一套），Jev 说跟才开仓，记 `agent_follow`（`code: jev_follow`）；说跳过记 `agent_skip`（`code: jev_skip`），不下单；决策模型没绑定、预算用完、出错、30 秒没回答，都记 `agent_skip`（`code: jev_unavailable`，message 里写原因），不下单。判断账本 `judge_live_decisions` 这一行 `mode: "gate"`，每个候选一行；预算按运行、按 UTC 日计（作用域 `live:jev:<run>:<day>`，上限同影子判断：200 次、0.03 美元）。jev 模式不再额外做影子判断。
+- 策略带 IR judge 块时，不管什么模式都由 judge 块判断，和以前一样。
+- `GET /api/agent-strategy` 的 `role_engines.judge`：jev 模式为 `decision`。
+
+#### 9.56.9 执行层接到策略运行
+
+- 策略运行开仓现在和 AI 扫盘用同一套执行层：止损底线和上限（读 workflow，按 9.56.11 的模式判；ATR 模式取 `stop_floor_atr_tf` 最近已收盘 K 线的 ATR14，取不到时改按百分比判）、净盈亏比。净盈亏比按入场价（限价用挂单价，市价用现价）和止盈目标算；分档止盈按各档仓位比例加权成一个等效目标（30% 在 1R、70% 在 3R 相当于 2.4R）；没有止盈目标（只靠信号或时间离场）不判净盈亏比。被拒时 `order_rejected` 的 message 仍以 `基础闸拒绝:` 开头，`data` 带 `layer: "gate"`、`code`、`gates`。
+- **组合经理倍率也作用于策略运行**：固定风险的运行在 `sizing_agent` 不是 `off` 且组合经理开着时，开仓前问一次仓位意见，倍率 0.25–2 乘在运行自己的 `risk_pct` 上；模型失败或超时（10 秒）按 1 倍。下单前最后一次数量检查用同一个倍率复核，数量上限、最小名义、流动性上限都不变。波动率目标（vol_target）的运行不接倍率：它的数量只由 `sizeRunOrder` 算，乘倍率会改掉它的单笔风险上限。代价：每个通过检查的候选多一次便宜模型调用（不占每日判断额度），开仓前最多多等 10 秒；按金额算的收益和回测会差一个倍率，按 R 算的不变。
+- 预检 `GET /api/strategy-runs/preflight` 新增：
+  - `execution_policy_mismatch`：回测（或历史候选）按当前执行层会被拒的比例。回测样本被拒 ≥50% 是 blocker，其它情况是 warning；只能用同版本实盘候选核对时只给 warning（运行时本来就会逐单拒掉并记原因）。message 例：`回测订单按当前执行层会被拒掉 60%(3/5:止损低于下限 3),样本止损中位 0.18%;建议把策略止损倍数放宽到 ≥0.8×ATR(按样本 ATR 中位 0.40%,约 0.32%)`。建议只说怎么改策略，不建议调低执行层下限。
+  - `execution_policy_changed`（warning）：新回测报告里记下的阈值和现在不同，提示重跑回测。
+  - `execution_unverified`（warning）：找不到这个版本的回测订单或实盘候选，无法核对。
+  - 样本来源优先级：新回测报告的 `execution_gate` 计数 → 旧报告的订单计划（`assets[].plans`，止损、止盈、数据集算的 ATR）→ 同策略同版本运行的 `candidate` 事件。
+
+#### 9.56.10 研究回测也按执行层拒单
+
+- 研究回测（全窗口回测报告，默认执行器和订单周期执行器）和研究 run 在下单决策时用同一套阈值判断，被拒的候选不下单。阈值默认取 workflow 当前值（没接上就用默认值）。
+- 冻结的阈值仍是契约 `ExecutionGateThresholds` 的 5 个数，止损底线的模式靠数值表达（9.56.11）：pct 模式存 `min_stop_atr: 0`；atr 模式存 `min_stop_pct: 0`，`min_stop_atr` 换算到回测周期；两个都大于 0 的是 09-27 下午之前的快照，按原规则两条都判。
+- 用到的阈值存进结果里，重放按存下的值，不再读 workflow：研究 run 存在 `manifest.request.order_gate.execution_thresholds`（请求显式传 `null` 表示不按执行层拒单；幂等键不变）；回测报告存在 `execution_gate.thresholds`。
+- `BacktestReport.execution_gate` 和每个 `BacktestAsset.execution_gate`（篮子是两条腿之和，报告顶层是各单资产之和）：
+
+```jsonc
+{
+  "version": "exec-gate-v1",
+  "thresholds": { "min_stop_pct": 1, "max_stop_pct": 5, "min_stop_atr": 0, "min_net_rr": 1.5, "round_trip_cost_bps": "12" },   // pct 模式的快照
+  "checked": 310,       // 进入执行层判断的候选数
+  "rejected": 225,      // 被拒的候选数(去重)
+  "rejected_by_execution": { "stop_distance": 93, "stop_atr": 0, "stop_too_wide": 0, "min_net_rr": 225 },  // 一个候选可以同时命中几项
+  "examples": [{ "symbol": "SOLUSDT", "at": 1790000000000, "reason": "…" }]   // 最多 5 条
+}
+```
+
+- `execution_gate` 为 `null` 或没有这个字段：这份报告是旧的，回测时没按执行层拒单，前端显示「这份回测没按执行层拒单」。旧报告不重算。
+- 订单计划被执行层拒掉时 `status: "blocked"`，`blocked_reason` 是四个原因码之一。
+- 改进环（`improve/evaluate.ts`）和 ASP 快速回测（`quick-backtest.ts`）暂时仍不按执行层拒单，它们不产出报告。
+- 实盘候选生成（`generateRunCandidate`）不按执行层过滤，候选照常出来，由执行层在下单时拒掉并记在漏斗里。
+
+#### 9.56.11 止损底线两种模式（2026-09-27 下午）
+
+背景：参照带单员 72 笔开仓，止损中位 1.72%，一半在 1.3%–2.3%，最窄 0.64%，约合 2.3×1h ATR 或 1×4h ATR。原来 0.3% 的底线太窄。默认按百分比说止损，用户可以切到 ATR。
+
+- **pct 模式**（默认）：止损距离 ≥ `min_stop_pct`（默认 1%）。ATR 只用来显示倍数，不参与判断。
+- **atr 模式**：止损距离 ≥ `min_stop_atr` × `stop_floor_atr_tf` 那根的 ATR14（默认 1×1h ATR），百分比底线不生效。取不到 ATR（行情缓存里没有、补拉失败）时改按 `min_stop_pct` 判，原因里写「ATR 不可用,改按百分比」。`min_stop_atr: 0` 表示关掉下限。
+- `max_stop_pct` 两种模式都判。
+- 判定只有一个函数 `stopGeometry`（`execution-policy.ts`），这些地方都调它：AI 扫盘开仓检查、策略运行开仓、订阅信号开仓、对话提议、发送前复查、策略运行预检（`execution_policy_mismatch`）、研究回测（`research/execution-gate.ts`）。
+- ATR 从哪来：AI 扫盘用这次扫盘已经拉好的特征（atr 模式时把 `stop_floor_atr_tf` 加进拉取计划）；策略运行、订阅信号、对话提议、发送前复查读网关的 ATR 缓存，缓存里没有当前这根才拉一次（同一键同时只拉一次，失败 60 秒内不重试）。pct 模式不为止损底线拉 K 线。
+- 研究回测只有信号周期的 ATR：atr 模式的倍数按「波动随时间开根号」换算到回测周期（1×1h ATR ≈ 2×15m ATR ≈ 0.5×4h ATR，保留计算精度，避免把正数下限舍入成 0）后冻结，报告警告里写明换算；策略运行预检用同一换算和回测快照比较。
+- 当前五字段回测快照不能同时保存 ATR 模式和自定义百分比回退值：ATR 数据缺失时回测使用默认 1%，可能与运行设置不同。保留自定义回退值需要扩展 `ExecutionGateThresholds` 契约；策略运行预检的样本检查保留当前设置中的百分比。
+- 原因码与文字：
+
+| 模式 | 检查项名 | code | reason 例 |
+|---|---|---|---|
+| pct | 止损距离 | `stop_distance` / `stop_too_wide` | `0.60%(允许 1%–5%)` |
+| atr | 止损ATR下限 | `stop_atr` | `0.73×ATR(下限 1×1h ATR ≈ 0.55%;距离 0.40%,上限 5%)` |
+| atr | 止损距离 | `stop_too_wide` | `7.00%(上限 5%)` |
+| atr 取不到 ATR | 止损距离 | `stop_distance` | `ATR 不可用,改按百分比:0.60%(允许 1%–5%)` |
+
+- 发送前复查（新增）：发单前用新鲜价格再判一次止损底线和上限（限价单按挂单价和现价里对自己更不利的那个），不过就不发，线程关闭原因 `发送前止损复查:止损距离|止损ATR下限|止损过宽 <reason>;原计划不改价`，原因码分别是 `stop_distance` / `stop_atr` / `stop_too_wide`。批准到发送之间把底线调宽了，已批的单会在这里被拦下。
+- 提示词：规则 5 按当前模式写具体数值（「止损至少 1.00%,不超过 5%」或「止损至少 1×1h ATR(当前 BTC≈0.55%),不超过 5%」）；没绑策略的 AI 扫盘多一条计划证据「止损底线(代码核验)」，说明和「可选ATR尺度」两条都要满足、按更宽的放。提示词版本 `demo-playbook-v11.2-stopfloor`。持仓计划的 ATR 尺度检查（没绑策略时 ≥1×1h ATR）不变。
+- 出厂 playbook 的止损句改为「止损放在最近结构位(swing 低/高)之外,至少 1%(波动大的币按规则里的 ATR 下限放得更宽);第一止盈至少是止损距离的 1.5 倍,可给第二止盈」。
+- 一次性迁移（网关启动时执行一次）：
+  - 库里 `min_stop_pct === 0.3` 且没有 `stop_floor_mode` → 改成 1.0；`min_stop_atr === 0.5` 且没有 `stop_floor_mode` → 改成 1.0。迁移后存成 `stop_floor_mode: "pct"`，下次启动不再触发。
+  - `playbook_text` 与旧出厂 playbook 逐字相同 → 换成新默认；改过一个字都不动。
+  - 有改动时记一条活动 `workflow_changed`（`level: warn`，`data.via: "migration"`，`data.changes: [{ key, from, to }]`）并写日志。
+- 英文文案之后由评审分支补。

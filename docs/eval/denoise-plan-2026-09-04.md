@@ -1,6 +1,6 @@
 # Eval 去噪方案(v2 已合并实施,2026-09-04)
 
-> v1 草案经过一轮对抗评审;下面是合并后的定稿,与 `packages/eval-a` 实现一致。与 v1 的差别:**N=5 而不是 3;稳定 = 众数唯一且 ≥ 4/5(N=3 时须 3/3)**;noise_floor 定义为每 case 无放回两两动作不同概率的等权平均,self_consistency = 1 − noise_floor(不是平均众数占比);硬不变量同时报按样本与按 case(众数样本),future_leakage 只按 case;有 brain error 的 case 从噪声底排除;`--resume` 遇到样本数不足的旧记录会重做(k=0 走缓存);zai-api t=0 直连保留为旁路诊断,本轮不跑,不作为线上链结论。
+> v1 草案由 Claude 起草,Codex(GPT-5.4)对抗评审见 `.codex-reports/eval-denoise-review.md`;下面是合并后的定稿,与 `packages/eval-a` 实现一致。与 v1 的差别:**N=5 而不是 3;稳定 = 众数唯一且 ≥ 4/5(N=3 时须 3/3)**;noise_floor 定义为每 case 无放回两两动作不同概率的等权平均,self_consistency = 1 − noise_floor(不是平均众数占比);硬不变量同时报按样本与按 case(众数样本),future_leakage 只按 case;有 brain error 的 case 从噪声底排除;`--resume` 遇到样本数不足的旧记录会重做(k=0 走缓存);zai-api t=0 直连保留为旁路诊断,本轮不跑,不作为线上链结论。
 >
 > 实现:`run --samples N`(`|sample|k` 缓存槽,k=0 兼容旧键;repair 键带 sample id;并发上限 4),episode 记 `samples[] / agreement / actions_seen / mode_tie`;report 新增 `self_consistency / noise_floor / unstable_cases`,动作类指标只在稳定 case 上算;compare 只比两边都稳定的 case 并标注噪声底。测试 `test/sampling.test.ts`。
 >
@@ -62,7 +62,7 @@
 
 - 不改 gateway 的 brain 实现(线上仍 pi);不动 cases/v1 内容;不把众数机制搬到线上(线上一次判断就是一次,降噪靠 prompt/playbook 措辞与触发器,不靠多问)。
 
-## 5. 请 外部评审对抗的问题
+## 5. 请 Codex 对抗的问题
 
 1. 众数 + 2/3 门槛是否合理?N=3 够不够(N=5 成本 ×5/3)?
 2. 硬不变量按样本统计会不会让 hallucinated_numbers 之类被放大到没法读?是否应该同时报"按众数样本"的数字?

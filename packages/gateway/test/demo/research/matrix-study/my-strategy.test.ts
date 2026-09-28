@@ -1,6 +1,6 @@
 // §9.53 B 自选策略行:「我的策略」某版本 IR 作矩阵的行(资产 × 周期 × 两臂),adopt 出来是该策略的新版本。零网络、零模型(判断用桩)。
 import { describe, expect, it } from 'vitest';
-import type { StrategyIR } from '@trading-swarm/contracts';
+import type { StrategyIR } from '@trade-gate/contracts';
 import { openStateDb } from '../../../../src/state-db.js';
 import { irVariants } from '../../../../src/demo/research/batch/families.js';
 import { MatrixStudyService } from '../../../../src/demo/research/matrix-study/service.js';

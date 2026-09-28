@@ -10,17 +10,22 @@
  *   篮子净值 = 两腿逐根相加;基准同为 50/50 买入持有)。行情缺失的资产 status=data_missing,写原因,不补造。
  * 执行:默认执行器 = engine v4(research-spot-ir-v4,见 engine.ts);IR 带 order 块时走订单周期执行核(orders/executor.ts,research-orders-v1),
  *   模块加载时注册(setAssetExecutor 可替换,传 null 恢复缺省)。
+ * 执行层(2026-09-27):下单决策时刻按与实盘同一套执行层阈值挡单(execution-gate.ts)。阈值 = job.execution_thresholds,不传时取
+ *   service 注入的 workflow 当前值,拿不到就用 DEFAULT_EXECUTION_THRESHOLDS,不会悄悄变成不挡。用到的阈值存在每个 execution_gate.thresholds 里。
+ *   传 null 就不按执行层挡单,execution_gate 写 null。以前的报告没有这个字段,读出来当 null,不重新计算。
  * 永续(order.market=perp):每个资产(含篮子两腿)改从 data/perp-market.ts 取 OKX SWAP 成交价 K 线 + 标记价 + 资金费 + 分档,
  *   数据集以 BTC-USDT-SWAP 形式落库(market=perp,不与现货数据集混用);资金费分界与重叠期偏差写进 asset.data.perp 与 warnings。
  */
 import { randomUUID } from 'node:crypto';
-import { validate, type BacktestAsset, type BacktestEquityPoint, type BacktestMetrics, type BacktestReport, type BacktestReportSummary, type BacktestScore, type BacktestSegmentMetrics, type BacktestTrade, type BacktestPlan, type BacktestPlanStats, type OrderGateParams, type ResearchBar, type ResearchDataset, type ResearchExecution, type ResearchRequest, type StrategyIR } from '@trading-swarm/contracts';
+import { validate, type ExecutionGateStats, type BacktestAsset, type BacktestEquityPoint, type BacktestMetrics, type BacktestReport, type BacktestReportSummary, type BacktestScore, type BacktestSegmentMetrics, type BacktestTrade, type BacktestPlan, type BacktestPlanStats, type OrderGateParams, type ResearchBar, type ResearchDataset, type ResearchExecution, type ResearchRequest, type StrategyIR } from '@trade-gate/contracts';
 import type { ResearchStore } from './store.js';
 import type { ResearchService } from './service.js';
 import { emitBacktestReport, type BacktestReportMeta } from './hooks.js';
 import { runReplay, FAST_ENGINE_VERSION, viewBars, type SignalCache } from './engine.js';
 import { checkIR, irWarmup, irHistoryBars, timeframeMillis, resolveRequest } from './strategy.js';
 import { orderGateFor } from './order-gate.js';
+import { DEFAULT_EXECUTION_THRESHOLDS, floorModeOf, researchThresholds, type ExecutionThresholds } from '../execution-policy.js';
+import { emptyExecutionGate, mergeExecutionGate } from './execution-gate.js';
 import { prewarmPineSeries } from './primitives/pine.js';
 import { STRATEGY_SPEC_VERSION } from './strategy-spec.js';
 import { hash } from './primitives.js';
@@ -62,6 +67,8 @@ export interface BacktestJob {
   run_ids?: string[];
   execution?: Partial<ResearchExecution>;
   timeout_ms?: number;
+  /** 执行层阈值快照:不传 = service 注入的 workflow 当前值(拿不到用 DEFAULT_EXECUTION_THRESHOLDS);null = 不按执行层挡单 */
+  execution_thresholds?: ExecutionThresholds | null;
 }
 export interface BacktestDeps {
   store: ResearchStore;
@@ -79,7 +86,7 @@ export interface BacktestDeps {
 export interface AssetPerpInput { mark: (OrderBar | null)[]; funding: FundingSeries; tiers: MmrTier[]; max_lever: number | null }
 export interface AssetRunInput { judge?: import('./judge/index.js').JudgeRuntime; candidate_filter?: import('./orders/index.js').OrderPathInput['candidate_filter']; on_candidate?: import('./orders/index.js').OrderPathInput['on_candidate']; symbol: string; dataset: ResearchDataset; dataset_id: string; ir: StrategyIR; execution: ResearchExecution; order_gate: OrderGateParams; timeframe: string; from_ms: number; to_ms: number; cache: SignalCache; check: () => void; /** 订单执行核用:taker/maker 费率(永续缺省 0.05%/0.02%) */ fees?: { taker: string; maker?: string }; /** 永续:与 dataset.bars 下标对齐的标记价 + 资金费 + 分档 */ perp?: AssetPerpInput | null; segment_of?: (at: number) => 'in_sample' | 'out_of_sample' }
 export interface AssetRunEquity { at: number; equity: number; holdings: number; exposure: number }
-export interface AssetRunOutput { candidates?: import('./judge/filter.js').CandidateLog[]; status: 'completed' | 'failed'; error: string | null; engine_version: string; equity: AssetRunEquity[]; trades: Omit<BacktestTrade, 'segment'>[]; fees: number; plans?: BacktestPlan[]; plan_stats?: BacktestPlanStats | null; warnings?: string[] }
+export interface AssetRunOutput { candidates?: import('./judge/filter.js').CandidateLog[]; status: 'completed' | 'failed'; error: string | null; engine_version: string; equity: AssetRunEquity[]; trades: Omit<BacktestTrade, 'segment'>[]; fees: number; plans?: BacktestPlan[]; plan_stats?: BacktestPlanStats | null; warnings?: string[]; /** 执行层统计(order_gate 带 execution_thresholds 时执行器给) */ execution_gate?: ExecutionGateStats | null }
 export type AssetExecutor = (input: AssetRunInput) => Promise<AssetRunOutput>;
 // 模块加载即注册订单周期执行核(IR 带 order 块时);测试可替换,传 null 恢复这个缺省注册
 let pickExecutor: (ir: StrategyIR) => AssetExecutor | null = pickOrderExecutor;
@@ -102,7 +109,7 @@ export const engineExecutor: AssetExecutor = async (x) => {
   });
   const warnings: string[] = [];
   if (r.status === 'completed' && arm.equity.length && Number(arm.equity.at(-1)!.holdings) > 0) warnings.push(`${x.symbol} 期末仍有持仓,按最后收盘价盯市计入净值,不计入已平仓统计`);
-  return { status: r.status === 'completed' ? 'completed' : 'failed', error: r.error, engine_version: r.engine_version, equity: arm.equity.map((e) => ({ at: e.at, equity: Number(e.equity), holdings: Number(e.holdings), exposure: e.exposure })), trades, fees: Number(arm.metrics.fees), warnings };
+  return { status: r.status === 'completed' ? 'completed' : 'failed', error: r.error, engine_version: r.engine_version, equity: arm.equity.map((e) => ({ at: e.at, equity: Number(e.equity), holdings: Number(e.holdings), exposure: e.exposure })), trades, fees: Number(arm.metrics.fees), warnings, ...(arm.execution_gate ? { execution_gate: arm.execution_gate } : {}) };
 };
 export function normalizeSymbol(s: string): string {
   const base = s.replace(/^okx:(spot|perp):/i, '').toUpperCase().replace(/-SWAP$/, '').replace(/[-/:_]/g, '');
@@ -154,7 +161,7 @@ export function okxLoader(deps: BacktestDeps): BarsLoader {
         if (first !== null && first > window.from_ms && first < window.to_ms) { bars = await fetchRange({ from_ms: first, to_ms: window.to_ms }); note = `OKX 最早数据 ${new Date(first).toISOString().slice(0, 10)}`; }
       }
     }
-    return { bars, source: `okx:spot:${timeframe}:public candles${have.length ? '(部分来自已存数据集)' : ''}`, ...(note ? { note } : {}) };
+    return { bars, source: `okx:spot:${timeframe}:public candles${have.length ? ' (partly from the stored dataset)' : ''}`, ...(note ? { note } : {}) };
   };
 }
 /** 首根探针:OKX 带 since 的 K 线请求在上市前返回空,since=0 又会给最近一根,所以在 [from, to] 上二分「since 处有没有 bar」,约 log2(根数) 次请求。 */
@@ -255,7 +262,14 @@ export async function runBacktestReport(deps: BacktestDeps, job: BacktestJob, si
   const checked = checkIR(ir, job.timeframe);
   if (!checked.ok) throw Error('SCHEMA_MISMATCH:strategy_ir_checks_failed:' + checked.checks.filter((c) => !c.ok).map((c) => c.name).join(','));
   const resolved = resolveRequest({ idempotency_key: 'x', dataset_id: 'x', study_id: 'x', strategy_ir: ir, execution: { ...DEFAULT_EXECUTION, ...job.execution }, from_ms: 0, to_ms: 1, arms: ['a_rules'], repeats: 1, max_model_calls: 0, timeout_ms: 1000, purpose: 'development', acknowledge_adaptive_search: false });
-  const execution = resolved.execution, order_gate = orderGateFor(ir), initial = Number(execution.initial_cash);
+  // 执行层阈值(见文件头),传 null 就不挡。阈值放进 order_gate 交给执行器,engine v4 和订单执行核都从 order_gate 读
+  // 冻结成契约里的 5 个数(模式按数值表达,ATR 模式的倍数折算到回测周期,见 researchThresholds)
+  const rawTh: ExecutionThresholds | null = job.execution_thresholds === undefined ? { ...(deps.service.executionThresholds?.() ?? DEFAULT_EXECUTION_THRESHOLDS) } : job.execution_thresholds;
+  const th: ExecutionThresholds | null = rawTh ? researchThresholds(rawTh, step) : null;
+  const floorNote = rawTh?.stop_floor_mode === 'atr' && rawTh.min_stop_atr > 0 && rawTh.stop_floor_atr_tf !== job.timeframe ? `(实盘按 ${rawTh.min_stop_atr}×${rawTh.stop_floor_atr_tf} ATR,回测只有 ${job.timeframe} 的 ATR,按波动随时间开根号折成 ${th!.min_stop_atr} 倍)` : '';
+  const execution = resolved.execution, order_gate = th ? { ...orderGateFor(ir), execution_thresholds: th } : orderGateFor(ir), initial = Number(execution.initial_cash);
+  /** 某个资产的执行层统计。有阈值但执行器没给统计时(测试里替换的执行器)记成 0 个候选,不写 null,null 只表示没按执行层挡单 */
+  const gateOf = (out: AssetRunOutput): ExecutionGateStats | null => (th ? out.execution_gate ?? emptyExecutionGate(th) : null);
   // 订单块:市场/杠杆/方向;永续手续费缺省 taker 0.05% / maker 0.02%(只在调用方显式给 fee_rate 时跟随),现货沿用 execution.fee_rate
   const perp = ir.order?.market === 'perp', leverage = perp ? ir.order!.leverage ?? 1 : 1, shortSide = !!ir.order && ir.order.direction !== 'long';
   const fees = ir.order ? (perp ? { taker: job.execution?.fee_rate ?? '0.0005', maker: job.execution?.fee_rate ?? '0.0002' } : { taker: execution.fee_rate }) : undefined;
@@ -316,7 +330,7 @@ export async function runBacktestReport(deps: BacktestDeps, job: BacktestJob, si
     engines.add(out.engine_version); warnings.push(...(out.warnings ?? []));
     if (out.status !== 'completed') { assets.push(missingAsset(key, label, 'single', [p.symbol], 'failed', out.error ?? 'failed')); continue; }
     const bench = benchmarkValues(p.dataset!.bars, p.start!, p.end!, initial, execution);
-    const r = buildAsset(key, label, 'single', [p.symbol], samplesOf(out.equity, bench), out.trades, out.fees, initial, split, { from_ms: at(p, p.start!), to_ms: at(p, p.end!) }, provenance(p, p.start!), { engine_version: out.engine_version, strategy_capacity: capacityOf(p, p.start!, p.end!, out, bench), ...(out.plans ? { plans: out.plans } : {}), ...(out.plan_stats !== undefined ? { plan_stats: out.plan_stats } : {}) });
+    const r = buildAsset(key, label, 'single', [p.symbol], samplesOf(out.equity, bench), out.trades, out.fees, initial, split, { from_ms: at(p, p.start!), to_ms: at(p, p.end!) }, provenance(p, p.start!), { engine_version: out.engine_version, strategy_capacity: capacityOf(p, p.start!, p.end!, out, bench), ...(out.plans ? { plans: out.plans } : {}), ...(out.plan_stats !== undefined ? { plan_stats: out.plan_stats } : {}), execution_gate: gateOf(out) });
     results.push(r); assets.push(r.asset);
   }
   // 3) BTC+ETH 篮子:两腿各半资金、共同起点(较晚者)与终点(较早者)
@@ -336,7 +350,7 @@ export async function runBacktestReport(deps: BacktestDeps, job: BacktestJob, si
         const [a, b] = outs as [typeof outs[0], typeof outs[0]], bm = new Map(b.out.equity.map((x) => [x.at, x]));
         const samples: EquitySample[] = a.out.equity.filter((x) => bm.has(x.at)).map((x) => { const y = bm.get(x.at)!, eq = x.equity + y.equity, ba = a.bench.get(x.at), bb = b.bench.get(x.at); return { at: x.at, equity: eq, exposure: eq > 0 ? (x.holdings + y.holdings) / eq : 0, benchmark: ba !== undefined && bb !== undefined ? ba + bb : null, positions: (x.holdings > 0 ? 1 : 0) + (y.holdings > 0 ? 1 : 0) }; });
         const trades = [...a.out.trades, ...b.out.trades].sort((x, y) => x.exit_at - y.exit_at || x.entry_at - y.entry_at);
-        const r = buildAsset(BASKET_KEY, 'BTC+ETH', 'basket', ['BTCUSDT', 'ETHUSDT'], samples, trades, a.out.fees + b.out.fees, initial, split, { from_ms: from, to_ms: to }, null, { engine_version: a.out.engine_version, per_symbol: outs.map((o, k) => { const eqAt = (at: number) => o.out.equity.find((x) => x.at === at)?.equity ?? half, pnl = eqAt(samples.at(-1)?.at ?? to) - eqAt(samples[0]?.at ?? from); return { symbol: legs[k]!.symbol, trades: o.out.trades.length, pnl, win_rate: o.out.trades.length ? o.out.trades.filter((t) => t.pnl > 0).length / o.out.trades.length : null, contribution: pnl / initial }; }) as BacktestAsset['per_symbol'], strategy_capacity: basketCapacity(legs.map((l, k) => capacityOf(l!, l!.dataset!.bars.findIndex((b) => b.close_time >= from), l!.dataset!.bars.findIndex((b) => b.close_time >= to), outs[k]!.out, outs[k]!.bench))) });
+        const r = buildAsset(BASKET_KEY, 'BTC+ETH', 'basket', ['BTCUSDT', 'ETHUSDT'], samples, trades, a.out.fees + b.out.fees, initial, split, { from_ms: from, to_ms: to }, null, { engine_version: a.out.engine_version, per_symbol: outs.map((o, k) => { const eqAt = (at: number) => o.out.equity.find((x) => x.at === at)?.equity ?? half, pnl = eqAt(samples.at(-1)?.at ?? to) - eqAt(samples[0]?.at ?? from); return { symbol: legs[k]!.symbol, trades: o.out.trades.length, pnl, win_rate: o.out.trades.length ? o.out.trades.filter((t) => t.pnl > 0).length / o.out.trades.length : null, contribution: pnl / initial }; }) as BacktestAsset['per_symbol'], strategy_capacity: basketCapacity(legs.map((l, k) => capacityOf(l!, l!.dataset!.bars.findIndex((b) => b.close_time >= from), l!.dataset!.bars.findIndex((b) => b.close_time >= to), outs[k]!.out, outs[k]!.bench))), execution_gate: th ? mergeExecutionGate(outs.map((o) => gateOf(o.out))) : null });
         results.push(r); assets.push(r.asset);
       }
     }
@@ -348,6 +362,12 @@ export async function runBacktestReport(deps: BacktestDeps, job: BacktestJob, si
   }
   if (perp) warnings.push('永续维持保证金分档用的是 OKX 当前值,不是历史值;强平按逐仓、标记价判定');
   if (shortSide) warnings.push(`策略${ir.order!.direction === 'both' ? '含做空' : '做空'}:持有基准仍是买入持有(做多),超额收益里含方向差,不是同方向对照`);
+  // 报告级执行层 = 各单资产相加(不含篮子,篮子两腿与单资产重复)
+  const execution_gate = th ? mergeExecutionGate(results.filter((r) => r.asset.kind === 'single').map((r) => r.asset.execution_gate)) ?? emptyExecutionGate(th) : null;
+  const floorMode = th ? floorModeOf(th) : 'pct';
+  const floorText = !th ? '' : floorMode === 'atr' ? `止损不小于 ${th.min_stop_atr} 倍 ATR${floorNote}、不超过 ${th.max_stop_pct}%` : floorMode === 'pct' ? `止损距离要在 ${th.min_stop_pct}% 到 ${th.max_stop_pct}% 之间` : `止损距离要在 ${th.min_stop_pct}% 到 ${th.max_stop_pct}% 之间,且不小于 ${th.min_stop_atr} 倍 ATR`;
+  if (execution_gate) warnings.push(`这份回测按实盘的执行层阈值挡单:${floorText},扣掉 ${th!.round_trip_cost_bps}bps 往返成本后盈亏比不低于 ${th!.min_net_rr}。各资产一共检查 ${execution_gate.checked} 个候选,挡掉 ${execution_gate.rejected} 个`);
+  else warnings.push('这份回测没有按实盘的执行层阈值挡单,回测里能下的单到实盘可能下不出去');
   if (ir.order) warnings.push(`订单周期执行核(${[...engines][0] ?? 'research-orders-v1'}):分段、基准与 analyzer 指标口径不变;计划统计见各资产 plan_stats`);
   // 4) 评分与报告
   const primary = results.find((r) => r.asset.key === primarySymbol) ?? results[0];
@@ -361,7 +381,7 @@ export async function runBacktestReport(deps: BacktestDeps, job: BacktestJob, si
     id, created_at, engine_version: [...engines][0] ?? FAST_ENGINE_VERSION, title: (job.title ?? ir.label).slice(0, 300), description: (job.description ?? ir.description ?? '').slice(0, 4000), strategy_ir_hash: ir_hash, strategy_ir: ir, timeframe: job.timeframe,
     window: win, segments: [{ name: 'in_sample', from_ms: win.from_ms, to_ms: split }, { name: 'out_of_sample', from_ms: split + 1, to_ms: win.to_ms }],
     execution: { initial_cash: initial, fee_rate: Number(fees?.taker ?? execution.fee_rate), slippage_bps: Number(execution.slippage_bps), sizing_mode: (volTargetOf(ir) ? `波动率目标仓位(目标年化 ${Math.round(volTargetOf(ir)!.target_vol * 100)}%:每笔 × min(1, 目标/入场前实现波动));` : '') + (ir.order ? `${execution.sizing_mode === 'unit_notional' ? '每笔首腿保证金 = 100% 可用权益' : `每笔首腿保证金 = ${Number(execution.max_allocation) * 100}% 权益`}${perp ? `,永续 ${leverage} 倍杠杆(名义 = 保证金 × ${leverage}),逐仓` : ',现货不加杠杆'};加仓腿等权分摊首腿额度${perp ? `;吃单 ${Number(fees!.taker) * 100}% / 挂单 ${Number(fees!.maker) * 100}%` : ''}` : execution.sizing_mode === 'unit_notional' ? 'unit_notional(每笔 100% 可用资金,现货不加杠杆;和买入持有同一敞口口径)' : `${execution.sizing_mode ?? 'risk_fraction'}(每笔风险 ${Number(execution.risk_fraction) * 100}% 权益,单笔最多 ${Number(execution.max_allocation) * 100}% 资金)`), fill_model: ir.order ? ORDER_FILL_MODEL : FILL_MODEL, basket_weighting: BASKET_WEIGHTING, market: perp ? 'perp' : 'spot', leverage, view_bars: `每根决策只看最近 ${viewBars(ir, resolved.policy, step)} 根已收盘 K 线(6×预热,500–5000);统一预热 ${WARMUP_BARS} 根` },
-    primary_key: primary?.asset.key ?? primarySymbol, assets, score: sc, run_ids: (job.run_ids ?? []).slice(0, 32), inquiry_id: job.meta.inquiry_id, session_id: job.meta.session_id, strategy_id: null, strategy_version: null, warnings: [...new Set(warnings)].slice(0, 64).map((w) => w.slice(0, 4000)),
+    primary_key: primary?.asset.key ?? primarySymbol, assets, score: sc, run_ids: (job.run_ids ?? []).slice(0, 32), inquiry_id: job.meta.inquiry_id, session_id: job.meta.session_id, strategy_id: null, strategy_version: null, warnings: [...new Set(warnings)].slice(0, 64).map((w) => w.slice(0, 4000)), execution_gate,
   } as unknown as BacktestReport;
   const checkedReport = validate('research-backtest', report);
   if (!checkedReport.ok) throw Error('SCHEMA_MISMATCH:backtest_report:' + checkedReport.errors.slice(0, 5).join(';'));
@@ -380,17 +400,24 @@ export function summaryOf(r: BacktestReport): BacktestReportSummary {
   if (eq.length && (eq.length - 1) % stride !== 0) spark.push(eq.at(-1)!.pnl_pct);
   return { id: r.id, created_at: r.created_at, title: r.title, timeframe: r.timeframe, primary_key: r.primary_key, strategy_ir_hash: r.strategy_ir_hash, strategy_id: r.strategy_id, strategy_version: r.strategy_version, score: r.score, metrics: p?.metrics ?? null, sparkline: spark.slice(0, 120) };
 }
+/** 读报告:2026-09-27 之前的报告没有 execution_gate,读出来当 null,表示当时没按执行层挡单,不重新计算。 */
+function loadReport(json: string): BacktestReport {
+  const r = JSON.parse(json) as BacktestReport;
+  r.execution_gate ??= null;
+  for (const a of r.assets ?? []) a.execution_gate ??= null;
+  return r;
+}
 export function getBacktestReport(store: ResearchStore, id: string): BacktestReport | null {
   const row = store.db.prepare('SELECT report_json FROM research_backtests WHERE id=?').get(id) as { report_json: string } | undefined;
-  return row ? (JSON.parse(row.report_json) as BacktestReport) : null;
+  return row ? loadReport(row.report_json) : null;
 }
 export function reportByKey(store: ResearchStore, key: string): BacktestReport | null {
   const row = store.db.prepare('SELECT report_json FROM research_backtests WHERE idempotency_key=?').get(key) as { report_json: string } | undefined;
-  return row ? (JSON.parse(row.report_json) as BacktestReport) : null;
+  return row ? loadReport(row.report_json) : null;
 }
 export function reportForRun(store: ResearchStore, run_id: string): BacktestReport | null {
   const row = store.db.prepare('SELECT report_json FROM research_backtests WHERE run_id=? ORDER BY created_at DESC LIMIT 1').get(run_id) as { report_json: string } | undefined;
-  return row ? (JSON.parse(row.report_json) as BacktestReport) : null;
+  return row ? loadReport(row.report_json) : null;
 }
 export function listBacktestReports(store: ResearchStore, q: { strategy_id?: string | null; limit?: number } = {}): BacktestReportSummary[] {
   const limit = Math.max(1, Math.min(200, Math.floor(q.limit ?? 50)));

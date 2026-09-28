@@ -1,18 +1,18 @@
 # Demo 运行时(2026-09-03)—— 影子判断 + Binance Demo Trading 执行
 
 > 目的:在不碰真钱、不依赖 Binance 自建 MCP 客户端的前提下,把「事件触发 → JudgmentEpisode → 有限判断 → 策略状态机 → (演示账户)执行 → 回放」整条链跑给人看。
-> 口径来自 `~/Desktop/trading-swarm-eval/harness-assessment-and-eval-plan.md`(§4/§5/§9/§11):Agent 只在触发时读新鲜状态、维护 thesis、输出有限判断;数量/风险/执行由代码决定;每次判断可回放。
-> **不是 A2**:六记录状态机/plan 物化/durable 队列不在这里做;外部评审 NO-GO 的 P0 仍然挡着 live。本运行时只允许两种执行后端:`paper`(进程内模拟)与 `demo`(`https://demo-fapi.binance.com`,币安官方演示环境,假钱)。
+> 口径来自 `<repo>/harness-assessment-and-eval-plan.md`(§4/§5/§9/§11):Agent 只在触发时读新鲜状态、维护 thesis、输出有限判断;数量/风险/执行由代码决定;每次判断可回放。
+> **不是 A2**:六记录状态机/plan 物化/durable 队列不在这里做;Codex NO-GO 的 P0 仍然挡着 live。本运行时只允许两种执行后端:`paper`(进程内模拟)与 `demo`(`https://demo-fapi.binance.com`,币安官方演示环境,假钱)。
 
 ## 1. 进程与包
 
 | 进程 | 包 | 职责 |
 |---|---|---|
 | gateway(Node 24) | `packages/gateway/src/demo/` | 行情采集(公共 fapi,无 key)、调度(K 线收盘 / 手动)、EpisodeBuilder、ContextBuilder、大脑适配(pi/GLM 或 claude CLI)、Strategy reducer、纸面账户、HTTP API + SSE、`state.sqlite` 新表 |
-| tswarm-demo-exec(Rust,exec-core 的 bin) | `crates/exec-core/src/bin/tswarm-demo-exec.rs` | **唯一持有 demo API key 的进程**;stdin/stdout NDJSON;base URL 硬编码 `FAPI_DEMO`,拒绝任何覆盖;place 必须带 clientOrderId |
+| tgate-demo-exec(Rust,exec-core 的 bin) | `crates/exec-core/src/bin/tgate-demo-exec.rs` | **唯一持有 demo API key 的进程**;stdin/stdout NDJSON;base URL 硬编码 `FAPI_DEMO`,拒绝任何覆盖;place 必须带 clientOrderId |
 | webui(Vite+React) | `packages/webui/` | 单页:agent 时间线(人话)+ 策略卡 + 账户卡 + 迷你 K 线;dev 时 `/api` 代理到 gateway |
 
-gateway 监听 `127.0.0.1:18800`(设计 §14 默认口)。凭证文件 `~/.trading-swarm/secrets/apikey-demo.json`(`{"api_key":"…","api_secret":"…"}`,0600),只有 Rust 读。没有这个文件 → 自动落到 `paper` 后端,UI 顶部 chip 显示「纸面模拟」而不是「Demo Trading」。
+gateway 监听 `127.0.0.1:18800`(设计 §14 默认口)。凭证文件 `~/.trade-gate/secrets/apikey-demo.json`(`{"api_key":"…","api_secret":"…"}`,0600),只有 Rust 读。没有这个文件 → 自动落到 `paper` 后端,UI 顶部 chip 显示「纸面模拟」而不是「Demo Trading」。
 
 ## 2. 领域对象(gateway 本地,JSON,snake_case,金额十进制字符串,时间 unix 毫秒)
 
@@ -99,9 +99,9 @@ interface LoopView { running: boolean; paused: boolean; halted: boolean; every_m
 | POST | `/api/intents/:id/approve` / `reject` | 手动审批模式下使用 |
 | GET | `/api/events` | **SSE**:`event:` 之一 `loop.state`(LoopView)/`episode.started`({id,trigger})/`episode.finished`(EpisodeSummary)/`strategy.changed`(Strategy)/`intent.changed`(DemoIntent)/`account.updated`(AccountView)/`market.tick`(MarketView)/`log`(log 行);`data:` 为 JSON;每 15s 一条 `: ping` |
 
-## 4. tswarm-demo-exec NDJSON 协议(gateway ↔ Rust,stdin 请求一行,stdout 响应一行)
+## 4. tgate-demo-exec NDJSON 协议(gateway ↔ Rust,stdin 请求一行,stdout 响应一行)
 
-请求 `{"id":<int>,"op":"<op>","params":{...}}`;响应 `{"id":<int>,"ok":true,"result":<json>}` 或 `{"id":<int>,"ok":false,"error":{"kind":"<local_reject|unauthorized|clock_skew|rate_limited|transport|rejected>","message":"…","code":<int?>,"ambiguous":<bool>}}`。启动后先自发一行 `{"id":0,"ok":true,"result":{"hello":"tswarm-demo-exec","base_url":"https://demo-fapi.binance.com","api_key_masked":"…","server_time_offset_ms":…}}`。stderr 是日志。
+请求 `{"id":<int>,"op":"<op>","params":{...}}`;响应 `{"id":<int>,"ok":true,"result":<json>}` 或 `{"id":<int>,"ok":false,"error":{"kind":"<local_reject|unauthorized|clock_skew|rate_limited|transport|rejected>","message":"…","code":<int?>,"ambiguous":<bool>}}`。启动后先自发一行 `{"id":0,"ok":true,"result":{"hello":"tgate-demo-exec","base_url":"https://demo-fapi.binance.com","api_key_masked":"…","server_time_offset_ms":…}}`。stderr 是日志。
 
 | op | params | result |
 |---|---|---|
@@ -125,7 +125,7 @@ interface LoopView { running: boolean; paused: boolean; halted: boolean; every_m
 | `exchange_info_symbols` | `{}` | 从 `/fapi/v1/exchangeInfo` 抽取,只留 `contractType=="PERPETUAL"` 且 `quoteAsset=="USDT"` 的行,紧凑数组 `[{symbol, status, price_precision, qty_precision, step_size, tick_size, min_qty, min_notional}]`(给符号选择器用,~500 行) |
 | `leverage_bracket` | `{symbol}` | `GET /fapi/v1/leverageBracket` 原样(杠杆分层/维持保证金率) |
 
-硬规则:base URL 只能是 `FAPI_DEMO`;凭证只从 `~/.trading-swarm/secrets/apikey-demo.json` 或 env `TG_DEMO_API_KEY`/`TG_DEMO_API_SECRET` 读;不实现任何 sapi/划转/提币;`place` 的 `new_client_order_id` 缺失直接拒;transport 类错误的响应 `ambiguous=true`(发送后不确定),gateway 据此标 `unknown` 并用 `get_order` 对账,**不重发**。
+硬规则:base URL 只能是 `FAPI_DEMO`;凭证只从 `~/.trade-gate/secrets/apikey-demo.json` 或 env `TG_DEMO_API_KEY`/`TG_DEMO_API_SECRET` 读;不实现任何 sapi/划转/提币;`place` 的 `new_client_order_id` 缺失直接拒;transport 类错误的响应 `ambiguous=true`(发送后不确定),gateway 据此标 `unknown` 并用 `get_order` 对账,**不重发**。
 
 ## 5. 判断循环(gateway)
 
@@ -148,7 +148,7 @@ interface LoopView { running: boolean; paused: boolean; halted: boolean; every_m
 TG_DEMO_BRAIN=stub ./start-demo.sh  # 不调模型(桩大脑,永远 NO_TRADE)
 TG_DEMO_BRAIN=claude ./start-demo.sh # 用 Claude Code 订阅当大脑(耗额度)
 ```
-demo key:https://demo.binance.com → API 管理 → 建 key → 写 `~/.trading-swarm/secrets/apikey-demo.json`(`{"api_key":"…","api_secret":"…"}`,`chmod 600`)。不要用主账户 key。
+demo key:https://demo.binance.com → API 管理 → 建 key → 写 `~/.trade-gate/secrets/apikey-demo.json`(`{"api_key":"…","api_secret":"…"}`,`chmod 600`)。不要用主账户 key。
 
 ## 7. 实测记录
 

@@ -1,4 +1,4 @@
-import type { StrategyJudge, JudgeStateV1 } from '@trading-swarm/contracts';
+import type { StrategyJudge, JudgeStateV1 } from '@trade-gate/contracts';
 import { usdUnits, usdString } from './store.js';
 const SCALE=1_000_000_000_000n;
 export const LIVE_ONLY_FIELDS = ['features.ob_imbalance_05','features.ob_wall_up','features.ob_wall_down','features.spread_bps','features.liq_long_5m','features.liq_short_5m'] as const;

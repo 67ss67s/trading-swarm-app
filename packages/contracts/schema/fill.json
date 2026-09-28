@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://trading-swarm.dev/schema/fill.json",
+  "$id": "https://trade-gate.dev/schema/fill.json",
   "title": "Fill",
   "description": "成交观察值(设计 §5.1),不可变;(account, exchange_order_id, trade_id) 唯一。",
   "type": "object",

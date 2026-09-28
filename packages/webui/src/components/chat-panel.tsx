@@ -29,12 +29,14 @@ import { ChatSessionBar, readSavedSession, SESSION_KEY } from '@/components/chat
 import { onAskAgent, takePendingQuestion } from '@/lib/ask-agent';
 import { fmtClock, useNow } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { t } from '@/lib/i18n';
-import type { ChatMessage, ChatToolCall, QueueView } from '@/api/types';
+import { t, quote } from '@/lib/i18n';
+import type { BotRole, ChatMessage, ChatToolCall, QueueView } from '@/api/types';
+import { chatStateText, roleOfSession, rolePrompts, useAgents } from '@/api/agents';
+import { st } from '@/lib/server-text-en';
 
 type Tab = 'chat' | 'feed';
 
-const NARRATION_PREFIX = '旁白 · ';
+const NARRATION_PREFIX = '旁白 · '; // i18n-ignore(后端消息前缀,只做匹配)
 
 function msgKind(m: ChatMessage): 'chat' | 'narration' {
   if (m.kind) return m.kind;
@@ -98,7 +100,7 @@ function ToolCallPill({ call }: { call: ChatToolCall }) {
           <Icon className="size-2.5" />
         </span>
         <span className={cn('shrink-0 font-medium', a.ok ? 'text-foreground/90' : 'text-destructive')}>{a.verb}</span>
-        {a.detail ? <span className="num min-w-0 truncate text-muted-foreground">{a.detail}</span> : null}
+        {a.detail ? <span className="num min-w-0 truncate text-muted-foreground">{st(a.detail)}</span> : null}
         {!a.ok ? <span className="shrink-0 text-destructive">· {t('失败')}</span> : null}
         <ChevronRight className={cn('ml-auto size-3 shrink-0 text-muted-foreground opacity-40 transition group-hover:opacity-100', open && 'rotate-90 opacity-100')} />
       </button>
@@ -142,7 +144,7 @@ function Welcome({ prompts, onPick }: { prompts: SuggestedPrompt[]; onPick: (tex
               </span>
               <span className="min-w-0">
                 <span className="block text-[12.5px] font-medium text-foreground">{p.title}</span>
-                <span className="line-clamp-2 block text-[11.5px] text-muted-foreground">「{p.text}」</span>
+                <span className="line-clamp-2 block text-[11.5px] text-muted-foreground">{quote(p.text)}</span>
                 <span className="mt-0.5 block text-[10.5px] text-muted-foreground/80">→ {p.hint}</span>
               </span>
             </button>
@@ -150,6 +152,30 @@ function Welcome({ prompts, onPick }: { prompts: SuggestedPrompt[]; onPick: (tex
         })}
       </div>
       <p className="mt-2 text-[10.5px] text-muted-foreground">{t('点一下填进输入框,改完再发')}</p>
+    </div>
+  );
+}
+
+/** 非研究类 agent 的空态:它是谁(tagline)+ 三四个它做得到的起手问题 */
+function AgentWelcome({ name, tagline, prompts, onPick }: { name: string; tagline: string; prompts: string[]; onPick: (text: string) => void }) {
+  return (
+    <div className="mx-auto w-full max-w-2xl py-4 animate-in fade-in duration-300">
+      <div className="mb-3 flex items-start gap-2.5">
+        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+          <Sparkles className="size-4" />
+        </span>
+        <div className="min-w-0">
+          <div className="text-[14px] font-semibold">{t('你在跟 {name} 说话', { name })}</div>
+          {tagline ? <div className="text-[12px] text-muted-foreground">{tagline}</div> : null}
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {prompts.map((q) => (
+          <button key={q} type="button" onClick={() => onPick(q)} className="rounded-full border bg-card px-2.5 py-1 text-left text-[12px] text-muted-foreground transition-colors hover:border-primary/50 hover:bg-primary/5 hover:text-foreground">
+            {q}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -214,12 +240,17 @@ function useStickyScroll(depKey: unknown) {
   return { ref, onScroll, jumpToBottom };
 }
 
-export function ChatPanel({ compact = false }: { compact?: boolean }) {
+/**
+ * `session` 给了 = 受控(楼层对话框:钉死在某个 agent 的规范线程,不画会话条、不写 localStorage);
+ * 不给 = Agent 页用法,会话记本机,会话条里按九个 agent 选。
+ */
+export function ChatPanel({ compact = false, session: fixedSession, hideFeed = false }: { compact?: boolean; session?: string; hideFeed?: boolean }) {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>('chat');
   const [helpOpen, setHelpOpen] = useState(false); // 默认收起(B+ 方案),点 ⓘ 展开
   // v3.8:对话会话(§9.14)。记本机;老网关没有会话接口时 session 参数被忽略,行为同旧版
-  const [session, setSessionState] = useState<string>(readSavedSession);
+  const [savedSession, setSessionState] = useState<string>(readSavedSession);
+  const session = fixedSession ?? savedSession;
   const setSession = (id: string) => {
     setSessionState(id);
     try {
@@ -228,6 +259,11 @@ export function ChatPanel({ compact = false }: { compact?: boolean }) {
       /* ignore */
     }
   };
+  // §9.55:这个会话属于哪个 agent(规范线程);agent 的起手提问与「正在调 xx」都按它来
+  const agentsQ = useAgents();
+  const agentRole: BotRole | null = roleOfSession(session);
+  const agent = agentRole ? agentsQ.data?.agents.find((a) => a.role === agentRole) ?? null : null;
+  const researchy = agentRole === null || agentRole === 'gate_captain' || agentRole === 'strategy_lab';
   const now = useNow(1000);
 
   const chatQ = useQuery({ queryKey: ['chat-messages', 'chat', session], queryFn: () => api.chatMessages(500, 'chat', session) });
@@ -236,6 +272,7 @@ export function ChatPanel({ compact = false }: { compact?: boolean }) {
   const watchlist = overviewQ.data?.workflow.watchlist ?? [];
   const stratQ = useAgentStrategy();
   const prompts = useMemo(() => suggestedPrompts({ watchlist, strategy: stratQ.data ?? null }), [watchlist, stratQ.data]);
+  const agentPrompts = useMemo(() => (agentRole && !researchy ? rolePrompts(agentRole) : null), [agentRole, researchy]);
   const queue = overviewQ.data?.queue ?? null;
 
   // 老网关不认 kind 参数会把旁白一起返回,这里再按 kind 过一遍,两边都对。
@@ -254,7 +291,7 @@ export function ChatPanel({ compact = false }: { compact?: boolean }) {
   const waitingSince = optimistic ? optimistic.at : lastReal?.role === 'user' ? lastReal.at : null;
   const waitingSec = waitingSince ? Math.max(0, Math.round((now - waitingSince) / 1000)) : 0;
   const pending = waitingSince !== null;
-  const hint = pending ? queueHint(queue) : null;
+  const hint = pending ? chatStateText(agent?.chat) || queueHint(queue) : null;
 
   // ---- 输入 / 预填 ----
   const [text, setText] = useState('');
@@ -326,9 +363,9 @@ export function ChatPanel({ compact = false }: { compact?: boolean }) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* 顶栏:tab + 说明开关 + 清空 */}
-      <div className={cn('flex shrink-0 items-center gap-1 border-b px-2', compact ? 'h-7' : 'h-8')}>
-        {(['chat', 'feed'] as Tab[]).map((tk) => (
+      {/* 顶栏:tab + 说明开关 + 清空(楼层对话框自己有 tab,hideFeed 时不画) */}
+      <div className={cn('flex shrink-0 items-center gap-1 border-b px-2', compact ? 'h-7' : 'h-8', hideFeed && 'hidden')}>
+        {(hideFeed ? (['chat'] as Tab[]) : (['chat', 'feed'] as Tab[])).map((tk) => (
           <button
             key={tk}
             type="button"
@@ -363,7 +400,7 @@ export function ChatPanel({ compact = false }: { compact?: boolean }) {
         </div>
       </div>
 
-      {tab === 'chat' ? <ChatSessionBar session={session} onChange={setSession} compact={compact} /> : null}
+      {tab === 'chat' && fixedSession === undefined ? <ChatSessionBar session={session} onChange={setSession} compact={compact} /> : null}
 
       {/* 能力说明 + 快捷提问 */}
       {helpOpen ? (
@@ -384,7 +421,7 @@ export function ChatPanel({ compact = false }: { compact?: boolean }) {
             </>
           ) : null}
           <div className="flex flex-wrap gap-1">
-            {quickPrompts(watchlist).map((q) => (
+            {(agentPrompts ?? quickPrompts(watchlist)).map((q) => (
               <button
                 key={q}
                 type="button"
@@ -406,7 +443,9 @@ export function ChatPanel({ compact = false }: { compact?: boolean }) {
             <>
               {chatQ.isLoading ? <div className="py-10 text-center text-[12px] text-muted-foreground">{t('加载中…')}</div> : null}
               {!chatQ.isLoading && chatMessages.length === 0 && !optimistic ? (
-                compact ? (
+                agentPrompts ? (
+                  <AgentWelcome name={agent?.name ?? agentRole ?? ''} tagline={agent?.tagline ?? ''} prompts={agentPrompts} onPick={fill} />
+                ) : compact ? (
                   <div className="py-10 text-center text-[12.5px] text-muted-foreground">{t('还没有对话。问问它现在为什么不开单,或者让它看看某个币。')}</div>
                 ) : (
                   <Welcome prompts={prompts} onPick={fill} />
@@ -446,7 +485,17 @@ export function ChatPanel({ compact = false }: { compact?: boolean }) {
 
       {/* 输入区:建议胶囊(有对话后)+ 输入框 + 能力说明 */}
       <div className="shrink-0 border-t">
-      {!compact && tab === 'chat' && (chatMessages.length > 0 || optimistic) ? (
+      {!compact && tab === 'chat' && (chatMessages.length > 0 || optimistic) && agentPrompts ? (
+        <div className="flex items-center gap-1.5 overflow-x-auto px-2 pt-1.5 [scrollbar-width:none]">
+          <span className="shrink-0 text-[10.5px] text-muted-foreground">{t('试试')}</span>
+          {agentPrompts.map((q) => (
+            <button key={q} type="button" onClick={() => fill(q)} className="inline-flex shrink-0 items-center gap-1 rounded-full border bg-card px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground">
+              {q}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {!compact && tab === 'chat' && (chatMessages.length > 0 || optimistic) && !agentPrompts ? (
         <div className="flex items-center gap-1.5 overflow-x-auto px-2 pt-1.5 [scrollbar-width:none]">
           <span className="shrink-0 text-[10.5px] text-muted-foreground">{t('试试')}</span>
           {prompts.map((p) => {
@@ -466,7 +515,8 @@ export function ChatPanel({ compact = false }: { compact?: boolean }) {
           })}
         </div>
       ) : null}
-      <div ref={inputWrapRef} className="flex items-end gap-2 p-2">
+      {/* data-tour:评审版新手引导第 2 步指向输入框 + 发送 */}
+      <div ref={inputWrapRef} className="flex items-end gap-2 p-2" data-tour="chat-input">
         <Textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -476,7 +526,7 @@ export function ChatPanel({ compact = false }: { compact?: boolean }) {
               submit();
             }
           }}
-          placeholder={t('跟 agent 说点什么…(Enter 发送,Shift+Enter 换行)')}
+          placeholder={agent && agentRole !== 'gate_captain' ? t('跟 {name} 说点什么…(Enter 发送,Shift+Enter 换行)', { name: agent.name }) : t('跟 agent 说点什么…(Enter 发送,Shift+Enter 换行)')}
           className={cn('min-h-8 resize-none text-[13px]', compact ? 'h-8' : 'h-16')}
           disabled={send.isPending}
         />
@@ -485,7 +535,7 @@ export function ChatPanel({ compact = false }: { compact?: boolean }) {
           {t('发送')}
         </Button>
       </div>
-      {!compact && (chatMessages.length > 0 || optimistic) ? <div className="-mt-1 px-2.5 pb-1.5 text-[10.5px] text-muted-foreground">{t('能看数据、能开研究、能切策略;下单要你确认')}</div> : null}
+      {!compact && (chatMessages.length > 0 || optimistic) ? <div className="-mt-1 px-2.5 pb-1.5 text-[10.5px] text-muted-foreground">{agentPrompts ? agent?.tagline : t('能看数据、能开研究、能切策略;下单要你确认')}</div> : null}
       </div>
     </div>
   );

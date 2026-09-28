@@ -12,11 +12,11 @@
 // 向后兼容:只有 case 里写了 `visible.gate_env` 才会跑扩展的那几道闸;没写的 case(v1/v2/v3 全部)
 // 与 09-12 之前逐字一致。
 
-import { demo } from '@trading-swarm/gateway';
+import { demo } from '@trade-gate/gateway';
 // `eventBlackoutGate` 还没从 `demo/index.ts` 转出(本轮不动 gateway 源码),只能走 dist 深路径拿。
 // gateway 那边补一行 export 之后,这两个 import 应当换回 `demo.*`。
-import { eventBlackoutGate, EVENT_BLACKOUT_GATE } from '@trading-swarm/gateway/dist/demo/events.js';
-import type { MarketEvent } from '@trading-swarm/gateway/dist/demo/events.js';
+import { eventBlackoutGate, EVENT_BLACKOUT_GATE } from '@trade-gate/gateway/dist/demo/events.js';
+import type { MarketEvent } from '@trade-gate/gateway/dist/demo/events.js';
 import type { EvalCase, GateResult, Judgment, StrategyThread } from './types.js';
 import { featureTfs } from './inputs.js';
 

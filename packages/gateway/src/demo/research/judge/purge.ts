@@ -1,4 +1,4 @@
-import type { StrategyIR } from '@trading-swarm/contracts';
+import type { StrategyIR } from '@trade-gate/contracts';
 import { defaultExpiryBars } from '../orders/fills.js';
 interface Window { from_ms:number; to_ms:number }
 /** 标签成熟至少覆盖挂单等待 + 最大持仓 + 下根执行；无界策略必须另定边界协议。 */

@@ -40,7 +40,7 @@ npm run lab -- --study entry --snapshot docs/research/entry-study-2026-09-12.jso
 npm run lab -- --study params --snapshot docs/research/param-study-2026-09-12.json
 ```
 
-fill使用环境HTTPS代理；请求间隔1s，429/暂时网络故障指数退避，按已覆盖区间幂等续拉并逐页落盘。曾出现429和TLS临时失败，完成后再运行实验；不以失败返回空行情。缓存位于`~/.trading-swarm/demo/klines/`，资金费/研究输出位于`~/.trading-swarm/demo/research-entry/`，trial复用`~/.trading-swarm/demo/lab-trials.sqlite`。失败候选保留，相同实验key不重复记搜索次数；后续新增搜索会提高累计trial和DSR惩罚，历史JSON保持原快照。
+fill使用环境HTTPS代理；请求间隔1s，429/暂时网络故障指数退避，按已覆盖区间幂等续拉并逐页落盘。曾出现429和TLS临时失败，完成后再运行实验；不以失败返回空行情。缓存位于`~/.trade-gate/demo/klines/`，资金费/研究输出位于`~/.trade-gate/demo/research-entry/`，trial复用`~/.trade-gate/demo/lab-trials.sqlite`。失败候选保留，相同实验key不重复记搜索次数；后续新增搜索会提高累计trial和DSR惩罚，历史JSON保持原快照。
 
 入场manifest：`1f6469b3d8f74f8261321d96e475cec500a8f78bf8aa2ba741c1335bffefc18d`；参数manifest：`3df1c35e37b034313c494467973ff65b4817672dfa6706a86d976faa37a9ac0d`。归档JSON包含冻结策略内容/hash、币池、tick、数据SHA256、trial计数、覆盖率、完整统计和固定风险每日曲线：[入场完整结果](entry-study-2026-09-12.json)、[参数完整结果](param-study-2026-09-12.json)。
 

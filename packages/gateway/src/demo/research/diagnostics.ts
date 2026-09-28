@@ -1,4 +1,4 @@
-import type { ResearchArmResult,ResearchDataset,ResearchDiagnostics,ResearchUniverse } from '@trading-swarm/contracts';
+import type { ResearchArmResult,ResearchDataset,ResearchDiagnostics,ResearchUniverse } from '@trade-gate/contracts';
 import { factorDecompose } from './factor.js';
 import { periodsPerYear } from './calendar.js';
 import { decimal,q } from './primitives.js';

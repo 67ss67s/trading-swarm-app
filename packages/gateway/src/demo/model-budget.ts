@@ -9,7 +9,7 @@ export class ModelBudget {
     return { blocked: true, blocked_at: null, reason: '额度暂停记录无效，请人工检查后恢复' };
   }
   observe(text: string): boolean {
-    if (!/(you(?:'|’)ve hit your (?:(?:weekly|daily|usage|[0-9 -]+hour) )?limit|weekly (?:usage )?limit|usage limit (?:reached|exceeded)|out of (?:extra )?usage|insufficient (?:credits|quota)|credit balance is too low)/i.test(text)) return false;
+    if (!/(you(?:'|’)ve hit your (?:(?:weekly|daily|usage|[0-9 -]+hour) )?limit|weekly (?:usage )?limit|usage limit (?:reached|exceeded)|out of (?:extra )?usage|insufficient (?:credits|quota)|quota exceeded|insufficient_quota|额度耗尽|credit balance is too low)/i.test(text)) return false;
     this.state.set(this.key, JSON.stringify({ blocked: true, blocked_at: Date.now(), reason: '模型额度已耗尽，已停止自动尝试；额度恢复后请手动解除' }));
     return true;
   }

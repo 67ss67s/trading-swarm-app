@@ -2,7 +2,7 @@
  * Reference definitions: joshyattridge/smart-money-concepts (MIT); no Pine code copied.
  * Deliberately excludes FVG, liquidity and premium/discount. Confirmation is never backdated.
  */
-import type {ResearchBar,ResearchStructure} from '@trading-swarm/contracts';
+import type {ResearchBar,ResearchStructure} from '@trade-gate/contracts';
 import {define,type PrimitiveContext} from './registry.js';
 export interface Pivot {kind:'high'|'low';index:number;confirmed_index:number;at:number;confirmed_at:number;price:string}
 export interface Break {kind:'bos'|'choch';direction:'up'|'down';index:number;at:number;pivot_index:number;level:string}

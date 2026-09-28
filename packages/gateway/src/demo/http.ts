@@ -1,3 +1,12 @@
+import { publicDemo, configureDemo, visitorContext } from './public-demo.js';
+import { publicGate, runWithDemoContext, publicBody, publicSseFrame, isVisitorRequest, takePrereadBody } from './public-gate.js';
+import { publicChat, newDemoSession, demoSessions, ownsDemoSession } from './public-routes.js';
+import { gatewaySecurity } from './http-security.js';
+import { serveAspSnapshot } from './asp-snapshot.js';
+import { healthView, publicHealthView } from './routes-ops.js';
+import { OpsMonitor } from './ops-monitor.js';
+import { agentCards, agentDetail } from './agent-roster.js';
+import { isBotRole } from './agent-registry.js';
 import { fetchBasis } from './market.js';
 import { setAccountLevel, explainAccountLevelError, ACCT_LV_LABEL, type AcctLv } from './okx-account-mode.js';
 import type { Market } from './types.js';
@@ -22,12 +31,13 @@ import { McpDirectBackend } from './execution-mcp.js';
 import { BRAINS, MODEL_ID_RE } from './workflow.js';
 import { redactDeep } from './trader-feed.js';
 import { JUDGMENT_GRAPH, toMermaid } from './graph.js';
+import { sseHeartbeatMs } from './ops-config.js';
 
 type Handler = (req: http.IncomingMessage, res: http.ServerResponse, url: URL, params: Record<string, string>) => Promise<void>;
 
 function json(res: http.ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' });
-  res.end(JSON.stringify(body));
+  res.end(JSON.stringify(publicBody(res, body)));
 }
 function fail(res: http.ServerResponse, status: number, message: string, code = 'error'): void {
   json(res, status, { error: { code, message } });
@@ -36,16 +46,24 @@ function errStatus(e: unknown): number {
   return (e as { status?: number }).status ?? 500;
 }
 async function readBody(req: http.IncomingMessage): Promise<Record<string, unknown>> {
+  const preread = takePrereadBody(req); // 公网演示闸门为检查访客请求体已先读过(public-gate.ts)
+  if (preread) return preread;
   const chunks: Buffer[] = [];
-  for await (const c of req) chunks.push(c as Buffer);
+  let size = 0;
+  for await (const c of req) {
+    size += Buffer.byteLength(c as Buffer);
+    if (size > 4 * 1024 * 1024) throw Object.assign(new Error('请求体超过 4MiB'), { status: 413 });
+    chunks.push(c as Buffer);
+  }
   const raw = Buffer.concat(chunks).toString('utf8').trim();
   if (!raw) return {};
   return JSON.parse(raw) as Record<string, unknown>;
 }
 
-const EVENTS = ['strategy_run.updated', 'strategy_run.event', 'research.inquiry', 'research.improve', 'research.matrix_study', 'strategy.transitioned', 'research.workbench', 'market_event', 'research_task', 'loop.state', 'episode.started', 'episode.progress', 'episode.finished', 'strategy.changed', 'intent.changed', 'account.updated', 'market.tick', 'log', 'market_state.updated', 'thread.changed', 'chat.message', 'queue.state', 'workflow.changed', 'activity', 'memory.changed', 'execution.changed', 'backtest.progress', 'backtest.changed', 'screener.changed', 'bots.changed', 'portfolio.changed', 'risk.changed', 'workflow.proposal', 'trader_signal', 'market_delivery', 'market_publish', 'market_subscription', 'market_aftersale', 'models.changed', 'agent.strategy'] as const;
+const EVENTS = ['strategy_run.updated', 'strategy_run.event', 'research.inquiry', 'research.improve', 'research.matrix_study', 'strategy.transitioned', 'research.workbench', 'market_event', 'research_task', 'loop.state', 'episode.started', 'episode.progress', 'episode.finished', 'strategy.changed', 'intent.changed', 'account.updated', 'market.tick', 'log', 'market_state.updated', 'thread.changed', 'chat.message', 'chat.status', 'queue.state', 'workflow.changed', 'activity', 'memory.changed', 'execution.changed', 'backtest.progress', 'backtest.changed', 'screener.changed', 'bots.changed', 'portfolio.changed', 'risk.changed', 'workflow.proposal', 'trader_signal', 'market_delivery', 'market_publish', 'market_subscription', 'market_aftersale', 'models.changed', 'agent.strategy'] as const;
 
 export interface ServerOptions {
+  ops?: OpsMonitor;
   /** Gate-native Binance OAuth client (docs/design/execution-binance-mcp-2026-09-04.md path A); absent in tests. */
   oauth?: BinanceOAuth;
   /** The MCP client the `mcp` backend uses; shared so both reuse one session. Built on demand when absent. */
@@ -55,6 +73,9 @@ export interface ServerOptions {
 }
 
 export function createServer(rt: DemoRuntime, store: DemoStore, options: ServerOptions = {}): http.Server {
+  const security = gatewaySecurity();
+  if (publicDemo()) configureDemo(store.marketDb);
+  const ops = options.ops ?? new OpsMonitor(store.marketDb);
   const oauth = options.oauth ?? null;
   const openTerminal = options.openTerminal ?? openTerminalWith;
   let mcp: McpHttpClient | null = options.mcp ?? null;
@@ -65,13 +86,20 @@ export function createServer(rt: DemoRuntime, store: DemoStore, options: ServerO
   };
   const sse = new Set<http.ServerResponse>();
   const broadcast = (event: string, data: unknown): void => {
-    const frame = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-    for (const res of sse) res.write(frame);
+    for (const res of sse) {
+      const frame = publicSseFrame(res, store, event, data);
+      // 慢连接(写缓冲满)直接断开,不在内存里无限排队。
+      if (frame !== null && !res.write(frame)) { sse.delete(res); res.destroy(); }
+    }
   };
-  for (const ev of EVENTS) rt.on(ev, (data) => broadcast(ev, data));
-  setInterval(() => {
-    for (const res of sse) res.write(': ping\n\n');
-  }, 15_000).unref();
+  const listeners = EVENTS.map((ev) => {
+    const fn = (data: unknown): void => broadcast(ev, data);
+    rt.on(ev, fn);
+    return { ev, fn };
+  });
+  const heartbeat = setInterval(() => {
+    for (const res of sse) if (!res.write(': ping\n\n')) { sse.delete(res); res.destroy(); }
+  }, sseHeartbeatMs()).unref();
 
   const routes: { method: string; pattern: RegExp; keys: string[]; handler: Handler }[] = [];
   const route = (method: string, path: string, handler: Handler): void => {
@@ -125,7 +153,7 @@ export function createServer(rt: DemoRuntime, store: DemoStore, options: ServerO
   // 历史日志的读取出口也过一遍递归脱敏(六审 R6-02):`runtime.log` 现在在入口清,
   // 但库里可能还留着更早版本落下的、没清过的行 —— 读出来时再清一次才算闭环。
   route('GET', '/api/logs', async (_req, res, url) =>
-    json(res, 200, { logs: redactDeep(store.logs(Math.min(1000, Number(url.searchParams.get('limit') ?? '200'))), rt.followCredentials()) }));
+    json(res, 200, redactDeep(store.logPage(Math.max(1, Math.min(1000, Number(url.searchParams.get('limit') ?? '200') || 200)), Number(url.searchParams.get('before_id')) || undefined), rt.followCredentials())));
   route('GET', '/api/market/klines', async (_req, res, url) => {
     const symbol = (url.searchParams.get('symbol') ?? rt.workflow.watchlist[0] ?? 'BTCUSDT').toUpperCase();
     const tf = url.searchParams.get('tf') ?? '1h';
@@ -141,7 +169,7 @@ export function createServer(rt: DemoRuntime, store: DemoStore, options: ServerO
   route('GET', '/api/activity', async (_req, res, url) => {
     const before = Number(url.searchParams.get('before') ?? '');
     const threadId = url.searchParams.get('thread_id') ?? undefined;
-    json(res, 200, { activity: store.activity(Math.min(500, Number(url.searchParams.get('limit') ?? '200')), Number.isFinite(before) && before > 0 ? before : undefined, threadId) });
+    json(res, 200, store.activityPage(Math.max(1, Math.min(500, Number(url.searchParams.get('limit') ?? '200') || 200)), Number.isFinite(before) && before > 0 ? before : undefined, threadId, url.searchParams.get('before_id') ?? undefined));
   });
   route('GET', '/api/symbols', guarded(async (_req, res, url) => {
     const market = url.searchParams.get('market') ?? 'perp';
@@ -298,7 +326,7 @@ export function createServer(rt: DemoRuntime, store: DemoStore, options: ServerO
   binanceRoute('GET', '/oauth/binance/callback', async (_req, res, url) => {
     const page = (ok: boolean, msg: string): void => {
       res.writeHead(ok ? 200 : 400, { 'content-type': 'text/html; charset=utf-8' });
-      res.end(`<!doctype html><meta charset="utf-8"><title>trading-swarm</title><body style="font-family:system-ui;padding:2rem"><h2>${ok ? '币安已授权' : '授权失败'}</h2><p>${msg}</p><p>可以关闭这个页面,回到 trading-swarm 点「检查连接」。</p>`);
+      res.end(`<!doctype html><meta charset="utf-8"><title>trade-gate</title><body style="font-family:system-ui;padding:2rem"><h2>${ok ? '币安已授权' : '授权失败'}</h2><p>${msg}</p><p>可以关闭这个页面,回到 trade-gate 点「检查连接」。</p>`);
     };
     if (!oauth) return page(false, '网关未配置币安 OAuth(TG_BINANCE_OAUTH_CLIENT_ID)');
     try {
@@ -309,9 +337,9 @@ export function createServer(rt: DemoRuntime, store: DemoStore, options: ServerO
       let discovered = '';
       try {
         const d = await discoverAndPropose();
-        discovered = d.kept ? `;已有确认过的工具映射(${Object.keys(d.map.ops).length} 条)继续可用` : `;已抓到 ${d.tools.length} 个工具并生成映射草案,回到 trading-swarm 里核对后确认`;
+        discovered = d.kept ? `;已有确认过的工具映射(${Object.keys(d.map.ops).length} 条)继续可用` : `;已抓到 ${d.tools.length} 个工具并生成映射草案,回到 trade-gate 里核对后确认`;
       } catch (e) {
-        discovered = `;工具清单还没抓到(${(e as Error).message}),回到 trading-swarm 点「重新推断」`;
+        discovered = `;工具清单还没抓到(${(e as Error).message}),回到 trade-gate 点「重新推断」`;
         mapLog('warn', `授权后抓工具清单失败:${(e as Error).message}`);
       }
       rt.emit('execution.changed', { ...rt.executionView(), oauth: oauth.status() });
@@ -357,7 +385,7 @@ export function createServer(rt: DemoRuntime, store: DemoStore, options: ServerO
   const readCatalogue = () => loadCatalogue(store.kvGet(MCP_TOOLS_KV_KEY));
   const readMap = () => loadToolMap(store.kvGet(MCP_MAP_KV_KEY));
   const writeMap = (m: McpToolMap): void => store.kvSet(MCP_MAP_KV_KEY, JSON.stringify(m));
-  const mapLog = (level: 'info' | 'warn' | 'error', message: string, data?: unknown): void => store.log({ at: Date.now(), level, scope: 'binance-mcp', message, ...(data === undefined ? {} : { data }) });
+  const mapLog = (level: 'info' | 'warn' | 'error', message: string, data?: unknown): void => void store.log({ at: Date.now(), level, scope: 'binance-mcp', message, ...(data === undefined ? {} : { data }) });
   const emitExecution = (): void => {
     rt.emit('execution.changed', { ...rt.executionView(), oauth: oauth?.status() ?? null });
   };
@@ -449,7 +477,11 @@ export function createServer(rt: DemoRuntime, store: DemoStore, options: ServerO
 
   // ---- information officer
   route('GET', '/api/market-state', async (_req, res) => json(res, 200, rt.marketState));
-  route('GET', '/api/market-state/history', async (_req, res, url) => json(res, 200, { history: store.marketStates(Math.min(100, Number(url.searchParams.get('limit') ?? '20'))) }));
+  route('GET', '/api/market-state/history', async (_req, res, url) => {
+    const summary = url.searchParams.get('view') === 'summary';
+    const rows = store.marketStates(Math.max(1, Math.min(100, Number(url.searchParams.get('limit') ?? '20') || 20)), summary);
+    json(res, 200, { history: summary ? rows.map(({ id, as_of, bias, regime, summary, error }) => ({ id, as_of, bias, regime, summary, error })) : rows });
+  });
   route('GET', '/api/info/sources', async (_req, res) => json(res, 200, { sources: infoSourcesView() }));
   route('GET', '/api/info/events', async (_req, res, url) => json(res, 200, { events: store.infoEvents(Math.min(500, Number(url.searchParams.get('limit') ?? '100'))) }));
 
@@ -583,13 +615,22 @@ export function createServer(rt: DemoRuntime, store: DemoStore, options: ServerO
   }));
   route('POST', '/api/workflow/proposals/:id/reject', guarded(async (_req, res, _url, p) => json(res, 200, { proposal: rt.rejectWorkflowProposal(p['id']!) })));
 
+  // ---- 九个 Agent 的名册与循环(§9.55)
+  route('GET', '/api/agents', guarded(async (_req, res) => json(res, 200, { agents: agentCards(rt) })));
+  route('GET', '/api/agents/:role', guarded(async (_req, res, _url, p) => {
+    if (!isBotRole(p['role'])) return fail(res, 404, '未知 Agent', 'unknown_role');
+    json(res, 200, agentDetail(rt, p['role']));
+  }));
+
   // ---- chat
   route('GET', '/api/chat/messages', async (_req, res, url) => {
     const session = url.searchParams.get('session');
+    if (isVisitorRequest() && (!session || !ownsDemoSession(store, session, visitorContext()!.visitor))) return json(res, 200, { messages: [], session: null });
     json(res, 200, { messages: store.chat(Math.min(500, Number(url.searchParams.get('limit') ?? '100')), (['chat', 'narration', 'all'].includes(url.searchParams.get('kind') ?? '') ? url.searchParams.get('kind') : 'all') as 'chat' | 'narration' | 'all', session), session: session ? store.chatSession(session) : null });
   });
   route('POST', '/api/chat/messages', async (req, res) => {
     const body = await readBody(req);
+    if (isVisitorRequest()) return json(res, 200, await publicChat(rt, store, body));
     const text = typeof body['text'] === 'string' ? body['text'].trim() : '';
     if (!text) return fail(res, 400, 'text 必填', 'invalid');
     const session = typeof body['session'] === 'string' && body['session'] ? body['session'] : 'default';
@@ -603,14 +644,16 @@ export function createServer(rt: DemoRuntime, store: DemoStore, options: ServerO
     json(res, 200, { ok: true });
   });
   // ---- v3.8 会话列表(docs/demo/v3-ui-contract.md §9.14)
-  route('GET', '/api/chat/sessions', async (_req, res, url) => json(res, 200, { sessions: store.chatSessions({ include_archived: url.searchParams.get('archived') === '1' }) }));
+  route('GET', '/api/chat/sessions', async (_req, res, url) => json(res, 200, { sessions: isVisitorRequest() ? demoSessions(store) : store.chatSessions({ include_archived: url.searchParams.get('archived') === '1' }) }));
   route('POST', '/api/chat/sessions', async (req, res) => {
     const body = await readBody(req);
-    const role = typeof body['role'] === 'string' && (BOT_ROLES as readonly string[]).includes(body['role']) ? body['role'] : null;
+    if (isVisitorRequest()) return json(res, 201, { session: newDemoSession(store, typeof body['title'] === 'string' ? body['title'] : '评审对话') });
+    if (body['role'] !== undefined && body['role'] !== null && !isBotRole(body['role'])) return fail(res, 404, '未知 Agent', 'unknown_role');
+    const role = isBotRole(body['role']) ? body['role'] : null;
     const prof = role ? store.bots.profile(role) : null;
     json(res, 201, { session: store.createChatSession(typeof body['title'] === 'string' && body['title'] ? body['title'] : prof ? `@${prof.name.split(' / ')[0]}` : '新会话', Date.now(), role) });
   });
-  route('POST', '/api/chat/sessions/:id', async (req, res, _url, p) => {
+  route('POST', '/api/chat/sessions/:id', guarded(async (req, res, _url, p) => {
     const body = await readBody(req);
     const patch: { title?: string; archived?: boolean; can_execute?: boolean } = {};
     if (typeof body['title'] === 'string') patch.title = body['title'];
@@ -620,11 +663,11 @@ export function createServer(rt: DemoRuntime, store: DemoStore, options: ServerO
     if (!s) return fail(res, 404, `没有会话 ${p['id']}`, 'not_found');
     if (patch.can_execute !== undefined) rt.log('warn', 'chat', `会话 ${s.id}「${s.title}」允许执行 = ${s.can_execute ? '开' : '关'}`);
     json(res, 200, { session: s });
-  });
-  route('DELETE', '/api/chat/sessions/:id', async (_req, res, _url, p) => {
+  }));
+  route('DELETE', '/api/chat/sessions/:id', guarded(async (_req, res, _url, p) => {
     if (!store.deleteChatSession(p['id']!)) return fail(res, 409, p['id'] === 'default' ? '默认会话不能删,只能清空' : '没有这个会话', 'cannot_delete');
     json(res, 200, { ok: true });
-  });
+  }));
 
   // ---- backtest / replay(docs/demo/v3-ui-contract.md §9.8;docs/design/blind-backtest-2026-09-05.md)
   // 盲测:每根 K 线只喂当时可见的数据给同一套 buildContext + 契约 + 闸。花钱的动作(POST /api/backtest)
@@ -685,6 +728,7 @@ export function createServer(rt: DemoRuntime, store: DemoStore, options: ServerO
 
   // ---- SSE
   route('GET', '/api/events', async (_req, res) => {
+    if (sse.size >= 100) return fail(res, 503, 'SSE 连接数已达上限', 'capacity');
     res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' });
     res.write(`event: loop.state\ndata: ${JSON.stringify(rt.loopView())}\n\n`);
     res.write(`event: queue.state\ndata: ${JSON.stringify(rt.queueView())}\n\n`);
@@ -693,9 +737,20 @@ export function createServer(rt: DemoRuntime, store: DemoStore, options: ServerO
   });
 
   const ports = ['5180', '5181', '5191', '5195', '18800', '18801', '18805', '18811', '18900', process.env['TG_DEMO_PORT'], process.env['TG_UI_PORT']].filter(Boolean);
-  const ALLOWED_ORIGINS = new Set(ports.flatMap(port => ['127.0.0.1', 'localhost'].map(host => `http://${host}:${port}`)));
-  return http.createServer(async (req, res) => {
+  const ALLOWED_ORIGINS = new Set(process.env['TG_ALLOWED_ORIGINS'] ? process.env['TG_ALLOWED_ORIGINS'].split(',').map(v => v.trim()) : ports.flatMap(port => ['127.0.0.1', 'localhost'].map(host => `http://${host}:${port}`)));
+  if (ALLOWED_ORIGINS.has('*')) throw new Error('TG_ALLOWED_ORIGINS 不允许通配符');
+  const server = http.createServer(async (req, res) => {
+    try {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
+    // 公网演示闸门(public-gate.ts):身份、限频、只读/可玩/owner 分类;非公网部署直接放过。
+    const gate = await publicGate(req, res, url, { store, backendKind: () => rt.backend.kind, respond: json, readBody });
+    if (gate.handled) return;
+    if (serveAspSnapshot(req, res, url)) return; // 信号市场只读快照模式(TG_PUBLIC_ASP_SNAPSHOT)
+    if (req.method === 'GET' && url.pathname === '/api/health') {
+      const view = healthView(rt, ops);
+      return json(res, view.status === 'ok' ? 200 : 503, gate.ctx && !gate.ctx.owner ? publicHealthView(view) : view);
+    }
+    if (!gate.ctx && !security.authorize(req, res)) return;
     // Browser requests must come from our own UI; non-browser callers (no Origin) are local tools.
     const origin = req.headers.origin;
     const privateApi = url.pathname.startsWith('/api/research') || url.pathname === '/api/events' || url.pathname.startsWith('/api/wallet') || url.pathname.startsWith('/api/execution/okx') || url.pathname === '/api/execution';
@@ -704,7 +759,7 @@ export function createServer(rt: DemoRuntime, store: DemoStore, options: ServerO
     else if (!privateApi && req.method === 'GET') res.setHeader('access-control-allow-origin', '*');
     if (origin && !ALLOWED_ORIGINS.has(origin) && (req.method !== 'GET' || privateApi)) return fail(res, 403, `origin ${origin} not allowed`, 'forbidden');
     if (req.method === 'OPTIONS') {
-      res.writeHead(204, { 'access-control-allow-methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS', 'access-control-allow-headers': 'content-type' });
+      res.writeHead(204, { 'access-control-allow-methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS', 'access-control-allow-headers': 'content-type,authorization' });
       return res.end();
     }
     for (const r of routes) {
@@ -714,12 +769,28 @@ export function createServer(rt: DemoRuntime, store: DemoStore, options: ServerO
       const params: Record<string, string> = {};
       r.keys.forEach((k, i) => (params[k] = decodeURIComponent(m[i + 1]!)));
       try {
-        await r.handler(req, res, url, params);
+        await runWithDemoContext(gate.ctx, req.method ?? 'GET', url.pathname, () => r.handler(req, res, url, params));
       } catch (e) {
-        if (!res.headersSent) fail(res, errStatus(e), (e as Error).message, 'internal');
+        const code = (e as { code?: unknown }).code;
+        if (!res.headersSent) fail(res, errStatus(e), (e as Error).message, typeof code === 'string' && (code.startsWith('demo_') || code === 'judge_locked') ? code : 'internal');
       }
       return;
     }
     fail(res, 404, `no route ${req.method} ${url.pathname}`, 'not_found');
+    } catch (e) {
+      // 畸形 URL / 请求体等入口错误;带 status 的(413 等)照原样回。
+      if (res.headersSent) res.destroy();
+      else fail(res, errStatus(e) === 500 ? 400 : errStatus(e), (e as { status?: number }).status ? (e as Error).message : '请求格式错误', 'bad_request');
+    }
   });
+  server.headersTimeout = 15_000;
+  server.requestTimeout = 30_000;
+  server.on('close', () => {
+    clearInterval(heartbeat);
+    for (const { ev, fn } of listeners) rt.off(ev, fn);
+    for (const res of sse) res.destroy();
+    sse.clear();
+    if (!options.ops) void ops.stop();
+  });
+  return server;
 }

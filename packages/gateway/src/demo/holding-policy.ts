@@ -5,6 +5,7 @@ import { tfToMs, type TfFeatures } from './market.js';
 import { parseInvalidationPrice, tfDirection } from './review-metrics.js';
 import type { Action, Direction, GateResult, Judgment, Kline, MarketView, StrategyThread } from './types.js';
 import type { StrategySpec } from './strategies.js';
+import { DEFAULT_EXECUTION_THRESHOLDS, effectiveMinNetRr, holdingEconomics, type ExecutionThresholds } from './execution-policy.js';
 
 export const HOLDING_POLICY_VERSION = 'holding-v1';
 export interface HoldingPlan {
@@ -17,6 +18,8 @@ export interface HoldingPlan {
   confirm_timeframe: string;
   atr_timeframe: string;
   atr_multiple: string;
+  /** 按入场价和硬止损算出的实际倍数;atr_multiple 是模型报的档位,两者可以差一点(ATR 尺度检查允许 25%) */
+  atr_multiple_actual?: string;
   atr_at_entry: string;
   selection_source: 'model' | 'derived';
   entry_price: string;
@@ -60,18 +63,14 @@ const direction = (features: TfFeatures[], tf: string) => tfDirection(features.f
 export function holdingTimeframes(h: StrategyHorizon, entryTf: string): [string, string] {
   return h === 'scalp' ? [entryTf, '1h'] : h === 'position' ? ['1d', '1w'] : [HORIZON_POLICY[h].timeframe, HORIZON_POLICY[h].confirm];
 }
-export function holdingEconomics(side: Direction, entry: string, stop: string, target: string | null, costBps = '12') {
-  if (![entry, stop].every(price) || !target || !price(target) || !/^\d+(\.\d+)?$/.test(costBps)) return null;
-  const e = D(entry), s = D(stop), tp = D(target), risk = side === 'long' ? e.sub(s) : s.sub(e), reward = side === 'long' ? tp.sub(e) : e.sub(tp);
-  if (risk.cmp(D('0')) <= 0 || reward.cmp(D('0')) <= 0) return null;
-  const costs = e.max(tp).mul(D(costBps)).div(D('10000'));
-  const netReward = reward.sub(costs), netRisk = risk.add(costs);
-  return { gross_rr: reward.div(risk).text(), net_rr: netReward.cmp(D('0')) > 0 ? netReward.div(netRisk).text() : '0', cost_per_unit: costs.text(), net_risk_per_unit: netRisk.text() };
-}
+/** 净盈亏比的唯一实现在 execution-policy.ts(回测 / 预检 / 实盘同一套);这里保留导出兼容旧引用。 */
+export { holdingEconomics };
 
 export function buildHoldingPlan(inp: {
   thread: StrategyThread; features: TfFeatures[]; judgment?: Judgment | null; strategy?: StrategySpec | null;
   now: number; origin?: HoldingPlan['origin']; round_trip_cost_bps?: string; confirm_bars?: number; invalidation_buffer_atr?: number;
+  /** §9.56 执行层阈值(workflow);不传 = 执行层缺省。min_net_rr 取执行层与策略显式参数中更严的那个。 */
+  execution?: ExecutionThresholds;
 }): HoldingPlan | null {
   const t = inp.thread, j = inp.judgment, choice = j?.proposal?.risk_plan;
   const h = t.horizon ?? inp.strategy?.horizon ?? inferHorizon(t.timeframe);
@@ -83,17 +82,17 @@ export function buildHoldingPlan(inp: {
   if (!entry || !price(entry) || !t.stop_price || !price(t.stop_price) || !base || !(base.atr14 > 0) || !Number.isFinite(base.atr14)) return null;
   const origin = inp.origin ?? 'entry';
   const inv = j?.invalidation_price ?? (parseInvalidationPrice(t.invalidation_text, Number(entry))?.toString() ?? null);
-  const bps = inp.round_trip_cost_bps ?? '12';
+  const bps = inp.round_trip_cost_bps ?? inp.execution?.round_trip_cost_bps ?? '12';
   const econ = holdingEconomics(t.side, entry, t.stop_price, t.take_profits[0] ?? null, bps);
   return {
     policy_version: HOLDING_POLICY_VERSION, origin, established_at: inp.now,
     strategy_ref: inp.strategy ? { id: inp.strategy.id, version: inp.strategy.version, content_hash: inp.strategy.content_hash } : t.strategy_id && t.strategy_version && t.strategy_content_hash ? { id: t.strategy_id, version: t.strategy_version, content_hash: t.strategy_content_hash } : null,
     horizon: h, thesis_timeframe: tf, confirm_timeframe: confirm, atr_timeframe: atrTf,
-    atr_multiple: choice?.stop_atr_multiple ?? distance(entry, t.stop_price).div(D(decimal(base.atr14))).text(), atr_at_entry: decimal(base.atr14), selection_source: choice ? 'model' : 'derived',
+    atr_multiple: choice?.stop_atr_multiple ?? distance(entry, t.stop_price).div(D(decimal(base.atr14))).text(), atr_multiple_actual: distance(entry, t.stop_price).div(D(decimal(base.atr14))).text(), atr_at_entry: decimal(base.atr14), selection_source: choice ? 'model' : 'derived',
     entry_price: entry, hard_stop: t.stop_price, invalidation_price: inv && price(inv) ? inv : null, invalidation_text: t.invalidation_text, thesis: t.thesis,
     confirm_bars: Math.max(1, Math.round(inp.confirm_bars ?? 2)), invalidation_buffer_atr: decimal(Math.max(inp.invalidation_buffer_atr ?? 0.2, HORIZON_POLICY[h].invalidation_atr)),
     entry_trends: { [tf]: origin === 'entry' ? direction(inp.features, tf) : null, [confirm]: origin === 'entry' ? direction(inp.features, confirm) : null },
-    round_trip_cost_bps: bps, min_net_rr: String(inp.strategy?.params['min_net_rr']?.value ?? 1.5), gross_rr: econ?.gross_rr ?? null, net_rr: econ?.net_rr ?? null, target_mode: 'single',
+    round_trip_cost_bps: bps, min_net_rr: String(effectiveMinNetRr(inp.execution ?? DEFAULT_EXECUTION_THRESHOLDS, inp.strategy?.params['min_net_rr']?.value)), gross_rr: econ?.gross_rr ?? null, net_rr: econ?.net_rr ?? null, target_mode: 'single',
   };
 }
 
@@ -105,10 +104,14 @@ export function holdingEntryGates(plan: HoldingPlan | null, t: StrategyThread): 
   const minAtr = D(String(HORIZON_POLICY[plan.horizon].stop_atr));
   const chosen = D(plan.atr_multiple);
   const actual = distance(plan.entry_price, plan.hard_stop).div(D(plan.atr_at_entry));
+  // 模型报的倍数只是离散档(1/1.5/2/3),止损实际放在结构外,常常落在两档之间;不低于下限、也不低于所报倍数的 0.75 就算一致
+  // (09-27 评审站:报 1.5 倍实际 1.2 倍,止损并不窄,却整笔被拒)
   const rrOk = plan.net_rr !== null && D(plan.net_rr).cmp(D(plan.min_net_rr)) >= 0;
+  // 跟单带单员(source=trader):止损是带单员给的,不按我们自己策略的 ATR 尺度卡宽窄(Jacky 09-27:跟单止损别拦那么严);止损在不利一侧由上游校验
+  const trader = t.source === 'trader';
   return [
-    { name: '策略ATR尺度', passed: allowedTf.includes(plan.atr_timeframe) && chosen.cmp(minAtr) >= 0 && actual.cmp(minAtr) >= 0 && chosen.cmp(D('4')) <= 0 && (plan.selection_source === 'derived' || actual.cmp(chosen) >= 0),
-      reason: `${plan.atr_timeframe} ATR=${plan.atr_at_entry}，选择${plan.atr_multiple}倍，实际${actual.text()}倍；策略下限${minAtr.text()}倍` },
+    { name: '策略ATR尺度', passed: trader || (allowedTf.includes(plan.atr_timeframe) && chosen.cmp(minAtr) >= 0 && actual.cmp(minAtr) >= 0 && chosen.cmp(D('4')) <= 0 && (plan.selection_source === 'derived' || actual.cmp(chosen.mul(D('0.75'))) >= 0)),
+      reason: `${plan.atr_timeframe} ATR=${plan.atr_at_entry}，选择${plan.atr_multiple}倍，实际${actual.text()}倍；策略下限${minAtr.text()}倍${trader ? '(跟单:带单员止损,不卡尺度)' : ''}` },
     { name: '净盈亏比', passed: rrOk, reason: `净RR=${plan.net_rr ?? '不可计算'}，需≥${plan.min_net_rr}；往返成本预算${plan.round_trip_cost_bps}bps` },
     { name: '结构失效价', passed: plan.invalidation_price !== null && (t.side === 'long' ? D(plan.invalidation_price).cmp(D(plan.entry_price)) < 0 && D(plan.invalidation_price).cmp(D(plan.hard_stop)) >= 0 : D(plan.invalidation_price).cmp(D(plan.entry_price)) > 0 && D(plan.invalidation_price).cmp(D(plan.hard_stop)) <= 0), reason: '失效价须位于入场的不利一侧与硬止损之间，不从自由文本漂移' },
   ];
@@ -191,10 +194,16 @@ export function evaluateHoldingReview(inp: HoldingInputs): HoldingReview {
   return out(['HOLD'],spike?.state==='wick_recovered'?'wick_recovered_thesis_intact':'thesis_intact',false,last.close_time);
 }
 
+/** 没绑策略时(按 playbook 自由判断)的 ATR 尺度选项:按工作周期推断的 horizon 给出允许的周期,跟入场检查用同一个 holdingTimeframes。 */
+export function renderFreeAtrChoices(features: TfFeatures[], horizon: StrategyHorizon, entryTf: string): string {
+  const choices = holdingTimeframes(horizon, entryTf).map((tf) => { const f = features.find((x) => x.tf === tf); return `${tf}:ATR=${f && f.atr14 > 0 ? decimal(f.atr14) : '缺失(不可选)'}`; }).join(';');
+  return `自由判断 horizon=${horizon} ${choices};可选倍数1/1.5/2/3(下限${HORIZON_POLICY[horizon].stop_atr});在proposal.risk_plan填写atr_timeframe与stop_atr_multiple,atr_timeframe只能从这里选。先选能放在结构外的最小倍数和较短周期;倍数越大、周期越长,止损越宽,净RR要求的目标也越远。止损还需在结构外,止盈必须引用独立目标;不要为凑RR推远目标。`;
+}
+
 export function renderAtrChoices(features: TfFeatures[], strategies: StrategySpec[]): string {
   return strategies.map((s) => {
     const tfs=holdingTimeframes(s.horizon,s.trigger.min_timeframe);
     const choices=tfs.map(tf=>{const f=features.find(f=>f.tf===tf);return `${tf}:ATR=${f&&f.atr14>0?decimal(f.atr14):'缺失(不可选)'}`;}).join(';');
-    return `${s.id} horizon=${s.horizon} ${choices};可选倍数1/1.5/2/3(策略下限${HORIZON_POLICY[s.horizon].stop_atr})；在proposal.risk_plan填写atr_timeframe与stop_atr_multiple。止损还需在结构外，止盈必须引用独立目标；不要为凑RR推远目标。`;
+    return `${s.id} horizon=${s.horizon} ${choices};可选倍数1/1.5/2/3(策略下限${HORIZON_POLICY[s.horizon].stop_atr})；在proposal.risk_plan填写atr_timeframe与stop_atr_multiple。先选能放在结构外的最小倍数和较短周期;倍数越大、周期越长,止损越宽,净RR要求的目标也越远。止损还需在结构外，止盈必须引用独立目标；不要为凑RR推远目标。`;
   }).join('\n');
 }

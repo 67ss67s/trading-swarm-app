@@ -9,6 +9,7 @@
  * (0.0737 = 7.37%),drawdown 与 max_drawdown 都是正数幅度(契约口径;视图对正负都容错,永远显示成红色负数)。
  * 价格是种子随机游走生成的,不是真实行情 —— 只用于开发与测试。
  */
+// i18n-ignore-file(只给 test/backtest-report.test.ts 用的假数据,不上界面)
 import type {
   BacktestAsset,
   BacktestEquityPoint,
@@ -22,7 +23,7 @@ import type {
   BacktestTrade,
   BacktestTradeStats,
   StrategyIR,
-} from '@trading-swarm/contracts';
+} from '@trade-gate/contracts';
 
 const DAY = 86_400_000;
 const FROM = Date.UTC(2020, 0, 1);

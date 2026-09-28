@@ -1,5 +1,5 @@
 /**
- * Pine 引擎托管器:网关进程负责拉起 / 看护 / 收掉 @trading-swarm/pine-engine 子进程。
+ * Pine 引擎托管器:网关进程负责拉起 / 看护 / 收掉 @trade-gate/pine-engine 子进程。
  *
  * - 端口:默认 listen 0(系统分配临时端口),子进程就绪后经 IPC(另有 stdout 一行 JSON 兜底)回报实际端口;
  *   TG_PINE_PORT 可显式指定。不再有固定 879x 端口(那是 trade-switch 的端口段)。
@@ -31,7 +31,7 @@ export interface PineEngineHealth {
 }
 
 export interface PineEngineHostOptions {
-  /** 引擎入口;默认解析 @trading-swarm/pine-engine/server.js。测试可换成假引擎脚本。 */
+  /** 引擎入口;默认解析 @trade-gate/pine-engine/server.js。测试可换成假引擎脚本。 */
   entry?: string;
   /** 沙箱放行的只读目录;默认 = 入口所在包 + 它的依赖树真实目录。 */
   readDirs?: string[];
@@ -65,7 +65,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 export function pineEnginePackageDir(): string | null {
   try {
     const require = createRequire(import.meta.url);
-    return realpathSync(path.dirname(require.resolve('@trading-swarm/pine-engine/package.json')));
+    return realpathSync(path.dirname(require.resolve('@trade-gate/pine-engine/package.json')));
   } catch { /* 走仓库布局兜底 */ }
   const guess = path.resolve(HERE, '..', '..', '..', '..', '..', 'pine-engine');
   return existsSync(path.join(guess, 'server.js')) ? realpathSync(guess) : null;
@@ -222,7 +222,7 @@ export class PineEngineHost {
     })();
     if (!entry || !existsSync(entry)) {
       this.status = 'down';
-      this.lastError = 'pine_engine_package_missing:找不到 @trading-swarm/pine-engine(在仓库根目录 npm install)';
+      this.lastError = 'pine_engine_package_missing:找不到 @trade-gate/pine-engine(在仓库根目录 npm install)';
       this.log(this.lastError);
       this.flushWaiters();
       return;
@@ -257,6 +257,7 @@ export class PineEngineHost {
       this.port = port;
       this.version = typeof msg.version === 'string' ? msg.version : this.version;
       this.status = 'up';
+      pineHealthObserver?.(true);
       this.lastBeat = Date.now();
       this.log(`up pid=${child.pid} port=${port} version=${this.version}`);
       this.flushWaiters();
@@ -312,6 +313,7 @@ export class PineEngineHost {
 
   private onExit(child: ChildProcess | null, reason: string): void {
     if (child && this.child !== child) return;
+    if (!this.stopping) pineHealthObserver?.(false, reason);
     this.child = null;
     this.port = null;
     this.pid = null;
@@ -342,6 +344,15 @@ export class PineEngineHost {
 let host: PineEngineHost | null = null;
 
 /** 按环境变量构造并拉起(TG_PINE_ENGINE=0 关、TG_PINE_PORT 指定端口)。重复调用返回同一个。 */
+/**
+ * 引擎起来/意外退出时通知网关的依赖健康(main.ts 注入 dependency-health)。用注入而不是 import:
+ * 本文件要能被 `node --experimental-strip-types` 单独加载(见 engine-host.test.ts),不能带 .js→.ts 的相对依赖。
+ */
+let pineHealthObserver: ((ok: boolean, reason?: string) => void) | undefined;
+export function setPineHealthObserver(fn: (ok: boolean, reason?: string) => void): void {
+  pineHealthObserver = fn;
+}
+
 export function startPineEngine(options: PineEngineHostOptions = {}): PineEngineHost {
   if (host) return host;
   const envPort = Number(process.env['TG_PINE_PORT'] ?? '');

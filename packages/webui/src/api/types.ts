@@ -6,6 +6,9 @@
 // v1(§ README.md §2)+ v2(§ v2-agent-loop.md §2)混在一个文件里,和网关一致。
 // 金额/价格/数量一律十进制字符串;时间戳一律 unix 毫秒;字段 snake_case。
 
+// 标签表用 tmap 包一层:读属性时才翻译(中英切换),与网关的差异仅此一处。
+import { tmap } from '../lib/i18n';
+
 // ---------------------------------------------------------------------------
 // v1 基础类型
 
@@ -273,7 +276,8 @@ export interface Episode {
   /** §9.34 减黑盒:这次判断的证据装载计划;老网关/老 episode 没有。 */
   evidence_plan?: EvidencePlanDetail | null;
   evidence_plan_hash?: string | null;
-  context_text: string; // 模型看到的全文
+  context_text: string | null; // 模型看到的全文;公网评审版对访客为 null(见 context_text_hidden)
+  context_text_hidden?: { hidden: true; length: number };
   context_hash: string;
   prompt_version: string;
   model: string;
@@ -390,6 +394,7 @@ export interface LoopView {
 }
 
 export interface LogEntry {
+  id?: number;
   at: number;
   level: 'info' | 'warn' | 'error';
   scope: string;
@@ -835,7 +840,7 @@ export type ThreadStatus = 'pending_entry' | 'in_position' | 'closed' | 'cancele
 export type ThreadSource = 'agent' | 'manual' | 'chat';
 
 export interface StrategyThread {
-  holding_plan?: { policy_version: string; origin: 'entry' | 'legacy_snapshot'; horizon: string; thesis_timeframe: string; confirm_timeframe: string; atr_timeframe: string; atr_multiple: string; net_rr: string | null; round_trip_cost_bps: string; target_mode: 'single' | 'scale_out' };
+  holding_plan?: { policy_version: string; origin: 'entry' | 'legacy_snapshot'; horizon: string; thesis_timeframe: string; confirm_timeframe: string; atr_timeframe: string; atr_multiple: string; atr_multiple_actual?: string; net_rr: string | null; round_trip_cost_bps: string; target_mode: 'single' | 'scale_out' };
   last_policy_review?: { reason: string; allowed_actions: string[]; attention: boolean };
   /** 09-12 跟单:这条线程是谁开的——`trader:<带单员名>`;自己开的线程没有这个字段。 */
   origin?: string;
@@ -1037,6 +1042,7 @@ export interface IndicatorSetsResponse {
 }
 
 export interface LogsResponse {
+  next_before_id?: number | null;
   logs: LogEntry[];
 }
 
@@ -1066,7 +1072,7 @@ export interface InfoEventsResponse {
 }
 
 export interface MarketStateHistoryResponse {
-  history: MarketState[];
+  history: Pick<MarketState, 'id' | 'as_of' | 'bias' | 'regime' | 'summary' | 'error'>[];
 }
 
 /**
@@ -1164,6 +1170,8 @@ export interface ChatSession {
   can_execute: boolean;
   message_count: number;
   last_text: string | null;
+  /** §9.55:某个 agent 的规范线程(default / agent:<role>);不能归档/删除,只能清空。老网关没有这个字段 */
+  canonical?: boolean;
 }
 
 export interface ChatSessionsResponse {
@@ -1226,6 +1234,7 @@ export interface ActivityItem {
 }
 
 export interface ActivityResponse {
+  next_before?: { at: number; id: string } | null;
   activity: ActivityItem[];
 }
 
@@ -1321,6 +1330,8 @@ export interface ServerEventMap {
   'market_state.updated': MarketState;
   'thread.changed': StrategyThread;
   'chat.message': ChatMessage;
+  /** §9.55 对话进行状态(给「正在输入」) */
+  'chat.status': AgentChatStatusEvent;
   'queue.state': QueueView;
   'workflow.changed': Workflow;
   /** §9.19 设置提议状态变化 */
@@ -3203,7 +3214,7 @@ export const DECISION_REASON_CODES = [
 export type DecisionReasonCode = (typeof DECISION_REASON_CODES)[number];
 
 /** 后端只发 code;中文在这里。认不出的 code 原样显示(不吞掉新增的枚举值)。 */
-export const DECISION_REASON_LABEL: Record<DecisionReasonCode, string> = {
+export const DECISION_REASON_LABEL: Record<DecisionReasonCode, string> = tmap({
   code_graph_edges: '判断图给出合法动作',
   code_council_consensus: '议会已达成共识',
   code_council_no_consensus: '议会没有共识',
@@ -3238,7 +3249,7 @@ export const DECISION_REASON_LABEL: Record<DecisionReasonCode, string> = {
   trader_duplicate_open: '同币已有活线程,重复开仓',
   trader_add_manual: '加仓信号,留人工处理',
   trader_mgmt_orphan: '管理动作找不到关联线程',
-};
+});
 
 export interface DecisionRecord {
   version: string;
@@ -3278,11 +3289,11 @@ export type FollowMode = 'book' | 'gated' | 'evidence';
 export const FOLLOW_MODES: readonly FollowMode[] = ['book', 'gated', 'evidence'];
 export type FollowApproval = 'manual' | 'auto';
 
-export const FOLLOW_MODE_LABEL: Record<FollowMode, string> = {
+export const FOLLOW_MODE_LABEL: Record<FollowMode, string> = tmap({
   book: '组合经理接管',
   gated: 'agent 把关',
   evidence: '只留证据',
-};
+});
 
 export type TraderAction =
   | 'open' | 'add' | 'reduce' | 'close' | 'cancel'
@@ -3292,7 +3303,7 @@ export const TRADER_ACTIONS: readonly TraderAction[] = [
   'open', 'add', 'reduce', 'close', 'cancel', 'stop_loss_update', 'take_profit_update', 'stopped_out', 'analysis_only', 'unknown',
 ];
 
-export const TRADER_ACTION_LABEL: Record<TraderAction, string> = {
+export const TRADER_ACTION_LABEL: Record<TraderAction, string> = tmap({
   open: '开仓',
   add: '加仓',
   reduce: '减仓',
@@ -3303,7 +3314,7 @@ export const TRADER_ACTION_LABEL: Record<TraderAction, string> = {
   stopped_out: '止损出场',
   analysis_only: '仅分析',
   unknown: '未知动作',
-};
+});
 
 export type TraderEntryKind = 'market' | 'limit' | 'zone' | 'ladder' | 'unknown';
 
@@ -3319,7 +3330,7 @@ export const TRADER_SIGNAL_STATUSES: readonly TraderSignalStatus[] = [
 /** 唯一的「可执行前态」(设计 §7):只有这一档的行给 apply/skip 按钮(服务端也这么认,不只是前端隐藏)。 */
 export const FOLLOW_EXECUTABLE_STATUS: TraderSignalStatus = 'review_only';
 
-export const TRADER_SIGNAL_STATUS_LABEL: Record<TraderSignalStatus, string> = {
+export const TRADER_SIGNAL_STATUS_LABEL: Record<TraderSignalStatus, string> = tmap({
   // new/triggered 是在途(落库了还没处置完/正在判断),统一显示「处理中」,不给按钮。
   new: '处理中',
   triggered: '处理中',
@@ -3336,7 +3347,7 @@ export const TRADER_SIGNAL_STATUS_LABEL: Record<TraderSignalStatus, string> = {
   dead: '已失效',
   mgmt_applied: '管理动作已执行',
   mgmt_orphan: '孤儿管理动作',
-};
+});
 
 export interface TraderTakeProfit {
   price: string;
@@ -3398,7 +3409,7 @@ export interface TraderSignal {
   /** §9.40:套利信号(仅记录,不产生意图);普通信号没有该字段 */
   kind?: 'arbitrage' | string;
   arbitrage?: { symbol: string; spot_side: 'long'; perp_side: 'short'; basis_pct: string | null; expected_apr: string | null } | null;
-  /** 信号从哪条链路进来的;bridge 之外 2026-09-20 起多了 `'okx_asp'`(OKX.AI 订阅投递)。 */
+  /** 信号从哪条链路进来的;`'okx_asp'` = OKX.AI 订阅投递。 */
   transport: string;
   backfill: boolean;
   /** R4-04:哪个 follow 会话拉进来的;跨会话的旧行按历史信号处理(等同 backfill)。 */
@@ -3437,7 +3448,7 @@ export interface FollowSignalActionResponse {
 
 // ---------------------------------------------------------------------------
 // 2026-09-20 信号市场(Signal Market · OKX.AI ASP;设计 docs/design/asp-market-2026-09-20.md,
-// 契约 §9.39)。取代跟单页的 bridge / 8794 那套:信号源只剩 OKX.AI 的 ASP 订阅投递,
+// 契约 §9.39)。信号源只有 OKX.AI 的 ASP 订阅投递,
 // 卖方侧多了 ASP 身份 / 发布器 / 售后。价格金额是十进制字符串,时间是 unix 毫秒。
 
 export type MarketTransport = 'queue' | 'watch';
@@ -3540,6 +3551,8 @@ export interface MarketWallet {
 }
 
 export interface MarketStatus {
+  sections?: Record<string, ReadCacheMeta>;
+  cache?: ReadCacheMeta;
   lights: OkxAccountStatus;
   wallet: MarketWallet;
   buyer: MarketIdentity | null;
@@ -3618,6 +3631,8 @@ export interface CatalogAgent {
   subscription: { job_id: string; status_name: string; trial: boolean } | null;
 }
 export interface CatalogResponse {
+  subscriptions_known?: boolean;
+  cache?: ReadCacheMeta;
   fetched_at: number | null;
   building: boolean;
   total_site: number | null;
@@ -3629,7 +3644,8 @@ export interface CatalogResponse {
   errors: string[];
 }
 export interface CatalogDetail {
-  agent: CatalogAgent;
+  cache?: ReadCacheMeta;
+  agent: CatalogAgent | null;
   overview: Record<string, unknown>;
   services: CatalogService[];
   reviews: { total_score: string | null; total_count: number; distribution: Record<string, number>; list: { reviewer: string | null; time: number | null; content: string; rating: string | null }[] };
@@ -3638,6 +3654,7 @@ export interface CatalogDetail {
 }
 
 export interface MarketSearchResponse {
+  cache?: ReadCacheMeta;
   services: MarketService[];
   search_after: string | null;
   has_more: boolean;
@@ -3654,6 +3671,7 @@ export interface MarketFeedback {
 }
 
 export interface MarketAspDetail {
+  cache?: ReadCacheMeta;
   profile: MarketIdentity & { online: boolean; feedback_rate: number | null };
   services: MarketService[];
   feedback: MarketFeedback[];
@@ -3730,12 +3748,24 @@ export interface MarketSubscriptionView {
   config: MarketSubscriptionConfig;
   stats: MarketSubscriptionStats;
   last_delivery_at: number | null;
+  /** 2026-09-25 订阅栏分组(网关 `display`;老网关没带时适配层按状态/试用字段兜底)。 */
+  display: MarketSubscriptionDisplay;
+}
+
+export type MarketSubscriptionGroup = 'active' | 'trial' | 'pending' | 'cancelled_trial' | 'ended';
+export interface MarketSubscriptionDisplay {
+  group: MarketSubscriptionGroup;
+  /** 一句人话状态(网关给的或兜底算的)。 */
+  label: string;
+  /** 试用/本期到期时间(ms);没有就 null。 */
+  until: number | null;
 }
 
 export interface MarketScorecardOutcome { signal_id: string; symbol: string; side: 'long' | 'short' | null; published_at: number; entry: string | null; stop: string | null; tps: string[]; status: 'pending_entry' | 'open' | 'stopped' | 'tp_hit' | 'expired' | 'unscorable'; r: number | null; mfe_r: number | null; mae_r: number | null; entry_at: number | null; exit_at: number | null; note: string | null; }
 /** 订阅信号事后回测(网关 scorecard.ts):零下单,按 15m K 线检验入场/止损/止盈。 */
 export interface MarketScorecard { job_id: string; n_signals: number; n_scored: number; wins: number; losses: number; win_rate: number | null; avg_r: number | null; sum_r: number | null; profit_factor: number | null; avg_rr_planned: number | null; outcomes: MarketScorecardOutcome[]; computed_at: number; }
 export interface MarketSubscriptionsResponse {
+  cache?: ReadCacheMeta;
   subscriptions: MarketSubscriptionView[];
   this_device: { id: string; name: string } | null;
   error: string | null;
@@ -3806,6 +3836,7 @@ export interface MarketPublisherState {
 }
 
 export interface MarketAsp {
+  cache?: ReadCacheMeta;
   identity: MarketIdentity | null;
   services: MarketService[];
   subscribers: MarketSubscriber[];
@@ -4000,7 +4031,8 @@ export interface ServerEventMap {
 // §9.51 策略一键运行 Strategy Run(docs/design/strategy-run-2026-09-24.md)
 // ---------------------------------------------------------------------------
 
-export type StrategyRunMode = 'auto' | 'agent' | 'confirm' | 'signal_only';
+/** confirm 已下线(全自动),只为老运行保留显示;jev = Jev 判断当真门(无 IR judge 块时判不跟就不下) */
+export type StrategyRunMode = 'auto' | 'jev' | 'agent' | 'confirm' | 'signal_only';
 export type StrategyRunStatus = 'running' | 'paused' | 'stopped' | 'error';
 export interface StrategyRunExecution {
   backend: 'paper' | 'okx' | 'binance';
@@ -4141,4 +4173,108 @@ export type ModelConnectionPatch = Partial<Omit<ModelConnectionInput, 'kind'>>;
 
 export interface ServerEventMap {
   'models.changed': ModelsView;
+}
+
+/** GET 展示缓存；不用于交易／订阅授权。 */
+export interface ReadCacheMeta {
+  fetched_at: number | null;
+  stale: boolean;
+  refreshing: boolean;
+  state: 'loading' | 'ready' | 'error';
+  error: string | null;
+}
+
+// ---- §9.55 Agent 名册、身份、循环与规范线程 ----------------------------------
+
+export type AgentChatState = 'idle' | 'queued' | 'thinking' | 'tool' | 'error';
+export type LoopNodeKind = 'trigger' | 'read' | 'code' | 'model' | 'gate' | 'handoff' | 'output' | 'human';
+
+export interface AgentRunLite {
+  id: string;
+  routine: string;
+  status: string;
+  started_at: number;
+  finished_at: number | null;
+  summary: string | null;
+}
+
+export interface AgentCard {
+  role: BotRole;
+  name: string;
+  /** HELM RADAR THREAD LAB BOOK SENTINEL AUDIT EXEC MARKET */
+  callsign: string;
+  tagline: string;
+  enabled: boolean;
+  /** gate_captain → "default";其余 → "agent:<role>" */
+  session_id: string;
+  message_count: number;
+  last_message_at: number | null;
+  last_text: string | null;
+  chat: { state: AgentChatState; tool: string | null; since: number | null };
+  loop: {
+    cadence: string;
+    status: 'idle' | 'running' | 'paused' | 'disabled' | 'error';
+    current_node: string | null;
+    last_run: AgentRunLite | null;
+    next_run_at: number | null;
+    pending_handoffs_in: number;
+  };
+  tools: { name: string; group: 'read' | 'research' | 'act' | 'config'; summary: string }[];
+}
+
+export interface AgentGraph {
+  entry: string;
+  nodes: { id: string; label: string; kind: LoopNodeKind; to_role?: BotRole | null }[];
+  edges: { from: string; to: string; label?: string | null }[];
+}
+
+export interface AgentsResponse {
+  agents: AgentCard[];
+}
+
+export interface AgentDetailResponse {
+  agent: AgentCard;
+  agent_md: string;
+  graph: AgentGraph;
+  recent_runs: (AgentRunLite | null)[];
+  handoffs: { in: BotHandoff[]; out: BotHandoff[] };
+}
+
+export interface AgentChatStatusEvent {
+  session_id: string;
+  role: BotRole | null;
+  state: AgentChatState;
+  tool: string | null;
+  at: number;
+}
+
+// ---- /api/asp-services/monitor:ASP 运行监视器(只读快照,见 gateway asp-agent/monitor.ts) ----
+export type AspMonitorLevel = 'ok' | 'warn' | 'fail' | 'unknown';
+export interface AspMonitorCheck { key: string; label: string; status: AspMonitorLevel; summary: string; at: number | null; hint: string | null }
+export interface AspMonitorService {
+  service_id: string; name: string; kind: 'subscription' | 'one_time'; price: string | null; status: AspMonitorLevel; summary: string;
+  subscribers: number; last_delivered_at: number | null; last_signal: string | null; failed_recent: number;
+  timeline: { at: number; channel: string; status: string }[];
+  orders_7d: Record<string, number>; last_order_at: number | null;
+}
+export interface AspMonitorTask {
+  job_id: string; kind: string; state: string; test_flag: boolean; buyer: string | null; service_id: string | null; service: string;
+  title: string | null; created_at: number; updated_at: number; error: string | null; status: AspMonitorLevel; retryable: boolean;
+}
+export interface AspMonitor {
+  at: number; lang: 'zh' | 'en'; overall: AspMonitorLevel; asp_id: string | null; asp_name: string | null; services_source: 'listing' | 'local_config';
+  checks: AspMonitorCheck[]; services: AspMonitorService[];
+  tasks: { counts_24h: Record<string, number>; items: AspMonitorTask[] };
+  cli: { window_ms: number; total: number; failed: number; by_code: Record<string, number>; recent_errors: { at: number; command: string; code: string | null }[] };
+  /** 评审站快照模式才有:只读 */
+  snapshot?: { as_of: number; source?: string };
+}
+export interface AspMonitorPush {
+  event_id: string; channel: string; created_at: number; status: string; updated_at: number; job_id: string; attempts: number;
+  signal: string | null; detail: string | null; error: string | null; subscribers: number;
+}
+export interface AspMonitorTaskDetail {
+  job_id: string; kind: string; state: string; test_flag: boolean; buyer: string | null; service_id: string | null;
+  accept_attempts: number; deliver_attempts: number; created_at: number; updated_at: number;
+  title: string | null; remote_status: string | null; fee: string | null; result_summary: string | null; deliverable_text: string | null; error: string | null;
 }

@@ -1,3 +1,6 @@
+import { dependencyHealth } from './dependency-health.js';
+import { BoundedMap } from './bounded-map.js';
+import { withOutputLanguage } from './output-language.js';
 // §9.52 模型连接与角色底层(docs/demo/v3-ui-contract.md §9.52;设计 chat-to-strategy-loop §3.7 / 验收 F1–F2)。
 //
 // 「底层」= 连接(API key 或本机 CLI)+ 角色绑定。7 个角色各自可绑一条连接 + 模型;没绑的回退旧槽位
@@ -20,7 +23,7 @@ import { randomBytes } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import type { Brain, BrainResult } from './brain.js';
 import { brainCatalog, commandForKind, testBrain } from './brain.js';
-import { cliLaunchStatus } from './cli-launch.js';
+import { cliLaunchStatusView } from './cli-launch.js';
 import { assertSafeBaseUrl, checkBaseUrlSyntax, HttpBrainError, httpBrain, isRedirectResponse, redactKeyText, UnsafeBaseUrlError, type HttpConnectionKind, type LookupFn } from './brain-http.js';
 import { DecisionError, DEFAULT_DECISION_BASE, DEFAULT_DECISION_MODEL, JevDecisionClient, type DecisionClient, type DecisionSpendLedger } from './decisions.js';
 import type { BrainTestResult, CliCommandsView } from './types.js';
@@ -238,12 +241,12 @@ export function secretsDirFor(db: DatabaseSync): string | null {
   }
 }
 
-/** 缺省导入源:~/.trading-swarm-okx/openrouter.env。测试进程(VITEST)里不碰真实家目录,除非显式给 TG_MODEL_IMPORT_ENV。 */
+/** 缺省导入源:~/.trade-gate-okx/openrouter.env。测试进程(VITEST)里不碰真实家目录,除非显式给 TG_MODEL_IMPORT_ENV。 */
 export function defaultImportEnvPath(): string | null {
   const explicit = process.env['TG_MODEL_IMPORT_ENV'];
   if (explicit !== undefined) return explicit.trim() || null;
   if (process.env['VITEST']) return null;
-  return path.join(os.homedir(), '.trading-swarm-okx', 'openrouter.env');
+  return path.join(os.homedir(), '.trade-gate-okx', 'openrouter.env');
 }
 
 // ------------------------------------------------------------------ 运行时路由
@@ -290,14 +293,15 @@ type FailingKind = 'missing_connection' | 'missing_key';
 export class ModelRouter {
   readonly store: ModelConnectionStore;
   readonly vault: KeyVault;
-  private readonly brains = new Map<string, Brain>();
-  private readonly decisionClients = new Map<string, JevDecisionClient>();
+  private readonly brains = new BoundedMap<string, Brain>(64);
+  private readonly decisionClients = new BoundedMap<string, JevDecisionClient>(64);
 
   private readonly ignoredBaseWarned = new Set<string>();
 
   constructor(private readonly deps: ModelRouterDeps) {
     this.store = new ModelConnectionStore(deps.db, (id, kind, base) => {
       if (this.ignoredBaseWarned.has(id)) return;
+      if (this.ignoredBaseWarned.size >= 1024) this.ignoredBaseWarned.delete(this.ignoredBaseWarned.values().next().value!);
       this.ignoredBaseWarned.add(id);
       deps.log('warn', `模型连接 ${id}(${kind})存了自定义 base_url ${hostOnly(base)},已忽略:内置 provider 只走缺省地址`);
     });
@@ -339,7 +343,7 @@ export class ModelRouter {
       const command = commandForKind(tool, cmds);
       let ok = false;
       try {
-        ok = this.deps.detectCli ? this.deps.detectCli(tool, command) : command !== null && cliLaunchStatus(command).ok;
+        ok = this.deps.detectCli ? this.deps.detectCli(tool, command) : command !== null && cliLaunchStatusView(command).ok;
       } catch {
         ok = false;
       }
@@ -540,13 +544,15 @@ export class ModelRouter {
       name: inner.name,
       complete: async (system, user, o): Promise<BrainResult> => {
         try {
-          const r = await inner.complete(system, user, o);
+          const r = await inner.complete(withOutputLanguage(system), user, o);
+          dependencyHealth.observe('brain', true);
           if (this.store.get(conn.id)?.status === 'error') {
             this.store.setStatus(conn.id, 'ok', { at: Date.now(), ok: true, latency_ms: r.latency_ms, detail: `${role} 调用成功` });
             this.changed();
           }
           return r;
         } catch (e) {
+          dependencyHealth.observe('brain', false, e);
           const detail = this.redact((e as Error).message);
           if (e instanceof HttpBrainError && (e.kind === 'auth' || e.kind === 'network')) {
             this.store.setStatus(conn.id, 'error', { at: Date.now(), ok: false, latency_ms: null, detail: `${role} 调用失败:${detail}` });
@@ -598,7 +604,7 @@ export class ModelRouter {
   /**
    * 判断要素(IR judge,§9.53 C)用的「钉住」决策连接:固定模型版本 + 不重试的客户端 + 不可变配置引用。
    * 回测与运行器都按 profile.ref 找它;ref 不含连接修改时间(改连接名称不让在跑的策略失效),
-   * 别名 ~typesafe/jev-latest 钉到当前版本(复审:别名不是不可变版本)。未绑定 / 连接失效 → null。
+   * 别名 ~typesafe/jev-latest 钉到当前版本(astra:别名不是不可变版本)。未绑定 / 连接失效 → null。
    */
   frozenDecision(): { profile: FrozenModelProfile; client: DecisionClient } | null {
     const b = this.store.binding('decision');
@@ -651,6 +657,7 @@ export class ModelRouter {
           return await inner.decide(req, o);
         } catch (e) {
           if (e instanceof DecisionError && (e.code === 'decision_budget_exhausted' || e.code === 'bad_request')) throw e;
+          dependencyHealth.observe('brain', false, e);
           const detail = this.redact((e as Error).message);
           if (e instanceof DecisionError && (e.code === 'auth' || e.code === 'network')) {
             this.store.setStatus(conn.id, 'error', { at: Date.now(), ok: false, latency_ms: null, detail: `decision 调用失败:${detail}` });

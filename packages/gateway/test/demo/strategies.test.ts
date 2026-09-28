@@ -253,8 +253,8 @@ function ctxInputs(strategies: StrategySpec[], klines?: Record<string, Kline[]>)
 }
 
 describe('buildContext × strategies', () => {
-  it('is demo-playbook-v11.1-ohlc and, with no strategies, renders the playbook exactly like v4 did', () => {
-    expect(PROMPT_VERSION).toBe('demo-playbook-v11.1-ohlc');
+  it('is demo-playbook-v11.2-stopfloor and, with no strategies, renders the playbook exactly like v4 did', () => {
+    expect(PROMPT_VERSION).toBe('demo-playbook-v11.2-stopfloor');
     const built = buildContext(ctxInputs([]));
     expect(built.strategy_ids).toEqual([]);
     expect(built.system_text).toContain(`Playbook(${PROMPT_VERSION})`);

@@ -18,7 +18,7 @@
  */
 import { createHash } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
-import type { ResearchBar, ResearchPolicy, StrategyIR, StrategyPrimitive } from '@trading-swarm/contracts';
+import type { ResearchBar, ResearchPolicy, StrategyIR, StrategyPrimitive } from '@trade-gate/contracts';
 import { irCandidate, policyToIR, strategyNodes, orderNodes, timeframeMillis } from './research/strategy.js';
 import { viewBars } from './research/engine.js';
 import { hash } from './research/primitives.js';

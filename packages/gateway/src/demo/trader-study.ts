@@ -224,7 +224,7 @@ export function normalizeSignals(
         ? "missing_raw_link"
         : /已经.*止盈|恭喜|连胜.*止盈|止盈.*利润|利润.*止盈|昨天.*(?:做空|做多|止盈)|汇报利润|加仓.*策略.*(?:快到|到了).*止盈|现价止盈\s*\d|第一目标也到了|汇报你的.*利润/.test(
               head,
-            ) && trader !== "交易员C"
+            ) && trader !== "TraderC"
           ? "retrospective_repost"
           : null;
     if (
@@ -660,10 +660,10 @@ export function featureRows(plans: Plan[], load: (s: string) => MarketData) {
         ]
       : p.levels.map((x) => make("limit", x));
     const family =
-      p.trader === "交易员B"
-        ? "human_trader_b"
-        : p.trader === "交易员A"
-          ? "human_trader_a"
+      p.trader === "TraderA"
+        ? "human_trader_a"
+        : p.trader === "TraderB"
+          ? "human_trader_b"
           : "human_trader_c";
     const signal =
       p.stop && snap
@@ -1017,12 +1017,12 @@ export function replayHumans(
   trialCounts: Record<string, number> = {},
 ) {
   const folds = anchoredWalkForward(from, to, 24, HOUR);
-  return ["交易员B", "交易员A", "交易员C"].map((trader) => {
+  return ["TraderA", "TraderB", "TraderC"].map((trader) => {
     const family =
-        trader === "交易员B"
-          ? "human_trader_b"
-          : trader === "交易员A"
-            ? "human_trader_a"
+        trader === "TraderA"
+          ? "human_trader_a"
+          : trader === "TraderB"
+            ? "human_trader_b"
             : "human_trader_c",
       trials = trialCounts[family] ?? 1;
     const selected = rows.filter(
@@ -1050,10 +1050,10 @@ export function replayHumans(
     return {
       trader,
       family:
-        trader === "交易员B"
-          ? "human_trader_b"
-          : trader === "交易员A"
-            ? "human_trader_a"
+        trader === "TraderA"
+          ? "human_trader_a"
+          : trader === "TraderB"
+            ? "human_trader_b"
             : "human_trader_c",
       available_from: selected.length
         ? Math.min(...selected.map((r) => r.at))

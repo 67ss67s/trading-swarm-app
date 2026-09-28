@@ -9,7 +9,7 @@ import { DatabaseSync } from 'node:sqlite';
 import type { ArmRow, Bar, Candidate, Geometry, Settlement } from './core.js';
 import type { CallLogEntry } from './model-arms.js';
 
-const LIVE_DBS = [join(homedir(), '.trading-swarm/demo/state.sqlite'), join(homedir(), '.trading-swarm-okx/demo/state.sqlite')];
+const LIVE_DBS = [join(homedir(), '.trade-gate/demo/state.sqlite'), join(homedir(), '.trade-gate-okx/demo/state.sqlite')];
 
 export function refuseLiveDb(path: string): void {
   const real = existsSync(path) ? realpathSync(path) : resolve(path);

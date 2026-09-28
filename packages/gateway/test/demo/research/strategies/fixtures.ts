@@ -1,4 +1,4 @@
-import type { BacktestMetrics, BacktestReport, StrategyIR } from '@trading-swarm/contracts';
+import type { BacktestMetrics, BacktestReport, StrategyIR } from '@trade-gate/contracts';
 import { hash } from '../../../../src/demo/research/primitives.js';
 import { defaultIR } from '../../../../src/demo/research/strategy.js';
 export { defaultIR };

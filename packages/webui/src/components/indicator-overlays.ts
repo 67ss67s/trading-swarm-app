@@ -26,6 +26,7 @@ import { api } from '@/api/client';
 import type { IndicatorPoint, IndicatorsResponse } from '@/api/types';
 import { CHART_COLORS } from '@/lib/chart-colors';
 import { t } from '@/lib/i18n';
+import { IS_JUDGE } from '@/lib/edition';
 
 export interface IndicatorChip {
   key: string;
@@ -56,7 +57,8 @@ export const PANE_CHIPS: IndicatorChip[] = [
 const STORAGE_KEY = 'tg.chart.overlays';
 const PANE_STORAGE_KEY = 'tg.chart.subpane';
 const DEFAULT_OVERLAYS = ['ema20', 'ema50'];
-const REFRESH_MS = 5_000;
+// 与 trade-chart 同口径:评审版 30s(公网访客多,别把 OKX 限频打满)
+const REFRESH_MS = IS_JUDGE ? 30_000 : 5_000;
 const SUBPANE_HEIGHT = 92;
 
 const OVERLAY_KEYS = new Set(OVERLAY_CHIPS.map((c) => c.key));

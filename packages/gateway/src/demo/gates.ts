@@ -1,5 +1,6 @@
 // Code-side gates + sizing (docs/demo/README.md §5.6–5.7). The model never sees or sets these.
 
+import { DEFAULT_EXECUTION_THRESHOLDS, stopGeometry, stopGeometryReason, type StopFloorMode, type StopFloorTf } from './execution-policy.js';
 import { TIER_LABEL, type AccountView, type GateResult, type Judgment, type MarketView, type Sizing, type Tier, type TierPolicy } from './types.js';
 
 export interface GateConfig {
@@ -8,14 +9,20 @@ export interface GateConfig {
   max_opens_per_day: number;
   min_stop_pct: number;
   max_stop_pct: number;
+  /** §9.56 ATR 止损下限(×stop_floor_atr_tf 那根的 ATR14),只在 atr 模式生效。实盘由 runtime 从 workflow 读(executionThresholds)。 */
+  min_stop_atr?: number;
+  /** §9.56 止损底线模式;不传时按数值推断(只给了 min_stop_pct = 百分比;两个都给 = 老配置,两条都判)。 */
+  stop_floor_mode?: StopFloorMode;
+  stop_floor_atr_tf?: StopFloorTf;
 }
 
 export const DEFAULT_GATES: GateConfig = {
   risk_pct: 0.5,
   max_notional_multiple: 3,
   max_opens_per_day: 2,
-  min_stop_pct: 0.3,
-  max_stop_pct: 5,
+  // 止损距离的默认值取自 execution-policy.ts,和 workflow 的默认值是同一份;运行时用 workflow 里的当前值。
+  min_stop_pct: DEFAULT_EXECUTION_THRESHOLDS.min_stop_pct,
+  max_stop_pct: DEFAULT_EXECUTION_THRESHOLDS.max_stop_pct,
 };
 
 export interface GateContext {
@@ -34,6 +41,11 @@ export interface GateContext {
    * `opens_today` / `open_threads` 是**本层**的计数,不是全局的。
    */
   tier?: { tier: Tier; opens_today: number; open_threads: number; policy: TierPolicy };
+  /**
+   * §9.56 stop_floor_atr_tf 那根的 ATR14(价格单位)。百分比模式只用来显示;ATR 模式没传或传 null =
+   * 取不到 ATR,改按百分比判并在原因里写明。老配置(两条都判)下不传就不加「止损ATR下限」这一行。
+   */
+  atr?: number | null;
 }
 
 /**
@@ -99,10 +111,28 @@ export function evaluateGates(j: Judgment, ctx: GateContext, cfg: GateConfig = D
       // A marketable limit fills near mark, so judge the stop against the worse of the two prices.
       const lim = p.entry === 'limit' && p.limit_price ? Number(p.limit_price) : null;
       const ref = lim === null ? mark : p.direction === 'long' ? Math.min(lim, mark) : Math.max(lim, mark);
-      const dist = (Math.abs(ref - stop) / ref) * 100;
       const sideOk = p.direction === 'long' ? stop < ref : stop > ref;
-      out.push({ name: '止损在正确一侧', passed: optionalStop || sideOk, reason: optionalStop ? '现货,无止损(可选)' : sideOk ? `${p.direction === 'long' ? '做多止损低于' : '做空止损高于'}入场价` : `止损 ${p.stop_price} 在入场价 ${ref.toFixed(1)} 的错误一侧` });
-      out.push({ name: '止损距离', passed: optionalStop || (dist >= cfg.min_stop_pct && dist <= cfg.max_stop_pct), reason: optionalStop ? '现货,无止损(可选)' : `${dist.toFixed(2)}%(允许 ${cfg.min_stop_pct}%–${cfg.max_stop_pct}%)` });
+      // 止损底线走执行层同一个判定(回测 / 预检 / 发送前复查同一套,execution-policy.ts);ctx.atr 是 stop_floor_atr_tf 那根的 ATR
+      const th = { ...DEFAULT_EXECUTION_THRESHOLDS, stop_floor_mode: cfg.stop_floor_mode, stop_floor_atr_tf: cfg.stop_floor_atr_tf, min_stop_pct: cfg.min_stop_pct, max_stop_pct: cfg.max_stop_pct, min_stop_atr: cfg.min_stop_atr ?? 0 };
+      const geo = stopGeometry(ref, stop, ctx.atr ?? null, th);
+      out.push({ name: '止损在正确一侧', passed: optionalStop || sideOk, reason: optionalStop ? '现货,无止损(可选)' : sideOk ? `${p.direction === 'long' ? '做多止损低于' : '做空止损高于'}入场价` : `止损 ${p.stop_price} 在入场价 ${ref.toFixed(1)} 的错误一侧`, code: 'stop_side' });
+      const floorBlock = geo.blocks.find((b) => b === 'stop_distance' || b === 'stop_atr');
+      const wide = geo.blocks.includes('stop_too_wide');
+      if (geo.mode === 'atr') {
+        // ATR 模式:底线一行(stop_atr;ATR 取不到改按百分比时记 stop_distance),上限另一行
+        out.push({ name: geo.atr_fallback ? '止损距离' : '止损ATR下限', passed: optionalStop || !floorBlock, reason: optionalStop ? '现货,无止损(可选)' : stopGeometryReason(geo, th), code: geo.atr_fallback ? 'stop_distance' : 'stop_atr' });
+        if (!geo.atr_fallback) out.push({ name: '止损距离', passed: optionalStop || !wide, reason: optionalStop ? '现货,无止损(可选)' : `${geo.stop_pct.toFixed(2)}%(上限 ${cfg.max_stop_pct}%)`, code: 'stop_too_wide' });
+        else if (wide) out.push({ name: '止损距离', passed: optionalStop, reason: optionalStop ? '现货,无止损(可选)' : `${geo.stop_pct.toFixed(2)}%(上限 ${cfg.max_stop_pct}%)`, code: 'stop_too_wide' });
+      } else {
+        const pctBlock = geo.blocks.find((b) => b === 'stop_distance' || b === 'stop_too_wide');
+        out.push({ name: '止损距离', passed: optionalStop || !pctBlock, reason: optionalStop ? '现货,无止损(可选)' : `${geo.stop_pct.toFixed(2)}%(允许 ${cfg.min_stop_pct}%–${cfg.max_stop_pct}%)`, code: pctBlock ?? 'stop_distance' });
+        // 老配置(百分比和 ATR 两条都判)才有这一行
+        if (geo.mode === 'both' && ctx.atr !== undefined) {
+          const k = cfg.min_stop_atr ?? 0, atrOk = optionalStop || !geo.blocks.includes('stop_atr');
+          out.push({ name: '止损ATR下限', passed: atrOk, code: 'stop_atr',
+            reason: optionalStop ? '现货,无止损(可选)' : geo.stop_atr === null ? `ATR 不可用,不判(百分比下限 ${cfg.min_stop_pct}% 仍生效)` : `止损 ${geo.stop_atr.toFixed(2)}×ATR(需 ≥ ${k}×ATR ≈ ${(k * ctx.atr! / ref * 100).toFixed(2)}%)` });
+        }
+      }
       if (p.take_profit_price) {
         const tp = Number(p.take_profit_price);
         const tpOk = p.direction === 'long' ? tp > ref : tp < ref;

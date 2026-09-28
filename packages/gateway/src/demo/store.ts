@@ -1,6 +1,9 @@
+import { LogWriter } from './log-retention.js';
+import { AGENT_REGISTRY, agentSessionId, isBotRole, isCanonicalSession } from './agent-registry.js';
 import { collapseObservations, errorKind } from './alert-summary.js';
 // SQLite persistence for the demo runtime (tables from migrations/0002_demo.sql).
 
+import type { DatabaseSync } from 'node:sqlite';
 import type { StateDb } from '../state-db.js';
 import { sourceLabel } from './info.js';
 import type { ActivityItem, ChatMessage, ChatSession, DemoIntent, EquityPoint, Episode, EpisodeSummary, InformationEvent, LogLine, MarketState, Strategy, StrategyRevision, StrategyThread, ThreadStatus, Workflow } from './types.js';
@@ -16,6 +19,14 @@ import { JudgmentLedgerStore } from './judgment-ledger.js';
 import { EventStore } from './events.js';
 import { LabProbeQueue, ShadowThreadStore, StrategyEventStore } from './strategy-loop.js';
 import { TraderSignalStore } from './trader-signal.js';
+
+/**
+ * 时间线摘要(types.ts summarize)用不到的大字段在 SQLite 里先剔掉再交给 JS 解析:
+ * context_text / evidence / evidence_plan / decision_record / judgment_raw / memory 约占一条 episode JSON 的八成。
+ * 只剔 summarize 不读的键(judgment 只读 action/direction/headline/confidence/reasons,council 只读 consensus,entry 只读 recommended/market_blocked),输出与全量解析逐字段相同;
+ * 路径不存在时 json_remove 原样返回。改 summarize 读取的字段时要同步检查这里。
+ */
+const EPISODE_SUMMARY_JSON = "json_remove(json, '$.context_text', '$.evidence', '$.evidence_plan', '$.decision_record', '$.judgment_raw', '$.memory', '$.judgment.thesis', '$.judgment.watch_conditions', '$.strategy_council.verdicts', '$.strategy_council.code_consensus', '$.strategy_council.text', '$.entry_advice.text', '$.entry_advice.reason')";
 
 export class DemoStore {
   /** v3.2 long-term memory (memory.ts) on the same sqlite handle. */
@@ -47,6 +58,7 @@ export class DemoStore {
     this.strategies.seed();
     this.bots = new BotRegistry(state.db);
     this.bots.seed();
+    this.ensureAgentSessions();
     this.screens = new ScreenStore(state.db);
     this.portfolio = new PortfolioStore(state.db);
     this.risk = new RiskStore(state.db);
@@ -63,6 +75,30 @@ export class DemoStore {
   get marketDb() { return this.state.db; }
   private get db() {
     return this.state.db;
+  }
+
+  /**
+   * 轮询读缓存(活动流 / 时间线摘要):UI 每 5 秒轮询,而这两张表几分钟才写一次,每次都读大 JSON + 解析是白烧主线程。
+   * 失效是精确的,不引入陈旧:本连接的写只经 saveActivity / saveEpisode(写后立刻清对应前缀);
+   * 其它连接/进程提交写入时 `PRAGMA data_version` 变化 → 整表清空;事务进行中不读不写缓存(不缓存未提交状态)。
+   * 缓存值当只读用;返回时数组浅拷贝,调用方 sort/push 不会污染缓存。
+   */
+  private readCache = new Map<string, unknown>();
+  private readCacheDataVersion = -1;
+  private dataVersionStmt: ReturnType<DatabaseSync['prepare']> | null = null;
+  private cachedRead<T>(key: string, load: () => T): T {
+    if (this.db.isTransaction) return load();
+    this.dataVersionStmt ??= this.db.prepare('PRAGMA data_version');
+    const dv = Number((this.dataVersionStmt.get() as { data_version: number }).data_version);
+    if (dv !== this.readCacheDataVersion) { this.readCache.clear(); this.readCacheDataVersion = dv; }
+    if (this.readCache.has(key)) return this.readCache.get(key) as T;
+    const value = load();
+    if (this.readCache.size >= 64) this.readCache.clear();
+    this.readCache.set(key, value);
+    return value;
+  }
+  private invalidateReads(prefix: 'activity:' | 'episodes:'): void {
+    for (const k of [...this.readCache.keys()]) if (k.startsWith(prefix)) this.readCache.delete(k);
   }
 
   loadStrategy(id: string): Strategy | null {
@@ -86,18 +122,21 @@ export class DemoStore {
     this.db
       .prepare('INSERT INTO demo_episodes(id, at, status, action, json) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET status = excluded.status, action = excluded.action, json = excluded.json')
       .run(e.id, e.at, e.status, e.judgment?.action ?? null, JSON.stringify(e));
+    this.invalidateReads('episodes:');
   }
   episode(id: string): Episode | null {
     const row = this.db.prepare('SELECT json FROM demo_episodes WHERE id = ?').get(id) as { json: string } | undefined;
     return row ? (JSON.parse(row.json) as Episode) : null;
   }
   episodes(limit = 50, beforeAt?: number): EpisodeSummary[] {
-    const rows = (
-      beforeAt
-        ? this.db.prepare('SELECT json FROM demo_episodes WHERE at < ? ORDER BY at DESC LIMIT ?').all(beforeAt, limit)
-        : this.db.prepare('SELECT json FROM demo_episodes ORDER BY at DESC LIMIT ?').all(limit)
-    ) as { json: string }[];
-    return rows.map((r) => summarize(JSON.parse(r.json) as Episode));
+    return [...this.cachedRead(`episodes:${limit}:${beforeAt ?? ''}`, () => {
+      const rows = (
+        beforeAt
+          ? this.db.prepare(`SELECT ${EPISODE_SUMMARY_JSON} AS json FROM demo_episodes WHERE at < ? ORDER BY at DESC LIMIT ?`).all(beforeAt, limit)
+          : this.db.prepare(`SELECT ${EPISODE_SUMMARY_JSON} AS json FROM demo_episodes ORDER BY at DESC LIMIT ?`).all(limit)
+      ) as { json: string }[];
+      return rows.map((r) => summarize(JSON.parse(r.json) as Episode));
+    })];
   }
   lastEpisode(): Episode | null {
     const row = this.db.prepare("SELECT json FROM demo_episodes WHERE status = 'done' ORDER BY at DESC LIMIT 1").get() as { json: string } | undefined;
@@ -117,11 +156,15 @@ export class DemoStore {
   episodeUsageSince(sinceAt: number): { model: string; count: number; input_tokens: number; output_tokens: number }[] {
     const rows = this.db
       .prepare(
-        `SELECT COALESCE(json_extract(json, '$.model'), 'unknown') AS model,
-                COUNT(*) AS n,
-                COALESCE(SUM(COALESCE(json_extract(json, '$.usage.input_tokens'), 0)), 0) AS input_tokens,
-                COALESCE(SUM(COALESCE(json_extract(json, '$.usage.output_tokens'), 0)), 0) AS output_tokens
-         FROM demo_episodes WHERE at >= ? GROUP BY model`,
+        // 先把索引中的小字段物化。直接 GROUP BY 表达式时 SQLite 仍会把整列 JSON 放进排序器。
+        `WITH usage AS MATERIALIZED (
+           SELECT COALESCE(json_extract(json, '$.model'), 'unknown') AS model,
+                  COALESCE(json_extract(json, '$.usage.input_tokens'), 0) AS input_tokens,
+                  COALESCE(json_extract(json, '$.usage.output_tokens'), 0) AS output_tokens
+           FROM demo_episodes WHERE at >= ?
+         )
+         SELECT model, COUNT(*) AS n, COALESCE(SUM(input_tokens), 0) AS input_tokens,
+                COALESCE(SUM(output_tokens), 0) AS output_tokens FROM usage GROUP BY model`,
       )
       .all(sinceAt) as { model: string; n: number; input_tokens: number; output_tokens: number }[];
     return rows.map((r) => ({ model: String(r.model), count: Number(r.n), input_tokens: Number(r.input_tokens), output_tokens: Number(r.output_tokens) }));
@@ -141,13 +184,17 @@ export class DemoStore {
     return rows.map((r) => ({ ...JSON.parse(r.json), market:(r as {market?:string}).market ?? 'perp' } as DemoIntent));
   }
 
-  log(line: LogLine): void {
-    this.db.prepare('INSERT INTO demo_logs(at, level, scope, message, json) VALUES (?, ?, ?, ?, ?)').run(line.at, line.level, line.scope, line.message, line.data === undefined ? null : JSON.stringify(line.data));
+  private logWriter?: LogWriter;
+  flushLogs(): void { this.logWriter?.flush(); }
+  log(line: LogLine): boolean {
+    return (this.logWriter ??= new LogWriter(this.db)).write(line);
   }
-  logs(limit = 200): LogLine[] {
-    const rows = this.db.prepare('SELECT at, level, scope, message, json FROM demo_logs ORDER BY id DESC LIMIT ?').all(limit) as { at: number; level: LogLine['level']; scope: string; message: string; json: string | null }[];
+  logs(limit = 200, beforeId?: number): LogLine[] { return this.logPage(limit, beforeId).logs; }
+  logPage(limit = 200, beforeId?: number) {
+    const rows = this.db.prepare('SELECT id, at, level, scope, message, json, repeat_count FROM demo_logs WHERE id < ? ORDER BY id DESC LIMIT ?').all(beforeId ?? Number.MAX_SAFE_INTEGER, limit) as { id: number; at: number; level: LogLine['level']; scope: string; message: string; json: string | null; repeat_count: number }[];
     // newest first (matches the episode list and the WebUI's expectation)
-    return collapseObservations(rows.map((r) => ({ at: r.at, level: r.level, scope: r.scope, message: r.message, ...(r.json ? { data: JSON.parse(r.json) as unknown } : {}) })), (r) => r.level === 'info' ? null : JSON.stringify([r.scope, /^[A-Z0-9]+USDT/.exec(r.message)?.[0] ?? '', (r.data as { thread_id?: string } | undefined)?.thread_id ?? '', errorKind(r.message)])).map((r) => ({ ...r, message: `${r.message}${(r.observed_count ?? 1) > 1 ? ` ×${r.observed_count}` : ''}` }));
+    const logs = collapseObservations(rows.map((r) => ({ id: r.id, at: r.at, level: r.level, scope: r.scope, message: r.message, ...(r.repeat_count > 1 ? { observed_count: r.repeat_count } : {}), ...(r.json ? { data: JSON.parse(r.json) as unknown } : {}) })), (r) => r.level === 'info' ? null : JSON.stringify([r.scope, /^[A-Z0-9]+USDT/.exec(r.message)?.[0] ?? '', (r.data as { thread_id?: string } | undefined)?.thread_id ?? '', errorKind(r.message)])).map((r) => ({ ...r, message: `${r.message}${(r.observed_count ?? 1) > 1 ? ` ×${r.observed_count}` : ''}` }));
+    return { logs, next_before_id: rows.length === limit ? rows.at(-1)!.id : null };
   }
 
   // ---------------------------------------------------------------- v2
@@ -193,9 +240,12 @@ export class DemoStore {
     const row = this.db.prepare('SELECT json FROM demo_market_states ORDER BY as_of DESC LIMIT 1').get() as { json: string } | undefined;
     return row ? this.hydrateNews(JSON.parse(row.json) as MarketState) : null;
   }
-  marketStates(limit = 20): MarketState[] {
+  marketStates(limit = 20, summary = false): MarketState[] {
     const rows = this.db.prepare('SELECT json FROM demo_market_states ORDER BY as_of DESC LIMIT ?').all(limit) as { json: string }[];
-    return rows.map((r) => this.hydrateNews(JSON.parse(r.json) as MarketState));
+    return rows.map((r) => {
+      const state = JSON.parse(r.json) as MarketState;
+      return summary ? state : this.hydrateNews(state);
+    });
   }
   infoEvent(id: string): InformationEvent | null {
     const row = this.db.prepare('SELECT json FROM demo_info_events WHERE id = ?').get(id) as { json: string } | undefined;
@@ -250,15 +300,23 @@ export class DemoStore {
     return Number(row.n);
   }
   episodesForThread(threadId: string, limit = 50): EpisodeSummary[] {
-    const rows = this.db.prepare('SELECT json FROM demo_episodes ORDER BY at DESC LIMIT 500').all() as { json: string }[];
+    const rows = this.db.prepare(`SELECT ${EPISODE_SUMMARY_JSON} AS json FROM demo_episodes ORDER BY at DESC LIMIT 500`).all() as { json: string }[];
     return rows
       .map((r) => JSON.parse(r.json) as Episode)
       .filter((e) => e.thread_id === threadId)
       .slice(0, limit)
       .map(summarize);
   }
+  /** 与 `intents(500).filter(thread_id)` 同口径(同一查询、同一顺序、同一 500 条窗口),只是不匹配的行在 SQLite 里就置空,不搬进 JS 解析。 */
   intentsForThread(threadId: string): DemoIntent[] {
-    return this.intents(500).filter((i) => i.thread_id === threadId);
+    const rows = this.db.prepare("SELECT CASE WHEN json_extract(json, '$.thread_id') = ? THEN json END AS json, market FROM demo_intents ORDER BY at DESC LIMIT ?").all(threadId, 500) as { json: string | null; market?: string }[];
+    const out: DemoIntent[] = [];
+    for (const r of rows) {
+      if (r.json === null) continue;
+      const i = { ...JSON.parse(r.json), market: r.market ?? 'perp' } as DemoIntent;
+      if (i.thread_id === threadId) out.push(i);
+    }
+    return out;
   }
 
   saveChat(m: ChatMessage): void {
@@ -290,8 +348,18 @@ export class DemoStore {
   }
 
   // ---- v3.8: chat sessions (migrations/0012)
+  /** 启动时修复九条规范线程,保留创建时间、消息与 default id。 */
+  ensureAgentSessions(now = Date.now()): void {
+    const upsert = this.db.prepare(`INSERT INTO demo_chat_session(id,title,created_at,updated_at,archived,can_execute,role) VALUES (?,?,?,?,0,0,?)
+      ON CONFLICT(id) DO UPDATE SET title=excluded.title,role=excluded.role,archived=0`);
+    for (const [role, spec] of Object.entries(AGENT_REGISTRY)) if (isBotRole(role)) upsert.run(agentSessionId(role), spec.name, now, now, role);
+  }
+  lastChatAt(session: string): number | null {
+    const row = this.db.prepare('SELECT MAX(at) AS at FROM demo_chat WHERE session_id=?').get(session)!;
+    return row['at'] === null ? null : Number(row['at']);
+  }
   private toSession(r: Record<string, unknown>): ChatSession {
-    return { id: String(r['id']), title: String(r['title']), created_at: Number(r['created_at']), updated_at: Number(r['updated_at']), archived: Number(r['archived']) === 1, can_execute: Number(r['can_execute']) === 1, role: r['role'] === null || r['role'] === undefined ? null : String(r['role']), message_count: Number(r['n'] ?? 0), last_text: r['last_text'] === null || r['last_text'] === undefined ? null : String(r['last_text']).slice(0, 120) };
+    return { id: String(r['id']), canonical: isCanonicalSession(String(r['id'])), title: String(r['title']), created_at: Number(r['created_at']), updated_at: Number(r['updated_at']), archived: Number(r['archived']) === 1, can_execute: Number(r['can_execute']) === 1, role: r['role'] === null || r['role'] === undefined ? null : String(r['role']), message_count: Number(r['n'] ?? 0), last_text: r['last_text'] === null || r['last_text'] === undefined ? null : String(r['last_text']).slice(0, 120) };
   }
   private static readonly SESSION_SQL = `SELECT s.*, (SELECT COUNT(*) FROM demo_chat c WHERE c.session_id = s.id) AS n,
       (SELECT json_extract(c.json, '$.text') FROM demo_chat c WHERE c.session_id = s.id ORDER BY c.at DESC LIMIT 1) AS last_text FROM demo_chat_session s`;
@@ -304,6 +372,13 @@ export class DemoStore {
     return r ? this.toSession(r) : null;
   }
   createChatSession(title: string, now = Date.now(), role: string | null = null): ChatSession {
+    if (role !== null) {
+      if (!isBotRole(role)) throw Object.assign(new Error('未知 Agent'), { status: 404, code: 'unknown_role' });
+      const session = this.chatSession(agentSessionId(role));
+      if (session) return session;
+      this.ensureAgentSessions(now);
+      return this.chatSession(agentSessionId(role))!;
+    }
     const id = `cs-${now.toString(36)}${Math.random().toString(36).slice(2, 6)}`;
     this.db.prepare('INSERT INTO demo_chat_session(id, title, created_at, updated_at, archived, can_execute, role) VALUES (?, ?, ?, ?, 0, 0, ?)').run(id, title.trim().slice(0, 80) || '新会话', now, now, role);
     return this.chatSession(id)!;
@@ -311,11 +386,12 @@ export class DemoStore {
   updateChatSession(id: string, patch: { title?: string; archived?: boolean; can_execute?: boolean }): ChatSession | null {
     const cur = this.chatSession(id);
     if (!cur) return null;
+    if (cur.canonical && patch.archived === true) throw Object.assign(new Error('规范会话不能归档,只能清空'), { status: 409, code: 'canonical_session' });
     this.db.prepare('UPDATE demo_chat_session SET title = ?, archived = ?, can_execute = ?, updated_at = ? WHERE id = ?').run((patch.title ?? cur.title).trim().slice(0, 80) || cur.title, (patch.archived ?? cur.archived) ? 1 : 0, (patch.can_execute ?? cur.can_execute) ? 1 : 0, Date.now(), id);
     return this.chatSession(id);
   }
   deleteChatSession(id: string): boolean {
-    if (id === 'default') return false;
+    if (isCanonicalSession(id)) throw Object.assign(new Error('规范会话不能删除,只能清空'), { status: 409, code: 'canonical_session' });
     this.db.prepare('DELETE FROM demo_chat WHERE session_id = ?').run(id);
     return this.db.prepare('DELETE FROM demo_chat_session WHERE id = ?').run(id).changes > 0;
   }
@@ -324,21 +400,30 @@ export class DemoStore {
 
   saveActivity(a: ActivityItem): void {
     this.db.prepare('INSERT INTO demo_activity(id, at, kind, level, symbol, thread_id, json, market) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET json = excluded.json').run(a.id, a.at, a.kind, a.level, a.symbol, a.thread_id, JSON.stringify(a), a.market ?? null);
+    this.invalidateReads('activity:');
   }
   /** Newest first. */
-  activity(limit = 200, beforeAt?: number, threadId?: string): ActivityItem[] {
+  activity(limit = 200, beforeAt?: number, threadId?: string): ActivityItem[] { return this.activityPage(limit, beforeAt, threadId).activity; }
+  activityPage(limit = 200, beforeAt?: number, threadId?: string, beforeId?: string) {
+    const page = this.cachedRead(`activity:${JSON.stringify([limit, beforeAt ?? null, threadId ?? null, beforeAt ? beforeId ?? null : null])}`, () => this.loadActivityPage(limit, beforeAt, threadId, beforeId));
+    return { activity: [...page.activity], next_before: page.next_before };
+  }
+  private loadActivityPage(limit: number, beforeAt?: number, threadId?: string, beforeId?: string) {
     const where: string[] = [];
     const args: (number | string)[] = [];
     if (beforeAt) {
-      where.push('at < ?');
+      where.push(beforeId ? '(at, id) < (?, ?)' : 'at < ?');
       args.push(beforeAt);
+      if (beforeId) args.push(beforeId);
     }
     if (threadId) {
       where.push('thread_id = ?');
       args.push(threadId);
     }
-    const rows = this.db.prepare(`SELECT json FROM demo_activity${where.length ? ` WHERE ${where.join(' AND ')}` : ''} ORDER BY at DESC LIMIT ?`).all(...args, limit) as { json: string }[];
-    return collapseObservations(rows.map((r) => JSON.parse(r.json) as ActivityItem), (a) => ['risk_alert', 'brain_error', 'screen_failed'].includes(a.kind) ? JSON.stringify([a.kind, a.symbol, a.thread_id, a.data['kind'] ?? errorKind(a.title)]) : null).map((a) => ({ ...a, title: `${a.title}${(a.observed_count ?? 1) > 1 ? ` ×${a.observed_count}` : ''}` }));
+    const rows = this.db.prepare(`SELECT at, id, json FROM demo_activity${where.length ? ` WHERE ${where.join(' AND ')}` : ''} ORDER BY at DESC, id DESC LIMIT ?`).all(...args, limit) as { at: number; id: string; json: string }[];
+    const activity = collapseObservations(rows.map((r) => JSON.parse(r.json) as ActivityItem), (a) => ['risk_alert', 'brain_error', 'screen_failed'].includes(a.kind) ? JSON.stringify([a.kind, a.symbol, a.thread_id, a.data['kind'] ?? errorKind(a.title)]) : null).map((a) => ({ ...a, title: `${a.title}${(a.observed_count ?? 1) > 1 ? ` ×${a.observed_count}` : ''}` }));
+    const last = rows.at(-1);
+    return { activity, next_before: rows.length === limit && last ? { at: last.at, id: last.id } : null };
   }
   saveEquity(p: EquityPoint): void {
     this.db.prepare('INSERT INTO demo_equity(at, equity, unrealized, backend) VALUES (?, ?, ?, ?) ON CONFLICT(at) DO UPDATE SET equity = excluded.equity, unrealized = excluded.unrealized, backend = excluded.backend').run(p.at, p.equity, p.unrealized, p.backend ?? 'paper');

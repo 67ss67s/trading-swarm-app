@@ -2,7 +2,7 @@ import type { Market } from './types.js';
 /**
  * 通道 × 交易对的保护腿凭证(§9.31,2026-09-12)。
  *
- * 背景(复审):v3.11 的 `protection_verified:<backend>` 是一次性标记——一个月前验过的通道
+ * 背景(Codex 复审):v3.11 的 `protection_verified:<backend>` 是一次性标记——一个月前验过的通道
  * 和昨天验过的在闸眼里一样,而且「从来没验证过」与「验过但最近一次真挂止损失败」是同一个处理。
  * 这里把它做成**有期限的凭证**:按 `通道 × 交易对` 存,默认 7 天(workflow.protection_ttl_days),
  * 过期或最近一次线上挂止损失败都会降级,由巡检自动重跑金丝雀续期。

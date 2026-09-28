@@ -1,9 +1,9 @@
 import { DirectAgentReads, rustReadBridge } from './direct-agent-reads.js';
 // Entry: `node dist/demo/main.js` (or `npm run demo` in packages/gateway). Config via env:
 //   TG_DEMO_PORT=18800  TG_DEMO_BRAIN=pi|claude|stub (initial workflow.brain; later edited from the UI)
-//   TG_DEMO_BACKEND=auto|paper|demo|cli|agent_mcp|mcp (auto = demo iff ~/.trading-swarm/secrets/apikey-demo.json exists)
+//   TG_DEMO_BACKEND=auto|paper|demo|cli|agent_mcp|mcp (auto = demo iff ~/.trade-gate/secrets/apikey-demo.json exists)
 //   cli = Agent OS channel: official binance-cli (Skills Hub `binance` skill) with BINANCE_API_ENV=demo and
-//         profile TG_DEMO_CLI_PROFILE (default tswarm-demo, created via `binance-cli profile create`)
+//         profile TG_DEMO_CLI_PROFILE (default tgate-demo, created via `binance-cli profile create`)
 //   agent_mcp = an agent CLI (TG_EXEC_AGENT_CLI=claude|codex, TG_EXEC_AGENT_MODEL) driving Binance's official
 //         MCP server; the CLI owns the OAuth session, the gateway holds nothing. See execution-agent.ts.
 //   mcp = the gateway itself calling that same MCP server with its own OAuth token (TG_BINANCE_OAUTH_CLIENT_ID)
@@ -13,7 +13,7 @@ import { DirectAgentReads, rustReadBridge } from './direct-agent-reads.js';
 //         profile TG_OKX_PROFILE(默认 ~/.okx/config.toml 的 default_profile),非模拟盘要 TG_OKX_LIVE=1。
 //         行情走 OKX 公共 REST(TG_OKX_REST_BASE)。见 docs/design/okx-atk-2026-09-20.md
 //   TG_DEMO_JUDGMENT_CAP=300 (0 = unlimited) initial daily_judgment_cap
-//   TG_DEMO_AUTO_APPROVE=1  TG_DEMO_RUN_ON_START=1  TG_DEMO_DB=~/.trading-swarm/demo/state.sqlite
+//   TG_DEMO_AUTO_APPROVE=1  TG_DEMO_RUN_ON_START=1  TG_DEMO_DB=~/.trade-gate/demo/state.sqlite
 
 import { existsSync } from 'node:fs';
 import os from 'node:os';
@@ -35,37 +35,52 @@ import type { AgentCliKind, Backend } from './types.js';
 import { createServer } from './http.js';
 import { DemoRuntime } from './runtime.js';
 import { DemoStore } from './store.js';
-import { startPineEngine, stopPineEngine } from './research/pine/engine-host.js';
-
-/** 零模型只读桥的可执行文件路径;未配置(或路径不存在)时返回 null,agent_mcp 读取退回 agent CLI。 */
-const directReadBin = (): string | null => {
-  const p = process.env['TG_DIRECT_READ_BIN']?.trim();
-  return p && existsSync(p) ? p : null;
-};
+import { setPineHealthObserver, startPineEngine, stopPineEngine } from './research/pine/engine-host.js';
+import { publicDemo, configureDemo } from './public-demo.js';
+import { gatewaySecurity } from './http-security.js';
+import { OpsMonitor } from './ops-monitor.js';
+import { dependencyHealth } from './dependency-health.js';
+import { installLifecycle } from './process-lifecycle.js';
+import { aspSnapshotEnabled } from './asp-snapshot.js';
+import { closeMatrixStudyWorkers } from './routes-matrix-study.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, '..', '..', '..', '..');
 /** demo_kv row holding the PaperBackend snapshot. */
 const PAPER_STATE_KEY = 'paper_state';
+/** Optional zero-model read bridge for the Binance agent_mcp path (TG_DIRECT_READ_BIN). Unset or missing: account reads go through the agent CLI. */
+const directReadBin = (): string | null => {
+  const p = process.env['TG_DIRECT_READ_BIN']?.trim();
+  return p && existsSync(p) ? p : null;
+};
 
 async function main(): Promise<void> {
   const port = Number(process.env['TG_DEMO_PORT'] ?? '18800');
-  const dbPath = process.env['TG_DEMO_DB'] ?? path.join(os.homedir(), '.trading-swarm', 'demo', 'state.sqlite');
-  const secretsFile = path.join(os.homedir(), '.trading-swarm', 'secrets', 'apikey-demo.json');
+  const host = gatewaySecurity().host;
+  // 浸泡验证实例(scripts/start-soak-dev.sh):强制 paper + stub,不起 Pine/ASP/账户三盏灯这些外部 CLI,只读公开行情。
+  const offline = process.env['TG_SOAK_OFFLINE'] === '1';
+  if (offline && (process.env['TG_DEMO_BACKEND'] !== 'paper' || process.env['TG_DEMO_BRAIN'] !== 'stub')) throw new Error('浸泡隔离模式要求 TG_DEMO_BACKEND=paper + TG_DEMO_BRAIN=stub');
+  if (offline) process.env['TG_NO_REAL_MODELS'] = '1';
+  const dbPath = process.env['TG_DEMO_DB'] ?? path.join(os.homedir(), '.trade-gate', 'demo', 'state.sqlite');
+  const secretsFile = path.join(os.homedir(), '.trade-gate', 'secrets', 'apikey-demo.json');
   const wantBackend = process.env['TG_DEMO_BACKEND'] ?? 'auto';
   const hasDemoKey = existsSync(secretsFile) || (Boolean(process.env['TG_DEMO_API_KEY']) && Boolean(process.env['TG_DEMO_API_SECRET']));
+  // 公网演示部署只注册 paper / OKX 模拟盘:live 通道与 Binance 通道在这里直接拒绝启动(补充要求 1 §2)。
+  if (publicDemo() && (process.env['TG_OKX_LIVE'] === '1' || exchange() !== 'okx')) throw new Error('公网演示只允许 TG_EXCHANGE=okx 且不开 TG_OKX_LIVE');
+  if (publicDemo() && (process.env['TG_OWNER_TOKEN']?.length ?? 0) < 32) throw new Error('公网演示需要至少 32 字符的 TG_OWNER_TOKEN');
   const state = openStateDb(dbPath);
+  if (publicDemo()) configureDemo(state.db);
   const store = new DemoStore(state);
   // auto = 上次在界面上选的通道(workflow.execution 已落库)优先;没选过才按有没有 demo key 决定。
   // 之前每次重启都退回 paper,用户切到 agent_mcp 后一刷新就「跳成了模拟」(2026-09-06)。mcp 直连不可自恢复(要 token+映射),不算。
   const persistedExec = loadWorkflow(store.loadWorkflowJson()).execution;
   // TG_EXCHANGE(默认 okx):通道清单按交易所裁(`backendsFor`),okx 模式下只有 paper/okx 两条,
-  // Binance 的四条连工厂都不注册;binance 模式下反过来,okx 工厂也不注册(review #13)。
+  // Binance 的四条连工厂都不注册;binance 模式下反过来,okx 工厂也不注册(codex-review #13)。
   const ex = exchange();
   // 每次探测/创建后端时重新解析配置；setup 会清空 availability 缓存。
   const okxGate = (): { available: boolean; note?: string } => okxAvailability();
   // 可恢复的通道按交易所分开,清单与 UI 同源(`backendsFor`):binance 模式下上次存的 `okx`
-  // 不能被恢复,否则行情走 Binance、交易却发去 OKX,而执行页连 OKX 这个选项都不显示(review #13)。
+  // 不能被恢复,否则行情走 Binance、交易却发去 OKX,而执行页连 OKX 这个选项都不显示(codex-review #13)。
   // `mcp` 单独排除:直连要 token + 人工确认过的工具映射,重启后不可自恢复。
   const resumable: Set<Backend> = new Set(backendsFor(ex).filter((k) => k !== 'mcp'));
   const autoKind = ex === 'okx'
@@ -73,7 +88,7 @@ async function main(): Promise<void> {
     : persistedExec && resumable.has(persistedExec) && (persistedExec !== 'demo' || hasDemoKey) ? persistedExec : hasDemoKey ? 'demo' : 'paper';
   const backendKind = wantBackend === 'auto' ? autoKind : wantBackend;
   const logFn = (level: 'info' | 'warn' | 'error', message: string, data?: unknown): void => {
-    store.log({ at: Date.now(), level, scope: 'demo-exec', message, ...(data === undefined ? {} : { data }) });
+    if (!store.log({ at: Date.now(), level, scope: 'demo-exec', message, ...(data === undefined ? {} : { data }) })) return;
     console.error(`${new Date().toISOString()} ${level} [demo-exec] ${message}`);
   };
   // One factory per backend so the UI can switch channels at runtime (v3-ui-contract §9.6). The
@@ -104,10 +119,9 @@ async function main(): Promise<void> {
         persist: { load: () => store.kvGet(PAPER_STATE_KEY), save: (json) => store.kvSet(PAPER_STATE_KEY, json) },
       }),
     demo: () => new DemoBackend(defaultDemoExecBin(REPO_ROOT), logFn),
-    cli: () => new CliBackend({ bin: defaultBinanceCliBin(REPO_ROOT), profile: process.env['TG_DEMO_CLI_PROFILE'] ?? 'tswarm-demo', env: 'demo', log: logFn }),
+    cli: () => new CliBackend({ bin: defaultBinanceCliBin(REPO_ROOT), profile: process.env['TG_DEMO_CLI_PROFILE'] ?? 'tgate-demo', env: 'demo', log: logFn }),
     agent_mcp: () =>
       new AgentMcpBackend({
-        // 零模型只读桥:可选的外部二进制(TG_DIRECT_READ_BIN)。未配置或文件不存在 → 不挂,账户读取走 agent CLI(read_mode=model)。
         reads: directReadBin() ? new DirectAgentReads(rustReadBridge(directReadBin()!), { get: k => store.kvGet(k), set: (k,v) => store.kvSet(k,v) }) : undefined,
         state: { get: k => store.kvGet(k), set: (k,v) => store.kvSet(k,v) },
         leanPrompt: true,
@@ -127,14 +141,14 @@ async function main(): Promise<void> {
         bin: current.cli,
         profile: current.profile,
         demo: current.demo,
-        live: process.env['TG_OKX_LIVE'] === '1',
+        live: !publicDemo() && process.env['TG_OKX_LIVE'] === '1',
         kv: { get: (k) => store.kvGet(k), set: (k, v) => store.kvSet(k, v) },
         log: logFn,
       });
     },
   };
   // 工厂也按交易所裁:okx 模式下摘掉 Binance 的四条(UI 不列、切不过去、不会因为缺 key 在后台报错),
-  // binance 模式下摘掉 okx —— 光挡住 resumable 不够,显式 TG_DEMO_BACKEND=okx 也不能绕过去(review #13)。
+  // binance 模式下摘掉 okx —— 光挡住 resumable 不够,显式 TG_DEMO_BACKEND=okx 也不能绕过去(codex-review #13)。
   for (const k of Object.keys(backends) as Backend[]) if (!backendsFor(ex).includes(k)) delete backends[k];
   // Booting straight into `mcp` only works once a human confirmed the tool map; otherwise start() would
   // throw and the process would die on every restart, so fall back to paper and say why.
@@ -149,11 +163,12 @@ async function main(): Promise<void> {
     : {
         mcp: () => mcpAvailability({ configured: oauth.status().configured, connected: oauth.status().connected, map: toolMap() }),
         // 09-07:官方 binance-cli 是推荐通道;没装/没 profile 时给出接入步骤(executionView 里会带 setup)
-        cli: () => cliAvailability(defaultBinanceCliBin(REPO_ROOT), process.env['TG_DEMO_CLI_PROFILE'] ?? 'tswarm-demo'),
+        cli: () => cliAvailability(defaultBinanceCliBin(REPO_ROOT), process.env['TG_DEMO_CLI_PROFILE'] ?? 'tgate-demo'),
       };
-  rt = new DemoRuntime({ store, backend, backends, backendGates, brains: { stub: stubBrain() } });
+  rt = new DemoRuntime({ store, backend, backends, backendGates, brains: { stub: stubBrain() }, ...(offline ? { models: { secretsDir: null, importEnvPath: null } } : {}) });
   // Env overrides for the initial workflow (later edits come from the UI and persist in state.sqlite).
   const patch: Record<string, unknown> = {};
+  if (process.env['TG_DEMO_START_PAUSED'] === '1') patch['paused'] = true;
   if (process.env['TG_DEMO_BRAIN']) patch['brain'] = process.env['TG_DEMO_BRAIN'];
   if (process.env['TG_DEMO_CHEAP_BRAIN']) patch['cheap_brain'] = process.env['TG_DEMO_CHEAP_BRAIN'];
   if (process.env['TG_DEMO_TF']) patch['timeframe'] = process.env['TG_DEMO_TF'];
@@ -170,23 +185,35 @@ async function main(): Promise<void> {
   }
   // okx 模式下不挂 Binance OAuth 与 /api/binance/*(§5)。
   // Pine 引擎(PineTS,AGPL 独立子进程):网关托管拉起,临时端口;TG_PINE_ENGINE=0 关,TG_PINE_PORT 指定端口。起不来不影响其它功能
-  startPineEngine();
-  const server = createServer(rt, store, ex === 'okx' ? {} : { oauth, mcp: mcpHttp });
-  server.listen(port, '127.0.0.1', () => console.error(`demo gateway listening on http://127.0.0.1:${port}  (backend=${backend.kind}, brain=${rt.workflow.brain}, db=${dbPath})`));
+  setPineHealthObserver((ok, reason) => dependencyHealth.observe('pine', ok, reason));
+  if (!offline) startPineEngine();
+  // 运维:库维护线程 + 健康指标;依赖连续失败/凭证失效/额度耗尽进活动流告警(页面不展示余额)。
+  const ops = new OpsMonitor(state.db, dbPath);
+  dependencyHealth.onSignal((signal) => {
+    rt!.activity('info_update', {
+      level: signal.recovered ? 'success' : 'danger',
+      title: signal.recovered ? `依赖已恢复:${signal.dependency}` : `依赖不可用:${signal.dependency}`,
+      detail: `原因分类:${signal.reason};请检查运行状态和对应凭证/额度`,
+      data: { ...signal },
+    });
+  });
+  const server = createServer(rt, store, { ops, ...(ex === 'okx' ? {} : { oauth, mcp: mcpHttp }) });
+  installLifecycle(async () => {
+    server.close();
+    server.closeAllConnections();
+    // 矩阵研究跑在 worker 里:先收掉(在跑的标 interrupted,可 resume),再停 runtime、关库
+    await closeMatrixStudyWorkers().catch(() => undefined);
+    await rt!.stop();
+    await stopPineEngine();
+    await ops.stop();
+    store.flushLogs();
+    state.close();
+  }, (kind, detail) => void store.log({ at: Date.now(), level: kind === 'recoverable_rejection' ? 'warn' : 'error', scope: 'process', message: `进程事件:${kind}${detail ? ` (${detail})` : ''}` }));
+  server.listen(port, host, () => console.error(`demo gateway listening on http://${host}:${port}  (backend=${backend.kind}, brain=${rt!.workflow.brain}, public_demo=${publicDemo()}, soak=${offline})`));
+  if (offline) rt.setWorkflow({ brain: 'stub', cheap_brain: 'stub', execution: 'paper' });
   await rt.start({ runOnStart: process.env['TG_DEMO_RUN_ON_START'] === '1' });
   // 预热 OKX 三盏灯(钱包 / A2A / Trade Kit):重启后第一次打开页面不用等两个 CLI(accountLights 之后走 SWR)
-  if (ex === 'okx') void rt.okxAccountLights().catch(() => undefined);
-
-  const shutdown = async (): Promise<void> => {
-    console.error('shutting down');
-    server.close();
-    await stopPineEngine();
-    await rt.stop();
-    state.close();
-    process.exit(0);
-  };
-  process.on('SIGINT', () => void shutdown());
-  process.on('SIGTERM', () => void shutdown());
+  if (ex === 'okx' && !offline && !aspSnapshotEnabled()) void rt.okxAccountLights().catch(() => undefined);
 }
 
 main().catch((e) => {

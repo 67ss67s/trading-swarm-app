@@ -1,7 +1,7 @@
 // Case generator (docs/eval/README.md §2). Deterministic given (symbols, tf, from, to, n, seed) and the
 // cached raw klines. The only network use in the whole package is the KlineSource passed in.
 
-import { demo } from '@trading-swarm/gateway';
+import { demo } from '@trade-gate/gateway';
 import type { EvalCase, Kline, MarketState, StrategyThread, Ticker24h } from './types.js';
 import { mirrorFloor, mirrorKlines, mirrorPriceStr } from './mirror.js';
 import type { KlineSource } from './binance.js';

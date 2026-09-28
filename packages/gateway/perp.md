@@ -3,7 +3,7 @@
 - 提示词:**生产 harness:context.ts buildContext 原文 + schema.ts 校验 + gates.ts(单轮,无修复调用)**
 - 版本:event_rules=jr-events-v1,management=jr-mgmt-v1,context_prompt=demo-playbook-v11-formula;playbook sha 60a5e47708af;system sha b916ac9f377a
 - 数据:BNBUSDT 17900 根 gaps=0 sha 9b290c526b;BTCUSDT 17900 根 gaps=0 sha 0f3714cff8;DOGEUSDT 17900 根 gaps=0 sha 94801d8d57;ETHUSDT 17900 根 gaps=0 sha 09503f1b9a;SOLUSDT 17900 根 gaps=0 sha 43a9f632ae;XRPUSDT 17900 根 gaps=0 sha 6c8a78f411;资金费 sha 634fd03719
-- 事件:2035 个,sha 00c005f382cf;模型:B2=pi:deepseek/deepseek-v4-flash(dedicated key(~/.trading-swarm-okx/secrets/deepseek.env,不入库))
+- 事件:2035 个,sha 00c005f382cf;模型:B2=pi:deepseek/deepseek-v4-flash(dedicated key(~/.trade-gate-okx/secrets/deepseek.env,不入库))
 
 ### 管仓 trail(主):吊灯 ATR22×3,168 根 —— 全部事件(零模型)
 | 臂 | 事件 | 笔数 | 做单率 | 每笔净 R [95% CI] | 胜率 | 合计 R | 每事件 R [95% CI] | model_error |

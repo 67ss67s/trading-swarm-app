@@ -1,4 +1,4 @@
-import type {ResearchPrecheckRequest,ResearchPrecheckResult,ResearchDataset} from '@trading-swarm/contracts';
+import type {ResearchPrecheckRequest,ResearchPrecheckResult,ResearchDataset} from '@trade-gate/contracts';
 import {checkIR,irCandidate,irWarmup} from './strategy.js';
 import {registry} from './primitives/index.js';
 import {evaluateOrderGate,DEFAULT_ORDER_GATE,riskCapApplies} from './order-gate.js';
@@ -19,7 +19,7 @@ export async function precheck(raw:ResearchPrecheckRequest,store:ResearchStore):
  const screens=new Map<number,ReturnType<typeof screenUniverse>>(),ratios:number[]=[],holds:number[]=[],blocks:Record<string,number>={};let candidates=0,passed=0,bars=0,regime=0,warmup=Infinity,widened=0,fallback=0;const rawStops:number[]=[];
  const deadline=Date.now()+15000;
  // 2026-09-23 全窗口:体检与 engine v4 同一视图长度(最近 W 根),内部 A 臂回放走 v4 快路径;只影响体检估计,不进任何 manifest
- const view=viewBars(raw.ir,{lookback:1,atr_period:1} as import('@trading-swarm/contracts').ResearchPolicy,base);
+ const view=viewBars(raw.ir,{lookback:1,atr_period:1} as import('@trade-gate/contracts').ResearchPolicy,base);
  for(const d of datasets){
   const first=d.bars.findIndex(b=>b.close_time>=raw.from_ms);warmup=Math.min(warmup,Math.max(0,first));
   for(let i=first;i<d.bars.length&&d.bars[i]!.close_time<=raw.to_ms;i++){

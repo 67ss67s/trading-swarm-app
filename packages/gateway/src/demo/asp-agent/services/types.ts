@@ -5,7 +5,7 @@
  */
 import type { AssetRecommendation, RecommendArgs } from '../../recommend.js';
 import type { DailyRegime } from '../../types.js';
-import type { ResearchBar } from '@trading-swarm/contracts';
+import type { ResearchBar } from '@trade-gate/contracts';
 import type { JudgeCandidateSnapshot, JudgeResult } from '../../research/judge/types.js';
 
 export type ServiceKey = 'asset_horizon' | 'research_report' | 'plan_gate' | 'jev_probability';
@@ -43,6 +43,8 @@ export class ServiceInputError extends Error {
 export interface MatrixLike {
   create(body: Record<string, unknown>): { id: string };
   get(id: string): MatrixViewLike;
+  /** 进程重启会把运行中的研究标成 interrupted,可从断点续跑 */
+  resume?(id: string): unknown;
 }
 /** MatrixStudyService.get 的子集(只列报告要读的字段) */
 export interface MatrixViewLike {
@@ -88,13 +90,20 @@ export interface PerCallService<P = unknown> {
  * 没有活跃订阅者时 broadcaster 不会调用 tick(不取数、不花模型钱)。
  */
 export type ChannelKey = 'market_brief' | 'radar_feed' | 'micro_alerts';
+/** 扇出器认得的全部频道:上架服务的频道 + 策略信号保活状态(agent.ts 提供,不在 LISTINGS 里) */
+export type BroadcastChannelKey = ChannelKey | 'strategy_status';
 export interface ChannelPush {
   /** 全局唯一且可重放判重:同一内容重复 tick 必须给同一个 event_id(例:`radar:swing:<screen_id>`) */
   event_id: string;
-  channel: ChannelKey;
+  channel: BroadcastChannelKey;
   summary: string;
   /** 推给订阅者的全文(第一行是标题,人读;可附一段 JSON) */
   text: string;
+  /**
+   * OKX.AI 订阅信号行:【Futures】/【Spot】等类型头开头、≤200 字。平台审核只把这种行算「发送了信号」,
+   * 所以扇出先单独 deliver 这一行,再把 text 作为详情跟一条。缺省时 broadcaster 按 summary 派生(signalFor)。
+   */
+  signal?: string;
   payload: Record<string, unknown>;
 }
 export interface ChannelDeps {
@@ -104,7 +113,7 @@ export interface ChannelDeps {
   log(level: 'info' | 'warn' | 'error', msg: string): void;
 }
 export interface SubscriptionChannel<D = unknown> {
-  key: ChannelKey;
+  key: BroadcastChannelKey;
   /** 定时检查:有新内容就返回推送,没有返回 null。broadcaster 按 every_ms 调用 */
   every_ms: number;
   tick(deps: ChannelDeps & D): Promise<ChannelPush | null>;
