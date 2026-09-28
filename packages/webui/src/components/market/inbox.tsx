@@ -9,7 +9,7 @@ import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { friendlyError } from '@/lib/edition';
+import { friendlyMarketError } from '@/components/market/judge';
 import { api } from '@/api/client';
 import { buildSignalFeed, offTypeFeedKeys } from '@/api/market-adapt';
 import type { FeedItem, FeedKind } from '@/api/market-adapt';
@@ -135,7 +135,7 @@ export function InboxTab({
     void qc.invalidateQueries({ queryKey: ['follow'], exact: true });
     void qc.invalidateQueries({ queryKey: ['market', 'subscriptions'] });
   };
-  const fail = (msg: string) => (err: unknown) => toast.error(msg, { description: friendlyError(err instanceof Error ? err.message : String(err)) });
+  const fail = (msg: string) => (err: unknown) => toast.error(msg, { description: friendlyMarketError(err instanceof Error ? err.message : String(err)) });
   const apply = useMutation({
     mutationFn: (a: { id: string; force_stale?: boolean }) => api.applyFollowSignal(a.id, { force_stale: a.force_stale }),
     onSuccess: (r) => {

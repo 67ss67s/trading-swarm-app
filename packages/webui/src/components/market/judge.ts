@@ -1,9 +1,10 @@
 /**
  * 评审版(VITE_EDITION=judge)信号市场的纯函数:快照横幅文案、状态灯友好化、身份加载态。
- * 全部带 edition 参数(默认取构建时 EDITION),默认版一律原样返回,行为不变。
+ * 全部带 edition 参数(默认取构建时 EDITION),默认版一律原样返回,行为不变(friendlyMarketError 例外,见下)。
  * 评审版文案只给英文评审看,直接写英文字面量(不进 i18n)。
  */
-import { EDITION, OKX_AI_LISTING_ID, friendlyError, type Edition } from '@/lib/edition';
+import { EDITION, OKX_AI_LISTING_ID, friendlyError, isTechError, type Edition } from '@/lib/edition';
+import { t } from '@/lib/i18n';
 import type { ReadCacheMeta } from '@/api/types';
 
 export const JUDGE_NOT_CONNECTED = 'Not connected in the judge edition';
@@ -24,6 +25,25 @@ export function snapshotBannerText(asOfText: string | null, edition: Edition = E
   if (edition !== 'judge') return null;
   const when = asOfText ? ` as of ${asOfText}` : '';
   return `This is a read-only snapshot of Trading Swarm's live ASP on OKX.AI — identity, services, subscriptions and deliveries —${when}. In the judge edition nothing here can be changed.`;
+}
+
+/** 默认版 OKX.AI 页:onchainos CLI 的原始报错(命令行、本机路径、进程退出码)换成这句 */
+export const MARKET_CLI_ERROR_ZH = '本机的 OKX.AI 工具没准备好:可能还没安装,或者钱包登录过期了。到顶栏的账户菜单里重新登录钱包再试。';
+
+const logged = new Set<string>();
+
+/**
+ * OKX.AI 页所有报错都走这里:评审版同 friendlyError;默认版把 CLI 原文(带命令行 / 本机路径那种)换成一句能照着做的说明,
+ * 原文在浏览器控制台打一次(同一句只打一次),自己排查时还看得到。不是技术原文的报错(平台的业务提示)原样显示。
+ */
+export function friendlyMarketError<T extends string | null | undefined>(text: T, edition: Edition = EDITION): T | string {
+  if (edition === 'judge') return friendlyError(text, undefined, edition);
+  if (!text || !isTechError(text)) return text;
+  if (!logged.has(text)) {
+    logged.add(text);
+    console.warn('[OKX.AI] 原始报错:', text);
+  }
+  return t(MARKET_CLI_ERROR_ZH);
 }
 
 export const listingLabel = (): string => `OKX.AI #${OKX_AI_LISTING_ID}`;

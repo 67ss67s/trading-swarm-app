@@ -27,6 +27,7 @@ import { JudgeLiveFeed } from '@/components/judge-live';
 import { StatusTag } from '@/components/tour/status-tag';
 import { st } from '@/lib/server-text-en';
 import { friendlyError } from '@/lib/edition';
+import { fmtCost } from '@/lib/money';
 
 type Tab = 'status' | 'jev' | 'execution' | 'team';
 const TAB_KEY = 'tg.agent.side.tab';
@@ -159,7 +160,7 @@ export function AgentSide() {
         </div>
         <div className="grid grid-cols-3 divide-x text-[11.5px]">
           <Cell k={t('判断')} v={usage ? `${usage.judgments}/${usage.cap || '∞'}` : '—'} tone={usage?.capped ? 'warn' : undefined} />
-          <Cell k={t('花费')} v={usage?.est_cny != null ? `¥${usage.est_cny.toFixed(2)}` : '—'} />
+          <Cell k={t('花费')} v={usage?.est_cny != null ? fmtCost(usage.est_cny) : '—'} />
           <Cell k={t('持仓')} v={String(today.holding)} sub={today.pendingEntry ? t('挂单 {n}', { n: today.pendingEntry }) : undefined} />
         </div>
         <div className="grid grid-cols-3 divide-x border-t text-[11.5px]">

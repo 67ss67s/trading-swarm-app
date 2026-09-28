@@ -1,6 +1,6 @@
 /**
  * 构建版本开关(lib/edition.ts + lib/nav.tsx):测试环境不设 VITE_EDITION = 默认版(开源版),judge 行为用显式 edition 参数测。
- * 09-28 开源:默认语言英文、旧楼层 / 日志不进侧栏、OKX.AI 放侧栏最上面,这几条两个版本一样;只读锁和「Judge demo」标记只在评审版。
+ * 09-28 开源:默认语言英文、旧楼层 / 日志不进侧栏、OKX.AI 在值班组交易下面,这几条两个版本一样;只读锁和「Judge demo」标记只在评审版。
  */
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_LANG, EDITION, IS_JUDGE, isPageHidden, lockReason } from '../src/lib/edition';
@@ -19,8 +19,10 @@ describe('edition', () => {
     expect(NAV.map((n) => n.id)).toEqual(ALL_NAV.filter((n) => !hidden.includes(n.id)).map((n) => n.id));
   });
 
-  it('puts OKX.AI (the signal market page) first in the sidebar', () => {
-    expect(NAV[0]).toMatchObject({ id: 'market', label: 'OKX.AI' });
+  it('puts OKX.AI (the signal market page) right below Trading in the duty group', () => {
+    const ops = NAV.filter((n) => n.group === 'ops').map((n) => n.id);
+    expect(ops.indexOf('market')).toBe(ops.indexOf('trade') + 1);
+    expect(NAV.find((n) => n.id === 'market')).toMatchObject({ label: 'OKX.AI', group: 'ops' });
     expect(NAV.filter((n) => n.id === 'market')).toHaveLength(1);
   });
 

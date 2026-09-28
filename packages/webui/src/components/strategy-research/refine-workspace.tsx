@@ -1,6 +1,6 @@
 /**
  * 精修工作区:把研究台主体(pages/research.tsx 的 ResearchWorkbench,embedded)嵌进来,迭代 / 改进能力全保留。
- * 两处共用:「策略研究」第 3 步(step-refine.tsx)和独立的「优化」页(#refine,pages/refine.tsx)。
+ * 用在「策略研究」第 3 步(step-refine.tsx)。
  *   带入:seed = 海选里的一组(study + trial)→ 研究台「策略构建」预填这一组的 IR(与 #research?matrix_study=&trial= 同一条路)。
  *   顶部一条「带入的策略摘要」;研究会话里每次回测都会自动存进「我的策略」(后端 strategies/service attachReport),
  *   这里每 8 秒看一次「我的策略」:进来之后有策略被存 / 更新 → 调一次 onSaved(每进一次只调一次),之后出现「去验收」按钮。

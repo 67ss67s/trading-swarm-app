@@ -15,6 +15,7 @@ import { Switch } from '@/components/ui/switch';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { estimateDaily } from './watch-logic';
+import { fmtCost } from '@/lib/money';
 
 const TIMEFRAMES = ['1m', '3m', '5m', '15m', '30m', '1h', '4h'];
 
@@ -150,8 +151,8 @@ export function PaceSection({ workflow, className }: { workflow: Workflow; class
             {t(p.label)}
           </Button>
         ))}
-        <span className="num ml-auto text-[10.5px] text-muted-foreground" title={t('按当前名单与下面的参数估算;GLM 单价 ≈¥0.006/次')}>
-          {t('按这套参数:每天约 {lo}–{hi} 次判断 · ≈¥{cost}', { lo: est.low, hi: est.high, cost: est.costHigh.toFixed(2) })}
+        <span className="num ml-auto text-[10.5px] text-muted-foreground" title={t('按当前名单与下面的参数估算;GLM 单价 ≈{unit}/次', { unit: fmtCost(0.006, 3) })}>
+          {t('按这套参数:每天约 {lo}–{hi} 次判断 · ≈{cost}', { lo: est.low, hi: est.high, cost: fmtCost(est.costHigh) })}
           {est.capped ? ` ${t('(被每日上限 {n} 封顶)', { n: workflow.daily_judgment_cap ?? 0 })}` : ''}
         </span>
       </div>

@@ -10,7 +10,7 @@ import type { MarketAsp, MarketDeliveryOut, MarketPublisherSettings } from '@/ap
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { JudgeLock } from '@/components/judge-lock';
-import { friendlyError } from '@/lib/edition';
+import { friendlyMarketError } from '@/components/market/judge';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
@@ -117,7 +117,7 @@ function DeliveryRow({ d, now, onRetry, retrying }: { d: MarketDeliveryOut; now:
           </button>
         </div>
       </div>
-      {d.blocked_reason ? <p className="mt-1 text-[10.5px] text-destructive">{friendlyError(d.blocked_reason)}</p> : null}
+      {d.blocked_reason ? <p className="mt-1 text-[10.5px] text-destructive">{friendlyMarketError(d.blocked_reason)}</p> : null}
       {open ? (
         <div className="mt-2 flex flex-col gap-2">
           <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all rounded border bg-muted/30 p-2 text-[10.5px]">{d.text}</pre>
@@ -131,7 +131,7 @@ function DeliveryRow({ d, now, onRetry, retrying }: { d: MarketDeliveryOut; now:
                 {j.status === 'delivered' ? t('已送达') : j.status === 'failed' ? t('失败') : t('待发')}
               </Badge>
               {j.attempt > 1 ? <span className="text-muted-foreground">{t('第 {n} 次', { n: j.attempt })}</span> : null}
-              {j.error ? <span className="truncate text-down">{friendlyError(j.error)}</span> : null}
+              {j.error ? <span className="truncate text-down">{friendlyMarketError(j.error)}</span> : null}
               {j.status === 'failed' ? (
                 <JudgeLock feature="asp_publish">
                   <Button size="xs" variant="ghost" disabled={retrying} onClick={() => onRetry(j.job_id)}>

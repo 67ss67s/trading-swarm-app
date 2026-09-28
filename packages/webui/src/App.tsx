@@ -126,7 +126,7 @@ import { SettingsPage } from '@/pages/settings';
 import { ModelsPage } from '@/pages/models';
 import { MatrixStudyPage } from '@/pages/matrix-study';
 import { StrategyResearchPage } from '@/pages/strategy-research';
-import { RefinePage } from '@/pages/refine';
+import { refineToResearchHash } from '@/components/strategy-research/refine-model';
 import { MarketPage } from '@/pages/market';
 import { StartPage } from '@/pages/start';
 import { ConnectPage } from '@/pages/connect';
@@ -134,7 +134,7 @@ import { bootRedirect } from '@/components/start/logic';
 import { useStartCore } from '@/components/start/use-start';
 import { HIDDEN_PAGE_FALLBACK, isPageHidden } from '@/lib/edition';
 
-const PAGE_IDS: Page[] = (['start', 'connect', 'trade', 'agent', 'watch', 'floor', 'floor-legacy', 'intel', 'events', 'screener', 'market', 'judgments', 'evolution', 'history', 'strategies', 'research', 'matrix-study', 'strategy-research', 'refine', 'my-strategies', 'models', 'logs', 'settings'] as Page[]).filter(pageAvailable);
+const PAGE_IDS: Page[] = (['start', 'connect', 'trade', 'agent', 'watch', 'floor', 'floor-legacy', 'intel', 'events', 'screener', 'market', 'judgments', 'evolution', 'history', 'strategies', 'research', 'matrix-study', 'strategy-research', 'my-strategies', 'models', 'logs', 'settings'] as Page[]).filter(pageAvailable);
 
 const LAST_PAGE_KEY = 'tg.page.last';
 
@@ -166,6 +166,12 @@ function readPageFromHash(): Page {
   if (hash === 'strategies') {
     try { window.history.replaceState(null, '', '#my-strategies'); } catch { /* 沙箱里可能不让改 */ }
     return 'my-strategies';
+  }
+  // 09-29:单独的「优化」页撤回,#refine(带的组合 / 对话参数一起换写法)落到研究台
+  if ((hash as string) === 'refine') {
+    const next = refineToResearchHash(window.location.hash);
+    try { window.history.replaceState(null, '', `#${next}`); } catch { /* 沙箱里可能不让改 */ }
+    return 'research';
   }
   // 「楼层(旧)」和「日志」两个旧页不露出(lib/edition.ts),hash 直达也回楼层首页
   if (isPageHidden(hash)) {
@@ -532,7 +538,6 @@ export default function App() {
             {page === 'models' ? <ModelsPage /> : null}
             {page === 'matrix-study' ? <MatrixStudyPage /> : null}
             {page === 'strategy-research' ? <StrategyResearchPage /> : null}
-            {page === 'refine' ? <RefinePage /> : null}
             {page === 'settings' ? <SettingsPage /> : null}
             </PageErrorBoundary>
           </main>

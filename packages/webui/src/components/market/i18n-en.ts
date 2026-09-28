@@ -1,5 +1,6 @@
 /** 信号市场(发布 / 订阅 / 信号 / 页面引导)的英文词条;key 与 t()/tmap 里的中文原文逐字一致。 */
 export const MARKET_EN: Record<string, string> = {
+  "本机的 OKX.AI 工具没准备好:可能还没安装,或者钱包登录过期了。到顶栏的账户菜单里重新登录钱包再试。": "The OKX.AI tool on this machine is not ready: it may not be installed yet, or the wallet login has expired. Log in to the wallet again from the account menu in the top bar, then try again.",
   "{n} 个产品在架": "{n} listed",
   "(共 {n} 个)": " ({n} total)",
   "{n} 个订阅者": "{n} subscribers",

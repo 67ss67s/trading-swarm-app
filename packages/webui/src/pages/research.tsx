@@ -58,6 +58,7 @@ import { RulesCard, useRunRules } from '@/components/research-workbench/rules-ca
 import { UniverseScreenPanel, tfLabel } from '@/components/research-workbench/screen-panel';
 import { StrategyBuilder } from '@/components/research-workbench/strategy-builder';
 import type { SeedAsset } from '@/components/research-workbench/seed-dataset';
+import { fallbackSession } from '@/components/research-workbench/session-pick';
 import { Pane, Workspace } from '@/components/pane';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -273,11 +274,14 @@ export function ResearchWorkbench({ embedded = false, matrixSeed: seedFromProps 
   // get a fresh chat instance so late mutation callbacks cannot change its draft.
   const [chatInstance, setChatInstance] = useState(0);
   const chatInstanceRef = useRef(0);
+  // 此刻真正选中的对话(同一轮 effect 里 state 还没更新,判断「要不要落到最近一条」看这个)
+  const sessionIdRef = useRef(sessionId);
   const selectSession = (id: string, preserveChat = false) => {
     if (!preserveChat) {
       chatInstanceRef.current += 1;
       setChatInstance(chatInstanceRef.current);
     }
+    sessionIdRef.current = id;
     setSessionId(id);
   };
   useEffect(() => {
@@ -309,12 +313,11 @@ export function ResearchWorkbench({ embedded = false, matrixSeed: seedFromProps 
     } else hashHandled.current = true;
     if (hashHandled.current && !embedded) window.history.replaceState(null, '', '#research');
   }, [sessionsQ.isSuccess, sessions]);
-  // 记住的会话被删了/换了机器:落到最近一条
+  // 记住的会话被删了/换了机器:落到最近一条(不盖掉深链刚选中的那段,见 fallbackSession)
   useEffect(() => {
     if (!hashHandled.current) return;
-    if (!sessions.length) return;
-    if (sessionId && sessions.some((x) => x.id === sessionId)) return;
-    selectSession(sessions[0]!.id);
+    const next = fallbackSession(sessions, sessionIdRef.current);
+    if (next) selectSession(next);
   }, [sessions, sessionId]);
 
   const createM = useMutation({
@@ -338,7 +341,8 @@ export function ResearchWorkbench({ embedded = false, matrixSeed: seedFromProps 
     }
   };
 
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => { try { return localStorage.getItem('tg.research.historyExpanded') !== 'true'; } catch { return true; } });
+  // 对话列表默认展开(第一次来就能看到已有的对话);用户收起过就记住
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => { try { return localStorage.getItem('tg.research.historyExpanded') === 'false'; } catch { return false; } });
   useEffect(() => { try { localStorage.setItem('tg.research.historyExpanded', String(!sidebarCollapsed)); } catch {} }, [sidebarCollapsed]);
   const [legacyOpen, setLegacyOpen] = useState(false);
   const legacyTurns = useMemo(() => loadLegacyChat(), [legacyOpen]);

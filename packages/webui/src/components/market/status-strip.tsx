@@ -6,7 +6,8 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Copy, Inbox, QrCode, RefreshCw, Settings2, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
-import { IS_JUDGE, friendlyError } from '@/lib/edition';
+import { IS_JUDGE } from '@/lib/edition';
+import { friendlyMarketError } from '@/components/market/judge';
 import { JudgeLock } from '@/components/judge-lock';
 import { pickSnapshotAsOf } from '@/api/market-adapt';
 import { JUDGE_NOT_CONNECTED, identityState } from './judge';
@@ -48,7 +49,7 @@ function WalletCard({ status }: { status: MarketStatus }) {
   const deposit = useMutation({
     mutationFn: api.marketWalletDepositNotice,
     onSuccess: (n) => setNotice(n),
-    onError: (err) => toast.error(t('拿不到充值地址'), { description: friendlyError(err instanceof Error ? err.message : String(err)) }),
+    onError: (err) => toast.error(t('拿不到充值地址'), { description: friendlyMarketError(err instanceof Error ? err.message : String(err)) }),
   });
   const months = monthsAffordable(w.balance_usdt, status.monthly_cost.amount);
   return (
@@ -87,7 +88,7 @@ function WalletCard({ status }: { status: MarketStatus }) {
           {t('充值')}
         </Button>
       </JudgeLock>
-      {w.error ? <span className={cn('text-[10.5px]', IS_JUDGE ? 'text-muted-foreground' : 'text-warn')}>{friendlyError(w.error)}</span> : null}
+      {w.error ? <span className={cn('text-[10.5px]', IS_JUDGE ? 'text-muted-foreground' : 'text-warn')}>{friendlyMarketError(w.error)}</span> : null}
 
       <Dialog open={notice !== null} onOpenChange={(o) => !o && setNotice(null)}>
         <DialogContent className="max-w-md">
@@ -139,7 +140,7 @@ function SettingsDrawer({ settings, onSaved }: { settings: MarketSettings; onSav
         onSaved();
       }
     },
-    onError: (err) => toast.error(t('保存失败'), { description: friendlyError(err instanceof Error ? err.message : String(err)) }),
+    onError: (err) => toast.error(t('保存失败'), { description: friendlyMarketError(err instanceof Error ? err.message : String(err)) }),
   });
   return (
     <div className="flex flex-col gap-4 text-[12px]">
@@ -213,7 +214,7 @@ export function StatusStrip({ status, isLoading, error }: { status: MarketStatus
       void qc.invalidateQueries({ queryKey: ['market', 'status'] });
       toast.success(r.follow.enabled ? t('已开始接收内容') : t('已停止接收内容'));
     },
-    onError: (err) => toast.error(t('切换失败'), { description: friendlyError(err instanceof Error ? err.message : String(err)) }),
+    onError: (err) => toast.error(t('切换失败'), { description: friendlyMarketError(err instanceof Error ? err.message : String(err)) }),
   });
   const poll = useMutation({
     mutationFn: api.marketInboxPoll,
@@ -222,7 +223,7 @@ export function StatusStrip({ status, isLoading, error }: { status: MarketStatus
       void qc.invalidateQueries({ queryKey: ['follow'] });
       toast.success(t('已收取一次'));
     },
-    onError: (err) => toast.error(t('收取失败'), { description: friendlyError(err instanceof Error ? err.message : String(err)) }),
+    onError: (err) => toast.error(t('收取失败'), { description: friendlyMarketError(err instanceof Error ? err.message : String(err)) }),
   });
 
   return (
@@ -258,7 +259,7 @@ export function StatusStrip({ status, isLoading, error }: { status: MarketStatus
         <div className="px-3 py-2 text-[12px] text-muted-foreground">{t('加载中…')}</div>
       ) : error || !status ? (
         <p className="px-3 py-2 text-[12px] text-destructive">
-          {t('加载失败')}:{friendlyError(error instanceof Error ? error.message : String(error))}
+          {t('加载失败')}:{friendlyMarketError(error instanceof Error ? error.message : String(error))}
         </p>
       ) : (
         <>

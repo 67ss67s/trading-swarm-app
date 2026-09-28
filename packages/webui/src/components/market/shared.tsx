@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { t, tmap } from '@/lib/i18n';
-import { friendlyError } from '@/lib/edition';
+import { friendlyMarketError } from '@/components/market/judge';
 import { judgeLightDetail } from './judge';
 
 export const MODE_CLASS: Record<FollowMode, string> = {
@@ -173,7 +173,7 @@ export function EmptyNote({ children }: { children: React.ReactNode }) {
 export function ErrorNote({ err }: { err: unknown }) {
   return (
     <p className="p-3 text-[12px] text-destructive">
-      {t('加载失败')}:{friendlyError(err instanceof Error ? err.message : String(err))}
+      {t('加载失败')}:{friendlyMarketError(err instanceof Error ? err.message : String(err))}
     </p>
   );
 }

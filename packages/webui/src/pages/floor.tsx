@@ -38,6 +38,7 @@ import { ModelSetupBanner } from '@/components/models/setup-banner';
 import { useModels } from '@/components/models/use-models';
 import { backendLabel, fx, relativeTime, useNow } from '@/lib/format';
 import { t, tmap, useLang } from '@/lib/i18n';
+import { fmtCost } from '@/lib/money';
 
 /** 执行通道连接状态;'checking' 是前端在数据没回来时自己填的。 */
 const CONN_LABEL: Record<string, string> = tmap({ connected: '已连接', needs_auth: '未登录', unavailable: '不可用', unknown: '状态未知', checking: '检查中' });
@@ -163,7 +164,7 @@ export function FloorPage({ connected = true }: { connected?: boolean }) {
         <div className="grid grid-cols-4 divide-x divide-[var(--of-line)] border-l border-[var(--of-line)]">
           <TopCell k={t('执行后端')} v={backendLabel(ov?.loop?.backend)} sub={CONN_LABEL[executionQ.data?.connection.status ?? 'checking'] ?? executionQ.data?.connection.status} color={ov?.loop?.halted ? 'var(--of-danger)' : 'var(--of-accent)'} />
           <TopCell k={t('调度')} v={ov?.loop?.halted ? t('紧急停止') : ov?.loop?.paused ? t('已暂停') : t('运行中')} sub={t('每 {n} 分钟 · {brain}', { n: Math.round((ov?.loop?.every_ms ?? 0) / 60000), brain: ov?.loop?.brain ?? '' })} color={ov?.loop?.halted ? 'var(--of-danger)' : ov?.loop?.paused ? 'var(--of-warn)' : 'var(--of-accent)'} />
-          <TopCell k={t('今日判断')} v={usage ? `${usage.judgments} / ${usage.cap || '∞'}` : '—'} sub={usage?.est_cny != null ? `≈ ¥${usage.est_cny.toFixed(2)}` : ''} color={usage?.capped ? 'var(--of-warn)' : undefined} />
+          <TopCell k={t('今日判断')} v={usage ? `${usage.judgments} / ${usage.cap || '∞'}` : '—'} sub={usage?.est_cny != null ? `≈ ${fmtCost(usage.est_cny)}` : ''} color={usage?.capped ? 'var(--of-warn)' : undefined} />
           <TopCell k={t('开着的线程')} v={String(ov?.threads?.length ?? 0)} sub={t('观察 {n} 个币', { n: watchlist.length })} />
         </div>
       </header>

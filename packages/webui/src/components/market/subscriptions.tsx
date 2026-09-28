@@ -10,7 +10,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { MarketScorecard, MarketSubscriptionGroup } from '@/api/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { friendlyError } from '@/lib/edition';
+import { friendlyMarketError } from '@/components/market/judge';
 import { JudgeLock } from '@/components/judge-lock';
 import { api } from '@/api/client';
 import { SUB_GROUP_ORDER, buildSignalFeed, pickSnapshotAsOf, marketSubscriptionAction, offTypeFeedKeys } from '@/api/market-adapt';
@@ -343,7 +343,7 @@ export function SubscriptionsTab({ onShowSignals, onGoMarket }: { onShowSignals:
 
   const refresh = () => { void qc.invalidateQueries({ queryKey: ['market'] }); void qc.invalidateQueries({ queryKey: ['follow'] }); };
   const done = (msg: string) => () => { setOperationError(null); refresh(); toast.success(msg); };
-  const fail = (msg: string) => (err: unknown) => { const message = friendlyError(err instanceof Error ? err.message : String(err)); setOperationError(message); refresh(); toast.error(msg, { description: message }); };
+  const fail = (msg: string) => (err: unknown) => { const message = friendlyMarketError(err instanceof Error ? err.message : String(err)); setOperationError(message); refresh(); toast.error(msg, { description: message }); };
 
   const patch = useMutation({
     mutationFn: (a: { jobId: string; body: Parameters<typeof api.marketPatchSubscription>[1] }) => api.marketPatchSubscription(a.jobId, a.body),
@@ -428,7 +428,7 @@ export function SubscriptionsTab({ onShowSignals, onGoMarket }: { onShowSignals:
         <ErrorNote err={q.error} />
       ) : q.data?.cache?.fetched_at === null ? null : subs.length === 0 ? (
         <div className="flex flex-col items-center gap-2 p-6 text-center">
-          {q.data?.error ? <p className="text-[11.5px] text-warn">{friendlyError(q.data.error)}</p> : null}
+          {q.data?.error ? <p className="text-[11.5px] text-warn">{friendlyMarketError(q.data.error)}</p> : null}
           <p className="text-[12.5px] font-medium">{t('你还没有订阅任何服务')}</p>
           <p className="max-w-md text-[11.5px] text-muted-foreground">{t('去「市场」挑一个信号或情报服务,多数可以先免费试用;订阅后收到的内容会出现在「信号」栏。')}</p>
           {onGoMarket ? (
@@ -439,7 +439,7 @@ export function SubscriptionsTab({ onShowSignals, onGoMarket }: { onShowSignals:
         </div>
       ) : (
         <ScrollArea className="min-h-0 flex-1">
-          {q.data?.error ? <div className="border-b bg-warn/10 px-3 py-1 text-[10.5px] text-warn">{friendlyError(q.data.error)}</div> : null}
+          {q.data?.error ? <div className="border-b bg-warn/10 px-3 py-1 text-[10.5px] text-warn">{friendlyMarketError(q.data.error)}</div> : null}
           <div className="flex flex-col gap-4 p-3">
             {grouped.map(([g, list]) =>
               g === 'ended' ? (

@@ -38,6 +38,7 @@ import { fmtPrice, relativeTime, useNow } from '@/lib/format';
 import { friendlyError } from '@/lib/edition';
 import { t, useLang } from '@/lib/i18n';
 import { st as serverText } from '@/lib/server-text-en';
+import { fmtCost } from '@/lib/money';
 
 const LAYOUT_KEY = 'tg.floor.v4.layout';
 const THEME_KEY = 'tg.floor.v4.theme';
@@ -221,7 +222,7 @@ export function FloorV4Page({ connected = true }: { connected?: boolean }) {
           }
           case 'brief': {
             const r = await qc.fetchQuery({ queryKey: ['captain', 'brief'], queryFn: api.captainBrief, staleTime: 30_000 });
-            toast(serverText(r.brief?.headline) ?? t('今天还没有值班简报'), r.brief ? { description: t('待阅交接 {h} · 风控 {r} · 今日花费 ¥{c}', { h: r.brief.pending_handoffs.count, r: r.brief.risk.level, c: r.brief.total_cost_cny.toFixed(2) }) } : undefined);
+            toast(serverText(r.brief?.headline) ?? t('今天还没有值班简报'), r.brief ? { description: t('待阅交接 {h} · 风控 {r} · 今日花费 {c}', { h: r.brief.pending_handoffs.count, r: r.brief.risk.level, c: fmtCost(r.brief.total_cost_cny) }) } : undefined);
             break;
           }
           case 'exposure': {

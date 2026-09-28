@@ -1,6 +1,6 @@
 import { pickSnapshotAsOf, waitForMarketRead } from '@/api/market-adapt';
 import { JudgeLock } from '@/components/judge-lock';
-import { friendlyError } from '@/lib/edition';
+import { friendlyMarketError } from '@/components/market/judge';
 import { CacheNote, cachePollMs } from './cache-note';
 /**
  * 「市场」栏:搜 OKX.AI 上的 ASP 服务(`service-match` 直通)、看详情、试用 / 订阅。
@@ -209,7 +209,7 @@ function DetailSheet({ agentId, onClose, onSubscribe }: { agentId: string | null
 
               <div>
                 <p className="mb-1.5 text-[11px] font-semibold text-muted-foreground">{t('评价 {n} 条', { n: d.feedback.length })}</p>
-                {d.feedback_error ? <p className="text-[11px] text-warn">{friendlyError(d.feedback_error)}</p> : null}
+                {d.feedback_error ? <p className="text-[11px] text-warn">{friendlyMarketError(d.feedback_error)}</p> : null}
                 <div className="flex flex-col gap-1.5">
                   {d.feedback.map((f, i) => (
                     <div key={i} className="rounded border bg-muted/20 px-2 py-1.5 text-[11px]">
@@ -289,7 +289,7 @@ function SubscribeDialog({
     },
     onSettled: () => { void qc.invalidateQueries({ queryKey: ['market'] }); },
     onError: (err) => {
-      toast.error(t('订阅失败'), { description: friendlyError(err instanceof Error ? err.message : String(err)) });
+      toast.error(t('订阅失败'), { description: friendlyMarketError(err instanceof Error ? err.message : String(err)) });
     },
   });
   const fee = s ? fmtServicePrice(s) : '';
@@ -390,7 +390,7 @@ function SubscribeDialog({
             ) : null}
           </div>
         ) : null}
-        {sub.error ? <p role="alert" className="whitespace-pre-wrap break-words text-[12px] text-down">{friendlyError(sub.error.message)}</p> : null}
+        {sub.error ? <p role="alert" className="whitespace-pre-wrap break-words text-[12px] text-down">{friendlyMarketError(sub.error.message)}</p> : null}
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={onClose} disabled={sub.isPending}>
             {t('取消')}
@@ -429,7 +429,7 @@ export function BrowseTab({ status, onSubscribed }: { status: MarketStatus | nul
       const hit = resolveCatalogService(r.services, service, trial);
       setSubTarget({ service: hit, trial });
     } catch (err) {
-      toast.error(t('拉不到服务信息'), { description: friendlyError(err instanceof Error ? err.message : String(err)) });
+      toast.error(t('拉不到服务信息'), { description: friendlyMarketError(err instanceof Error ? err.message : String(err)) });
     } finally {
       resolvingRef.current = false; setResolving(false);
     }
@@ -447,7 +447,7 @@ export function BrowseTab({ status, onSubscribed }: { status: MarketStatus | nul
       setPages((p) => [...p, r.services]);
       setAfter(r.search_after);
     },
-    onError: (err) => toast.error(t('翻页失败'), { description: friendlyError(err instanceof Error ? err.message : String(err)) }),
+    onError: (err) => toast.error(t('翻页失败'), { description: friendlyMarketError(err instanceof Error ? err.message : String(err)) }),
   });
 
   const services = useMemo(() => {
@@ -523,7 +523,7 @@ export function BrowseTab({ status, onSubscribed }: { status: MarketStatus | nul
       ) : q.isError ? (
         <ErrorNote err={q.error} />
       ) : services.length === 0 ? (
-        <EmptyNote>{friendlyError(q.data?.unmatch_reason) ?? t('没搜到服务;换个关键词,或者关掉筛选。')}</EmptyNote>
+        <EmptyNote>{friendlyMarketError(q.data?.unmatch_reason) ?? t('没搜到服务;换个关键词,或者关掉筛选。')}</EmptyNote>
       ) : (
         <ScrollArea className="min-h-0 flex-1">
           <div className="grid grid-cols-1 gap-2 p-3 sm:grid-cols-2 xl:grid-cols-3">

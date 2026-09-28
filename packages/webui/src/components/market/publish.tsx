@@ -17,7 +17,7 @@ import { Pane, Workspace } from '@/components/pane';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { JudgeLock } from '@/components/judge-lock';
-import { friendlyError } from '@/lib/edition';
+import { friendlyMarketError } from '@/components/market/judge';
 import { pickSnapshotAsOf } from '@/api/market-adapt';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
@@ -307,7 +307,7 @@ export function PublishTab() {
         {!dismissed ? <OnboardingCard items={fallbackChecklist(false, [])} onGo={goStep} onDismiss={dismissGuide} /> : null}
         <Workspace className="shrink-0">
           <Pane title={t('注册卖家身份')} hint={t('注册后,你的策略信号和服务才能在市场上出售')}>
-            {asp?.error ? <div className="border-b bg-warn/10 px-3 py-1 text-[10.5px] text-warn">{friendlyError(asp.error)}</div> : null}
+            {asp?.error ? <div className="border-b bg-warn/10 px-3 py-1 text-[10.5px] text-warn">{friendlyMarketError(asp.error)}</div> : null}
             <RegisterForm ref={registerRef} onRegistered={() => void qc.invalidateQueries({ queryKey: ['market'] })} />
           </Pane>
         </Workspace>

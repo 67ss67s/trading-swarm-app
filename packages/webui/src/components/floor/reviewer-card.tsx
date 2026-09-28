@@ -9,6 +9,7 @@ import { api } from '@/api/client';
 import type { ReviewerCardsResponse, TradeCard } from '@/api/types';
 import { relativeTime } from '@/lib/format';
 import { t, tmap } from '@/lib/i18n';
+import { fmtCost } from '@/lib/money';
 
 const EXIT_LABEL: Record<TradeCard['exit_class'], string> = tmap({ stop: '止损', take_profit: '止盈', model_exit: '模型离场', invalidated: '失效', canceled: '撤单', manual: '手动', halt: '紧急停止', other: '其他' });
 const OUTCOME: Record<TradeCard['outcome'], { label: string; color: string }> = {
@@ -86,7 +87,7 @@ export function ReviewerPanel({ data, now }: { data: ReviewerCardsResponse | nul
       </ul>
       {data.batches.length ? (
         <div className="mt-2 text-[9px] text-[var(--of-ink-faint)]">
-          {t('最近批次')}:{data.batches.slice(0, 3).map((b) => `${relativeTime(b.started_at, now)} ${b.status}${b.cost_cny ? ` ¥${b.cost_cny.toFixed(3)}` : ''}`).join(' · ')}
+          {t('最近批次')}:{data.batches.slice(0, 3).map((b) => `${relativeTime(b.started_at, now)} ${b.status}${b.cost_cny ? ` ${fmtCost(b.cost_cny, 3)}` : ''}`).join(' · ')}
         </div>
       ) : null}
     </div>

@@ -24,6 +24,7 @@ import { fmtDateTime, relativeTime, useNow } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { t, tmap } from '@/lib/i18n';
 import { st } from '@/lib/server-text-en';
+import { fmtCost } from '@/lib/money';
 
 type BotBadge = 'AI' | 'CODE' | 'EXEC';
 
@@ -79,7 +80,7 @@ function BotRow({ bot, lastRun, pending, now }: { bot: BotProfile; lastRun: BotR
         {lastRun || pending || presence?.action ? (
           <span className="num block truncate text-[10px] text-muted-foreground">
             {presence?.action ? `${st(presence.action)} · ` : ''}
-            {lastRun ? `${lastRun.routine} ${RUN_STATUS[lastRun.status]} ${relativeTime(lastRun.started_at, now)}${lastRun.cost_cny ? ` ¥${lastRun.cost_cny.toFixed(3)}` : ''}` : ''}
+            {lastRun ? `${lastRun.routine} ${RUN_STATUS[lastRun.status]} ${relativeTime(lastRun.started_at, now)}${lastRun.cost_cny ? ` ${fmtCost(lastRun.cost_cny, 3)}` : ''}` : ''}
             {pending ? <span className="text-warn"> · {t('{n} 条待读', { n: pending })}</span> : null}
           </span>
         ) : null}

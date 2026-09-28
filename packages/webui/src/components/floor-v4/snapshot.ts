@@ -25,6 +25,7 @@ import type { FloorSnapshot as SnapshotA, TaskIcon } from './engine-a/types';
 import { ROLES, ROLE_ORDER } from './engine-b/roles';
 import type { ActivityItem as EngineActivity, AgentSnap, AgentStat, AgentStatus, DeskInfo, EvoRoleRow, HandoffSnap, InboxItem, MarketState, MeetingSnap, Role, Snapshot, StrategyCard } from './engine-b/types';
 import { st as serverText } from '@/lib/server-text-en';
+import { fmtCost } from '@/lib/money';
 
 export type { Role };
 
@@ -227,7 +228,7 @@ function roleStats(role: Role, inp: FloorInputs, pendingIntents: number, pending
   const runsToday = (inp.bots?.runs ?? []).filter((r) => r.role === role && r.started_at >= Math.floor(inp.now / DAY) * DAY);
   const generic: AgentStat[] = [
     { label: t('今日运行'), value: String(runsToday.length) },
-    { label: t('今日花费'), value: `¥${runsToday.reduce((s, r) => s + (r.cost_cny || 0), 0).toFixed(2)}` },
+    { label: t('今日花费'), value: fmtCost(runsToday.reduce((s, r) => s + (r.cost_cny || 0), 0)) },
     { label: t('失败'), value: String(runsToday.filter((r) => r.status === 'failed' || Boolean(r.error)).length) },
   ];
   switch (role) {

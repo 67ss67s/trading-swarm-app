@@ -1,7 +1,7 @@
 /** 2026-09-25 信息架构重排(侧栏 / #start 开始清单 / #connect 接入页 / 散落的 ③ 条目)的英文词条,独立文件,不和别人抢 i18n-en.ts 的同一段。 */
 export const START_EN: Record<string, string> = {
   // 侧栏
-  '开始': 'Start', '选币与策略': 'Coins & strategies', '研究台': 'Research', '逐次判断': 'Judgments', '接入': 'Connect',
+  '开始': 'Start', '选币与策略': 'Coins & strategies', '研究台': 'Research workbench', '逐次判断': 'Judgments', '接入': 'Connect',
   '风控与自动化': 'Risk & automation', '实盘部署台': 'Live deployment', '高级': 'Advanced', '设置': 'Settings',
   '接入完成 ✓': 'Setup complete ✓', '必做 {done} / {total} 项完成。': '{done} / {total} required steps done. ',
   // 状态

@@ -26,7 +26,7 @@ Most AI trading bots put a model between a prompt and an order button. When they
 flowchart LR
   subgraph Research["Research loop"]
     R1[Radar screen<br/>short · mid · long] --> R2[Matrix research<br/>code vs code + Jev]
-    R2 --> R3[Refine]
+    R2 --> R3[Research workbench<br/>chat · backtest · refine]
     R3 --> R4[My strategies]
   end
 
@@ -118,13 +118,13 @@ Code: `packages/gateway/src/demo/asp-agent/` (services in `services/`, the order
 ### The research loop
 
 ```
-radar screen → picks by horizon → matrix research → refine → my strategy
+radar screen → picks by horizon → matrix research → research workbench → my strategy
   → strategy run → orders on OKX → judgment ledger → review → next round
 ```
 
 Short term means 3m / 5m / 15m, mid 1h / 4h, long 12h / 1d. Short-term trading is limited to liquid markets, because on small caps fees eat the edge.
 
-Matrix research tests assets × timeframes × strategy families, each in two versions: pure code, and code plus a Jev judgment step. Fees, slippage and funding are charged. Data is split into train, selection and a holdout that is evaluated once, after the candidates are frozen. Results are corrected for the number of trials (deflated Sharpe, Holm), so a strategy that only looks good by luck does not pass. "Nothing passed" is a normal result and comes with the reason. The Refine page takes a candidate from a finished screening run (or starts from scratch), works out what to change with the agent, and tests the change the same way.
+Matrix research tests assets × timeframes × strategy families, each in two versions: pure code, and code plus a Jev judgment step. Fees, slippage and funding are charged. Data is split into train, selection and a holdout that is evaluated once, after the candidates are frozen. Results are corrected for the number of trials (deflated Sharpe, Holm), so a strategy that only looks good by luck does not pass. "Nothing passed" is a normal result and comes with the reason. In the research workbench you work on a strategy by chatting with the agent. It compiles the rules, runs the backtest, tries parameter variants, explains why a strategy lags buy-and-hold, and saves every version to My strategies with before and after numbers.
 
 ![Batch validation: code vs. code + Jev, with a one-time holdout check](docs/assets/screenshots/batch-validation.jpg)
 
@@ -195,7 +195,7 @@ packages/
   gateway/      runtime: HTTP API and live updates, the nine agents, risk checks, OKX execution
                 and market data, research engine, strategy runs, Jev judgment, judgment ledger,
                 OKX.AI services (src/demo/**)
-  webui/        React UI: trading page, floor, agent chat, OKX.AI, research, refine, strategies,
+  webui/        React UI: trading page, floor, agent chat, OKX.AI, research workbench, strategies,
                 model connections
   contracts/    JSON Schema contracts and generated TypeScript types
   pine-engine/  runs PineScript v5/v6 indicators inside strategy rules

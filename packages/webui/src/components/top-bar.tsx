@@ -16,6 +16,7 @@ import { getLang, setLang, t, useLang } from '@/lib/i18n';
 import { backendLabel, fmtSigned, fmtUsdt, pnlText } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { AccountView, QueueView, UsageToday } from '@/api/types';
+import { fmtCost } from '@/lib/money';
 
 interface TopBarProps {
   page: Page;
@@ -35,7 +36,7 @@ interface TopBarProps {
 function UsageMeter({ usage }: { usage: UsageToday }) {
   const cap = Number(usage.cap) || 0;
   const judgments = Number(usage.judgments) || 0;
-  const cost = usage.est_cny !== null && usage.est_cny !== undefined && Number.isFinite(Number(usage.est_cny)) ? `≈¥${Number(usage.est_cny).toFixed(2)}` : null;
+  const cost = usage.est_cny !== null && usage.est_cny !== undefined && Number.isFinite(Number(usage.est_cny)) ? `≈${fmtCost(Number(usage.est_cny))}` : null;
   const text = `${t('今日判断')} ${judgments}${cap > 0 ? `/${cap}` : ''}${cost ? ` · ${cost}` : ''}`;
   return (
     <Tooltip>

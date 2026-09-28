@@ -48,6 +48,7 @@ import { directionLabel, fmtDateTime, relativeTime, useNow } from '@/lib/format'
 import { cn } from '@/lib/utils';
 import { t, tmap, listSep } from '@/lib/i18n';
 import { friendlyError } from '@/lib/edition';
+import { fmtCost } from '@/lib/money';
 
 // label 是 i18n key(中文原文),渲染时过 t()
 const HORIZONS: { id: ScreenHorizon; label: string }[] = [
@@ -107,8 +108,7 @@ function fmtCompact(v: number | null | undefined): string {
 }
 
 function fmtCny(v: number | null | undefined): string {
-  if (v === null || v === undefined || !Number.isFinite(v)) return '¥0.000';
-  return `¥${v.toFixed(3)}`;
+  return fmtCost(v, 3);
 }
 
 /** 倒计时:超过一小时给 h:mm,否则 m:ss。 */

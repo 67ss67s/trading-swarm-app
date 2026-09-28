@@ -106,6 +106,9 @@ export const OKX_AI_LISTING_URL = 'https://www.okx.ai/agents/13866'; // Trading 
 
 const TECH_ERROR = /ENOENT|EACCES|ECONNREFUSED|ETIMEDOUT|spawn|stderr|stdout|exit code|exited with|command not found|No such file|onchainos|okx-a2a|daemon|\bCLI\b|\bcli\b|node:\d+|UNDICI|at [\w.<>]+ \(|\/(?:usr|opt|Users|home|tmp)\/|\.(?:js|mjs|ts|toml):\d*|--profile|~\/\.okx|pi exit|timed out after/i;
 
+/** 是不是 CLI / 本机路径 / 进程报错这类技术原文(OKX.AI 页在默认版也会换成友好说明,见 components/market/judge.ts) */
+export const isTechError = (text: string): boolean => TECH_ERROR.test(text);
+
 export const FRIENDLY_TECH_ERROR = 'This part runs on private infrastructure that is not connected in the judge edition.';
 
 /** 交易所行情接口的原始报错(URL + HTTP / OKX 错误码 / 限频熔断),评审版换成一句行情暂不可用 */

@@ -8,7 +8,7 @@ import type { MarketIdentity } from '@/api/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { JudgeLock } from '@/components/judge-lock';
-import { friendlyError } from '@/lib/edition';
+import { friendlyMarketError } from '@/components/market/judge';
 import { cn } from '@/lib/utils';
 import { t } from '@/lib/i18n';
 import { fmtUsdt } from '../shared';
@@ -64,7 +64,7 @@ export function IdentityBar({ summary, identity, claimable, claimError, claiming
       </div>
       {approval?.remark && tone !== 'ok' ? (
         <p className={cn('text-[11px] sm:max-w-md', tone === 'bad' ? 'text-down' : 'text-muted-foreground')}>
-          {tone === 'bad' ? t('原因') : t('说明')}:{friendlyError(approval.remark)}
+          {tone === 'bad' ? t('原因') : t('说明')}:{friendlyMarketError(approval.remark)}
         </p>
       ) : null}
       <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
@@ -92,7 +92,7 @@ export function IdentityBar({ summary, identity, claimable, claimError, claiming
           </JudgeLock>
         ) : null}
       </div>
-      {claimError ? <p className="w-full text-[10.5px] text-warn">{friendlyError(claimError)}</p> : null}
+      {claimError ? <p className="w-full text-[10.5px] text-warn">{friendlyMarketError(claimError)}</p> : null}
     </div>
   );
 }

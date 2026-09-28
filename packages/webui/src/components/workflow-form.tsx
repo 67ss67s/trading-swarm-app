@@ -31,6 +31,7 @@ import { relativeTime } from '@/lib/format';
 import { trimNum, verdictText } from '@/lib/capacity';
 import { cn } from '@/lib/utils';
 import { t, tmap, listSep } from '@/lib/i18n';
+import { fmtCost } from '@/lib/money';
 
 
 
@@ -585,7 +586,7 @@ export function WorkflowForm({ groups, sectioned = false, defaultOpen = ['pace']
   const heartbeatMinutes = Math.round(draft.heartbeat_every_ms / 60000);
   const calls = callsPerHour(draft);
   const callsText = calls.low === calls.high ? `${Math.round(calls.low)}` : `${Math.round(calls.low)}–${Math.round(calls.high)}`;
-  const costText = `≈¥${(calls.high * 0.006).toFixed(2)}`;
+  const costText = `≈${fmtCost(calls.high * 0.006)}`;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -646,7 +647,7 @@ export function WorkflowForm({ groups, sectioned = false, defaultOpen = ['pace']
               ? t('每根收盘只在本地算特征。突破、EMA 交叉、放量、急拉急跌、开收盘窗口、资金费率极端、回踩,命中任一个,或者到心跳,才叫模型。')
               : t('每根收盘对观察列表里每个币各问一次模型,费用随周期线性涨;演示看热闹用。')}
             <div className="num mt-1 text-foreground/80">
-              {t('预计')} <span className="font-semibold">{callsText}</span> {t('次/小时')} · {costText}{t('/小时(GLM 单价 ≈¥0.006)')}
+              {t('预计')} <span className="font-semibold">{callsText}</span> {t('次/小时')} · {costText}{t('/小时(GLM 单价 ≈{unit})', { unit: fmtCost(0.006, 3) })}
             </div>
           </div>
 

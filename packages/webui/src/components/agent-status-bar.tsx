@@ -19,6 +19,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { BIAS_LABEL, REGIME_LABEL, fmtDateTime, relativeTime, useNow } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { t } from '@/lib/i18n';
+import { fmtCost } from '@/lib/money';
 
 const TONE_TEXT: Record<IntentTone, string> = { danger: 'text-destructive', warn: 'text-warn', ok: 'text-foreground', idle: 'text-muted-foreground' };
 const TONE_DOT: Record<IntentTone, string> = { danger: 'bg-destructive', warn: 'bg-warn', ok: 'bg-up', idle: 'bg-muted-foreground' };
@@ -154,7 +155,7 @@ export function AgentStatusBar() {
         {usage ? (
           <span className={cn('num text-muted-foreground', usage.capped && 'text-warn')} title={t('今日判断次数 / 上限 · 估算花费')}>
             {t('判断')} {usage.judgments}/{usage.cap || '∞'}
-            {usage.est_cny != null ? ` · ¥${usage.est_cny.toFixed(2)}` : ''}
+            {usage.est_cny != null ? ` · ${fmtCost(usage.est_cny)}` : ''}
           </span>
         ) : null}
         <span className="hidden h-3.5 w-px bg-border sm:block" />

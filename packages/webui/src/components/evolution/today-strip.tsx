@@ -5,6 +5,7 @@
  */
 import type { EvoToday } from '@/api/evolution';
 import { t } from '@/lib/i18n';
+import { fmtCost } from '@/lib/money';
 
 function money(v: string | null): string {
   const n = v == null ? NaN : Number(v);
@@ -37,7 +38,7 @@ export function TodayStrip({ today }: { today: EvoToday | null | undefined }) {
         <span className="num text-[9.5px] text-[var(--of-ink-faint)]">{today.date} UTC</span>
       </div>
       <Item k={t('权益')} v={money(today.equity)} />
-      {j ? <Item k={t('判断')} v={`${j.used} / ${j.cap || '∞'}`} sub={j.cost_cny != null ? `≈ ¥${j.cost_cny.toFixed(2)}` : null} color={j.cap && j.used >= j.cap ? 'var(--of-warn)' : undefined} /> : null}
+      {j ? <Item k={t('判断')} v={`${j.used} / ${j.cap || '∞'}`} sub={j.cost_cny != null ? `≈ ${fmtCost(j.cost_cny)}` : null} color={j.cap && j.used >= j.cap ? 'var(--of-warn)' : undefined} /> : null}
       {idle != null ? <Item k={t('空转')} v={`${Math.round(idle * 100)}%`} sub={t('票池为空 / 只有 HOLD 仍调模型')} color={idle >= 0.5 ? 'var(--of-warn)' : undefined} title={t('模型调用里空转的比例:票池为空,或只有 HOLD 也照样调用')} /> : null}
       {pool ? <Item k={t('票池')} v={poolEmpty ? t('空') : t('{n} 个', { n: pool.size })} sub={pool.reason} color={poolEmpty ? 'var(--of-danger)' : undefined} title={pool.reason ?? undefined} /> : null}
       {cand ? <Item k={t('影子候选')} v={t('{open} 开 / {settled} 结算', { open: cand.open, settled: cand.settled })} /> : null}

@@ -278,13 +278,13 @@ describe('导航与入口', () => {
   it('侧栏:「策略研究」一个入口,和我的策略同组放最前;研究台 / 批量验证不再单列,深链标题还在', () => {
     const pick = NAV.filter((n) => n.group === 'pick').map((n) => n.id);
     expect(pick[0]).toBe('strategy-research');
-    expect(pick[1]).toBe('refine'); // 09-28:精修单独成页「优化」(#refine),紧跟策略研究
+    expect(pick[1]).toBe('research'); // 09-29:研究台(对话 + 策略构建)回到侧栏,紧跟策略研究
     expect(pick[2]).toBe('my-strategies');
-    expect(pageLabel('refine')).toBe('优化');
-    expect(EN['优化']).toBe('Refine');
-    expect(NAV.some((n) => n.id === 'research' || n.id === 'matrix-study')).toBe(false);
+    expect(pageLabel('research')).toBe('研究台');
+    expect(EN['研究台']).toBe('Research workbench');
+    expect(NAV.some((n) => n.id === 'matrix-study' || (n.id as string) === 'refine')).toBe(false);
     expect(pageLabel('strategy-research')).toBe('策略研究');
-    expect(HIDDEN_PAGE_LABEL.research).toBe('研究台');
+    expect(HIDDEN_PAGE_LABEL.research).toBeUndefined();
     expect(pageLabel('matrix-study')).toBe('批量验证');
     expect(EN['策略研究']).toBe('Strategy Research');
   });

@@ -4,7 +4,7 @@
  */
 import type { AspApproval, AspProduct, ChecklistItem, ProductStatus } from '@/api/asp-products';
 import { t, tmap } from '@/lib/i18n';
-import { friendlyError } from '@/lib/edition';
+import { friendlyMarketError } from '@/components/market/judge';
 
 export const STRATEGY_KEY = 'strategy_signal';
 
@@ -192,7 +192,7 @@ export function writeDismissed(v: boolean): void {
 }
 
 export function errText(err: unknown): string {
-  return friendlyError(err instanceof Error ? err.message : String(err));
+  return friendlyMarketError(err instanceof Error ? err.message : String(err));
 }
 
 /** react-query key:挂在 ['market'] 下,注册 / 上下架后整体失效时一起刷新。 */

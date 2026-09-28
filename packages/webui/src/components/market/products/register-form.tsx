@@ -5,7 +5,7 @@ import { forwardRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
-import { friendlyError } from '@/lib/edition';
+import { friendlyMarketError } from '@/components/market/judge';
 import { api } from '@/api/client';
 import type { MarketPricing, MarketRegisterForm, MarketValidateFinding } from '@/api/types';
 import { ConfirmDialog } from '@/components/confirm-dialog';
@@ -65,7 +65,7 @@ export const RegisterForm = forwardRef<HTMLDivElement, { onRegistered: () => voi
       setValidated(r.pass);
       r.pass ? toast.success(t('校验通过')) : toast.error(t('有必须修的问题'));
     },
-    onError: (err) => toast.error(t('校验失败'), { description: friendlyError(err instanceof Error ? err.message : String(err)) }),
+    onError: (err) => toast.error(t('校验失败'), { description: friendlyMarketError(err instanceof Error ? err.message : String(err)) }),
   });
   const register = useMutation({
     mutationFn: () => api.marketAspRegister(form, avatar!),
@@ -80,7 +80,7 @@ export const RegisterForm = forwardRef<HTMLDivElement, { onRegistered: () => voi
       toast.success(t('ASP 身份已注册:#{id}', { id: r.agent_id ?? '?' }), { description: t('还没对外可见,点「上架」发布') });
       onRegistered();
     },
-    onError: (err) => toast.error(t('注册失败'), { description: friendlyError(err instanceof Error ? err.message : String(err)) }),
+    onError: (err) => toast.error(t('注册失败'), { description: friendlyMarketError(err instanceof Error ? err.message : String(err)) }),
   });
   const blocks = findings.filter((f) => f.severity === 'block').length;
   const canRegister = validated && blocks === 0 && avatar !== null;

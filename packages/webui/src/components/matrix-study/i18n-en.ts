@@ -102,7 +102,7 @@ export const MATRIX_UX_EN: Record<string, string> = {
   '没有能直接上实盘的,但有 {n} 组值得先用模拟盘看看': 'Nothing ready for live trading, but {n} combos are worth watching on paper',
   '这些组合只差样本数或统计显著性:选择段赚钱、跑赢同等仓位持有、回撤也在门槛内。它们没做最终验收,不算通过;点结果地图里的蓝色格子,可以存为候补策略,去我的策略里用模拟盘跑前向。': 'These combos only lack sample size or statistical significance: they made money on the selection period, beat holding at the same exposure, and stayed within the drawdown limit. They have not had the final check and do not count as passes; click a blue square in the result map to save one as a candidate strategy and run it forward on paper in My strategies.',
   '批量验证是海选:还不知道做哪个币、哪个周期、哪种策略时,一次把组合全跑一遍。已经有想法、要逐条改,去': 'Batch Validation is for screening: when you do not yet know which coin, timeframe or strategy, run all the combos at once. If you already have an idea and want to refine it rule by rule, go to',
-  '精修。': 'to refine it.', '研究台': 'Research',
+  '精修。': 'to refine it.', '研究台': 'Research workbench',
   '研究台是精修:已经有想法,逐条改规则、看回测。还不知道做哪个币、哪个周期、哪种策略,先去': 'Research is for refining: you already have an idea and adjust rules one at a time against backtests. If you do not yet know which coin, timeframe or strategy, first go to',
   '海选。': 'to screen.',
   '来自批量验证:{label}({market})。选择段 {ret},{n} 笔。在这里逐条改规则,再回测。': 'From Batch Validation: {label} ({market}). Selection period {ret}, {n} trades. Adjust the rules here one at a time, then backtest.',

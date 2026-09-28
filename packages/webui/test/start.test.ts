@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import type { BrainOption, ExecutionView, ModelConnection, ModelsView } from '../src/api/types';
 import { bootRedirect, evaluateStart, okxSimpleMode, startCoreComplete, startProgress, type StartInputs } from '../src/components/start/logic';
-import { NAV, NAV_COLLAPSIBLE_GROUPS, NAV_GROUP_LABEL, NAV_GROUP_ORDER, NAV_HEADLESS_GROUPS } from '../src/lib/nav';
+import { NAV, NAV_COLLAPSIBLE_GROUPS, NAV_GROUP_LABEL, NAV_GROUP_ORDER } from '../src/lib/nav';
 import { EN } from '../src/lib/i18n-en';
 
 function exec(over: Partial<ExecutionView> & { okx?: Partial<NonNullable<ExecutionView['okx']>> | null } = {}): ExecutionView {
@@ -147,15 +147,12 @@ describe('startCoreComplete / bootRedirect', () => {
 describe('navigation (IA ②)', () => {
   it('groups by user journey with a collapsed advanced group', () => {
     const ids = (g: string) => NAV.filter((n) => n.group === g).map((n) => n.id);
-    // 09-28:OKX.AI(原信号市场)单独一组放最上面,不画组名
-    expect(NAV_GROUP_ORDER).toEqual(['okx', 'ops', 'pick', 'review', 'settings', 'advanced']);
-    expect(NAV_HEADLESS_GROUPS).toEqual(['okx']);
-    expect(NAV[0]).toMatchObject({ id: 'market', label: 'OKX.AI', group: 'okx' });
-    expect(ids('okx')).toEqual(['market']);
-    // 09-25 楼层 v4 成为默认 #floor;09-28 旧楼层(#floor-legacy)所有版本都不进侧栏
-    expect(ids('ops')).toEqual(['floor', 'trade', 'agent']);
-    // 09-25 晚:研究台 + 批量验证合成「策略研究」,和「我的策略」同组放最前(旧路由保留,不单列);09-28 精修单独成页「优化」
-    expect(ids('pick')).toEqual(['strategy-research', 'refine', 'my-strategies', 'screener', 'watch']);
+    expect(NAV_GROUP_ORDER).toEqual(['ops', 'pick', 'review', 'settings', 'advanced']);
+    // 09-25 楼层 v4 成为默认 #floor;09-28 旧楼层(#floor-legacy)所有版本都不进侧栏;09-29 OKX.AI(原信号市场)在交易下面
+    expect(ids('ops')).toEqual(['floor', 'trade', 'market', 'agent']);
+    expect(NAV.find((n) => n.id === 'market')?.label).toBe('OKX.AI');
+    // 09-25 晚:研究台 + 批量验证合成「策略研究」,和「我的策略」同组放最前(旧路由保留,不单列);09-29 研究台回到侧栏
+    expect(ids('pick')).toEqual(['strategy-research', 'research', 'my-strategies', 'screener', 'watch']);
     expect(ids('settings')).toEqual(['connect', 'models', 'settings']);
     expect(ids('advanced')).toEqual(['intel', 'events']); // 09-25 实盘部署台退出导航;09-28 日志页不进侧栏
     expect(NAV_COLLAPSIBLE_GROUPS).toEqual(['advanced']);

@@ -10,7 +10,7 @@ import { ExternalLink, RefreshCw, Star } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/api/client';
 import { JudgeLock } from '@/components/judge-lock';
-import { friendlyError } from '@/lib/edition';
+import { friendlyMarketError } from '@/components/market/judge';
 import { pickSnapshotAsOf } from '@/api/market-adapt';
 import type { CatalogAgent, CatalogService } from '@/api/types';
 import { Badge } from '@/components/ui/badge';
@@ -396,7 +396,7 @@ export function CatalogView({ onSubscribe, busy = false }: { busy?: boolean; onS
                   toast.success(t('已开始重抓'));
                   void qc.invalidateQueries({ queryKey: ['market', 'catalog'] });
                 },
-                (err) => toast.error(t('重抓失败'), { description: friendlyError(err instanceof Error ? err.message : String(err)) }),
+                (err) => toast.error(t('重抓失败'), { description: friendlyMarketError(err instanceof Error ? err.message : String(err)) }),
               );
             }}
           >

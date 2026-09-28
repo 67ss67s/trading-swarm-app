@@ -25,6 +25,7 @@ import { useMarketScan } from './use-market-scan';
 import { useWatchWriter } from './use-watch-writer';
 import { WatchList, type WatchRowQuote } from './watch-list';
 import { estimateDaily, mergeAdd, moveItem, radarHits, removeSymbols, setTradable } from './watch-logic';
+import { fmtCost } from '@/lib/money';
 
 type Positions = Map<string, 'in_position' | 'pending_entry' | 'orphan'>;
 
@@ -177,9 +178,9 @@ function CostLine({ wf, usage }: { wf: Workflow; usage: { judgments: number; cap
     <div className="shrink-0 border-b px-3 py-2 text-[11.5px] leading-5">
       <span className="text-foreground">{t('这些参数决定每天判断几次、花多少钱:名单越长、周期越短、心跳越勤,调用越多。')}</span>{' '}
       <span className="num text-muted-foreground">
-        {t('现在约每天 {lo}–{hi} 次 · ≈¥{cost}', { lo: est.low, hi: est.high, cost: est.costHigh.toFixed(2) })}
+        {t('现在约每天 {lo}–{hi} 次 · ≈{cost}', { lo: est.low, hi: est.high, cost: fmtCost(est.costHigh) })}
         {usage ? ` · ${t('今天已用 {n}/{cap}', { n: usage.judgments, cap: usage.cap || '∞' })}` : ''}
-        {usage?.est_cny != null ? ` (¥${usage.est_cny.toFixed(2)})` : ''}
+        {usage?.est_cny != null ? ` (${fmtCost(usage.est_cny)})` : ''}
       </span>
     </div>
   );

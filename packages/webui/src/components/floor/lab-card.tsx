@@ -10,6 +10,7 @@ import type { CaptainBriefResponse, ExperimentResult, LabExperimentsResponse } f
 import { fx, relativeTime } from '@/lib/format';
 import { t } from '@/lib/i18n';
 import { RISK_LEVEL_COLOR, RISK_LEVEL_LABEL } from './risk-card';
+import { fmtCost } from '@/lib/money';
 
 function r(v: number | null | undefined, d = 2): string {
   return v == null || Number.isNaN(v) ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(d)}`;
@@ -170,7 +171,7 @@ export function CaptainBriefPanel({ data, now }: { data: CaptainBriefResponse | 
         <>
           <div className="mt-1 text-[10px] leading-4 text-[var(--of-ink)]">{b.headline}</div>
           <div className="mt-2 grid grid-cols-3 gap-px bg-[var(--of-line)] text-center text-[9px]">
-            <Cell k={t('角色任务')} v={String(Object.values(b.runs_by_role).reduce((a, x) => a + x.runs, 0))} sub={`¥${fx(b.total_cost_cny, 3)}`} />
+            <Cell k={t('角色任务')} v={String(Object.values(b.runs_by_role).reduce((a, x) => a + x.runs, 0))} sub={fmtCost(b.total_cost_cny, 3)} />
             <Cell k={t('待读')} v={String(b.pending_handoffs.count)} sub={Object.entries(b.pending_handoffs.by_from).map(([k, v]) => `${ROLE_SHORT[k] ?? k} ${v}`).join(' ') || '—'} />
             <Cell k={t('风控')} v={RISK_LEVEL_LABEL[b.risk.level]} sub={`${t('{n} 条告警', { n: b.risk.open })}${b.risk.blocks_new_risk ? ` · ${t('停新增')}` : ''}`} color={RISK_LEVEL_COLOR[b.risk.level]} />
             <Cell k={t('平仓')} v={String(b.trades.closed)} sub={t('{w} 胜 {l} 负 {r}R', { w: b.trades.wins, l: b.trades.losses, r: r(b.trades.total_r, 1) })} />

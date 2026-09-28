@@ -14,8 +14,11 @@
  * - 新闻标题(「…」里的正文)和模型现写的总结不翻:那是外部内容 / 模型输出,硬翻会失真。
  */
 import { getLang } from './i18n';
+import { fmtCost } from './money';
 
 const N = String.raw`[-−+]?\d[\d,]*(?:\.\d+)?`;
+/** 服务端写的人民币金额(¥ 后面那串数字)→ 英文下的美元,小数位照原文(至少 2 位) */
+const cost = (raw: string | undefined = ''): string => fmtCost(Number(raw.replace(/,/g, '').replace('−', '-')), Math.max(2, raw.split('.')[1]?.length ?? 0));
 const HAN = /[\u3400-\u9fff]/;
 
 type Tr = (s: string) => string | null;
@@ -95,7 +98,7 @@ const SEGMENT: Rule[] = [
   [/^(.+?) ?已恢复,自动切回$/, (m) => `${backend(m[1]!)} recovered; switched back automatically`],
   [new RegExp(`^(短线|中线|长线)\\((\\w+)\\) 筛选完成:(${N}) 币,前 (${N}):(.+)$`), (m) => `${HORIZON[m[1]!]} (${m[2]}) screen done: ${m[3]} coins, top ${m[4]}: ${list(m[5]!)}`],
   [new RegExp(`^(短线|中线|长线)\\((\\w+)\\):筛了 (${N}) 个币,取契合度前 (${N}) 个。应用只改 watchlist,不动风险/杠杆/执行。$`), (m) => `${HORIZON[m[1]!]} (${m[2]}): screened ${m[3]} coins, kept the top ${m[4]} by fit. Applying only changes the watchlist, not risk, leverage or execution.`],
-  [new RegExp(`^模型 (\\S+) ¥(${N})$`), (m) => `model ${m[1]} ¥${m[2]}`],
+  [new RegExp(`^模型 (\\S+) ¥(${N})$`), (m) => `model ${m[1]} ${cost(m[2])}`],
   [/^切换账户:原账户上还有未了结的东西$/, () => 'Account switch: the previous account still has open items'],
   [/^(\S+) 线程需要处理:(\w+)$/, (m) => `${m[1]} thread needs attention: ${m[2]}`],
   [new RegExp(`^(${N}) 笔订单状态不明$`), (m) => `${m[1]} orders in unknown state`],
@@ -104,7 +107,7 @@ const SEGMENT: Rule[] = [
   [new RegExp(`^(.+) 超时 (${N})ms\\(每分钟自动重试切回\\)$`), (m) => `${m[1]} timed out after ${m[2]}ms (retrying every minute to switch back)`],
   [new RegExp(`^(.+) 超时 (${N})ms$`), (m) => `${m[1]} timed out after ${m[2]}ms`],
   // ── 值班简报分段
-  [new RegExp(`^过去 (${N})h:(${N}) 次角色任务,¥(${N})$`), (m) => `last ${m[1]}h: ${m[2]} role tasks, ¥${m[3]}`],
+  [new RegExp(`^过去 (${N})h:(${N}) 次角色任务,¥(${N})$`), (m) => `last ${m[1]}h: ${m[2]} role tasks, ${cost(m[3])}`],
   [new RegExp(`^(${N}) 条待阅$`), (m) => `${m[1]} unread`],
   [new RegExp(`^风控 (\\w+)\\((${N}) 条开放\\)$`), (m) => `risk ${m[1]} (${m[2]} open)`],
   [/^无平仓$/, () => 'no closes'],
@@ -193,7 +196,7 @@ const SEGMENT: Rule[] = [
   // ── 进化日报标题(/api/evolution/daily headline)
   [/^当天没有(判断|信号收发|复盘|权益记录|筛选|研究活动|新告警|执行相关记录)$/, (m) => `No ${({ 判断: 'judgments', 信号收发: 'signals sent or received', 复盘: 'reviews', 权益记录: 'equity records', 筛选: 'screens', 研究活动: 'research activity', 新告警: 'new alerts', 执行相关记录: 'execution records' } as Record<string, string>)[m[1]!]} that day`],
   [new RegExp(`^下单 (${N}) 笔\\(失败 (${N})\\),交易所接口报错 (${N}) 次 / (${N}) 次判断\\((${N})%\\)$`), (m) => `${m[1]} orders (${m[2]} failed), ${m[3]} exchange API errors / ${m[4]} judgments (${m[5]}%)`],
-  [new RegExp(`^(${N}) 次模型调用,空转 (${N})\\((${N})%:票池为空 (${N}) / 只许 HOLD (${N})\\),¥(${N})$`), (m) => `${m[1]} model calls, ${m[2]} idle (${m[3]}%: empty pool ${m[4]} / HOLD-only ${m[5]}), ¥${m[6]}`],
+  [new RegExp(`^(${N}) 次模型调用,空转 (${N})\\((${N})%:票池为空 (${N}) / 只许 HOLD (${N})\\),¥(${N})$`), (m) => `${m[1]} model calls, ${m[2]} idle (${m[3]}%: empty pool ${m[4]} / HOLD-only ${m[5]}), ${cost(m[6])}`],
   [new RegExp(`^(${N}) 次筛选,前 (${N}) 候选 (${N}) 个,被跟进 (${N}) 个\\((${N})%\\),跟进后结算为正 (—|${N}%)$`), (m) => `${m[1]} screens, ${m[3]} top-${m[2]} candidates, ${m[4]} followed up (${m[5]}%), positive after follow-up ${m[6]}`],
   [new RegExp(`^研究 (${N}) 问 / (${N}) run / (${N}) 回测 / (${N}) 改进环,完成率 (—|${N}%);过门槛 (${N}),晋升 (${N})$`), (m) => `Research: ${m[1]} questions / ${m[2]} runs / ${m[3]} backtests / ${m[4]} improvement loops, completion ${m[5]}; ${m[6]} passed the gate, ${m[7]} promoted`],
   [new RegExp(`^复盘 (${N}) 批,教训提案 (${N}),已采纳 (${N})$`), (m) => `${m[1]} review batches, ${m[2]} lesson proposals, ${m[3]} adopted`],
