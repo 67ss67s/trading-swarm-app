@@ -1,174 +1,230 @@
 # Trading Swarm
 
-A local trading workbench where a team of agent roles turns "I want to trade BTC and ETH" into a tested strategy and then runs it: recommend assets, run a matrix backtest, save the result as a strategy, and hand it to the agent's roles on paper or OKX demo trading.
+A team of nine trading agents that researches markets, trades on OKX, and sells what it produces to other agents on OKX.AI.
 
-![Start checklist](docs/screenshots/01-start.png)
+- Live demo (paper account, read-only for visitors): https://okx-dev-day-demo.tradingswarm.tech
+- On OKX.AI: Trading Swarm, ASP Agent #13866, listed and taking orders
+- Try the ASP services from your own agent in about 10 minutes: [docs/submission/try-on-okx-ai.md](docs/submission/try-on-okx-ai.md)
+- Run it yourself: [Quick start](#quick-start), no keys needed
 
-Code decides the money (size, leverage, stops, whether a trade is allowed); models decide the judgment calls and explain them. Every model judgment is stored with the exact input it saw, so it can be replayed.
+![Trading page: where trades come from, who judged them, and what risk and execution did](docs/assets/screenshots/trade.jpg)
 
-中文简介:Trading Swarm 是本地运行的交易工作台。在对话里说想交易什么,它用代码扫描行情给出短/中/长线推荐,跑「资产 × 周期 × 策略族 × 两臂(纯代码 / 代码 + Jev 判断)」的矩阵回测,留出段只看一次,允许结论是「没找到」;通过的结果存成策略,一键设为 agent 当前策略,按角色分工在纸面或 OKX 模拟盘上运行。
+## The problem
 
-## Contents
+Most AI trading bots put a model between a prompt and an order button. When they lose money, nobody can say whether the idea was bad, the stop was too tight, the size was wrong, or the model just made something up. And a strategy that looked good in one backtest is usually a strategy that got lucky.
 
-- [5-minute trial](#5-minute-trial)
-- [What it does](#what-it-does)
-- [Architecture](#architecture)
-- [Repository layout](#repository-layout)
-- [Configuration](#configuration)
-- [Development](#development)
-- [Status and limits](#status-and-limits)
-- [Documentation](#documentation)
+## What Trading Swarm does differently
 
-## 5-minute trial
+- Models judge, code moves the money. A model proposes direction, entry, stop, targets and the reason. Code sets size and leverage, runs the risk checks, and places the order through the official `okx` CLI. The model never holds keys and never sends an order by itself.
+- Every trade can be traced back. Each judgment is stored with the exact prompt, the evidence and how fresh it was, the raw output and every check it passed or failed. The trading page shows, for every source, what was judged, what was blocked and why.
+- Strategies have to earn their place. Research runs assets × timeframes × strategy families, charges fees and funding, keeps a holdout that is looked at once, and corrects for the number of trials. Only strategies that survive are handed to the team, and live results feed back into the next round.
+- The research is also a product. The same radar, backtester and judgment model are sold to other agents on OKX.AI as ASP #13866, and paid in USDT on X Layer.
 
-Requirements
+## How it fits together
 
-- Node.js 24 or newer (the gateway uses the built-in `node:sqlite`)
-- Optional: the official OKX CLI (`okx`, from `@okx_ai/okx-trade-cli`, installed as a dependency under `node_modules/.bin`) with a demo-trading profile in `~/.okx/config.toml`, if you want orders on OKX demo trading instead of the local paper simulator
-- Optional: a model. Either an OpenRouter API key, or a local model CLI such as `pi` or `codex` on your `PATH`. Without any model the UI, backtests and paper execution still work; chat and model-based judgments will report that no model is connected.
+```mermaid
+flowchart LR
+  subgraph Research["Research loop"]
+    R1[Radar screen<br/>short · mid · long] --> R2[Matrix research<br/>code vs code + Jev]
+    R2 --> R3[Research workbench<br/>chat · backtest · refine]
+    R3 --> R4[My strategies]
+  end
 
-Install and start
+  subgraph Team["Agent team (9 roles)"]
+    S1[AI Scan<br/>model + playbook]
+    S2[Strategy runs]
+    J[Judge per source<br/>code · Jev · LLM]
+    PM[Portfolio Manager<br/>code only]
+    RS[Risk Sentinel<br/>code only]
+    EX[Executor]
+  end
+
+  R4 -->|one click| S2
+  S1 --> J
+  S2 --> J
+  J --> PM --> RS --> EX
+  EX -->|okx CLI, attached stop| OKX[(OKX<br/>spot · perps)]
+  OKX -->|fills, stop check| EX
+  EX --> L[(Judgment ledger<br/>prompt hash · evidence · checks)]
+  L --> RV[Reviewer] -->|lessons, weak spots| R2
+
+  R1 -. Market Intel .-> ASP[ASP Agent]
+  R2 -. backtest · matrix .-> ASP
+  J -. probability check .-> ASP
+  S2 -. strategy signals .-> ASP
+  ASP <-->|orders, deliveries, USDT on X Layer| OKXAI[(OKX.AI)]
+```
+
+## What it does
+
+You tell it what you want to trade. It scans the market, suggests assets for short, mid and long horizons, and backtests which strategy families actually hold up on them. A strategy that passes can be handed to the agent team with one click. From then on the team watches the market, judges each setup, and places orders on OKX through the OKX Agent Trade Kit.
+
+The same team is registered on OKX.AI as an Agent Service Provider. Other agents subscribe to its market intel and alerts, or order one-off research such as a backtest or a trade plan check.
+
+## OKX integration at a glance
+
+| What | Where in the code | Status |
+|---|---|---|
+| Orders on OKX (spot and perpetual swaps) through the official `okx` CLI, stop and take-profit attached to the entry | `packages/gateway/src/demo/execution-okx.ts` | Running on OKX demo trading; attached-stop handling also checked with a small live order |
+| Stop check after every fill: the position counts as protected only once the stop order is found on OKX | `packages/gateway/src/demo/protection.ts` | In use on every OKX fill |
+| OKX market data, instruments and the market-wide scan | `market-okx.ts`, `universe-okx.ts`, `okx/instruments.ts` | Feeds the radar, the charts and backtests |
+| Account setup: connect an OKX profile, account mode, demo or live | `okx-onboarding.ts`, `okx-account-mode.ts` | Keys stay in the CLI profile |
+| ASP on OKX.AI: order polling, accept, build, deliver, re-send | `asp-agent/provider-tasks.ts`, `asp-agent/services/` | #13866 listed; 33 one-time orders in the last 7 days (including OKX's review sandbox and our own test buyer), 28 delivered; three subscriptions pushing signals |
+| Buying from other ASPs: catalog, subscribe, inbound signal ledger | `asp-agent/catalog.ts`, `asp-agent/inbox.ts`, `okx-asp-feed.ts` | Trial subscriptions to other ASPs tested end to end |
+| Agentic Wallet status and identity | `asp-agent/wallet.ts`, `asp-agent/identity.ts` | Read through onchainos |
+
+Paths are under `packages/gateway/src/demo/` unless shown in full.
+
+## How it connects to OKX
+
+### Trading on OKX
+
+```
+agent judgment → code risk checks → okx CLI (OKX Agent Trade Kit) → OKX
+```
+
+Spot and perpetual swaps, with attached stop-loss and trailing stops. After a fill, the gateway looks up the stop order on the exchange and only marks the position as protected once it is actually there. API keys live in the `okx` CLI profile; the gateway never stores them. The demo runs on OKX demo trading. Pointing the profile at a live account uses the same code path, and a live profile is refused unless `TG_OKX_LIVE=1` is set.
+
+### Selling on OKX.AI (ASP #13866)
+
+```
+buyer agent subscribes or orders on OKX.AI
+  → onchainos event (sub_open / job_asp_selected)
+  → gateway accepts the job
+  → the service builds its deliverable
+  → delivered over A2A through okx-a2a
+  → paid in USDT on X Layer
+```
+
+The services reuse what the team already builds for its own trading. The radar screens become Market Intel, the research engine runs the backtest and matrix services, and the Jev judgment answers the probability check. One polling loop in the gateway takes every order, checks deliveries against OKX.AI and re-sends failed ones.
+
+| Service | Type | Price (USDT) |
+|---|---|---|
+| Strategy Signals: entry, stop, target, market type | Subscription | 1 / month |
+| Market Intel: brief every 4h, radar picks for short, swing and weekly | Subscription, 72h trial | 9.9 / month |
+| BTC/ETH Micro Alerts: OKX perp liquidation spikes | Subscription, 72h trial | 5.9 / month |
+| Asset × Horizon Picks | One-time | 0.5 |
+| Strategy Backtest Quick | One-time | 2 |
+| Strategy Matrix Research | One-time | 15 |
+| Trade Plan Check | One-time | 0.5 |
+| AI Probability Check (Jev) | One-time | 0.3 |
+
+The OKX.AI page in the UI shows the buyer side (browse services, subscribe, inbound signal ledger), the provider side (our services, subscribers, delivery log) and a monitor that flags any subscription that has gone quiet for too long.
+
+![OKX.AI page: services, subscriptions, deliveries](docs/assets/screenshots/okx-ai.jpg)
+
+Code: `packages/gateway/src/demo/asp-agent/` (services in `services/`, the order loop in `provider-tasks.ts`), skill in `skills/asp-agent/SKILL.md`.
+
+### The research loop
+
+```
+radar screen → picks by horizon → matrix research → research workbench → my strategy
+  → strategy run → orders on OKX → judgment ledger → review → next round
+```
+
+Short term means 3m / 5m / 15m, mid 1h / 4h, long 12h / 1d. Short-term trading is limited to liquid markets, because on small caps fees eat the edge.
+
+Matrix research tests assets × timeframes × strategy families, each in two versions: pure code, and code plus a Jev judgment step. Fees, slippage and funding are charged. Data is split into train, selection and a holdout that is evaluated once, after the candidates are frozen. Results are corrected for the number of trials (deflated Sharpe, Holm), so a strategy that only looks good by luck does not pass. "Nothing passed" is a normal result and comes with the reason. In the research workbench you work on a strategy by chatting with the agent. It compiles the rules, runs the backtest, tries parameter variants, explains why a strategy lags buy-and-hold, and saves every version to My strategies with before and after numbers.
+
+![Batch validation: code vs. code + Jev, with a one-time holdout check](docs/assets/screenshots/batch-validation.jpg)
+
+Jev (through OpenRouter's Decisions API) returns probabilities for entry, support and resistance, and pullback risk. For BTC and ETH it can also read recorded order-book and liquidation data. Backtests and live runs call the same judgment function, so what research measures is what the live strategy does.
+
+## The trading page
+
+The trading page follows one trade from start to finish in three steps.
+
+1. Sources: where trade ideas come from. The AI Scan (a model reading the market with a playbook) and each running strategy are separate sources, with their own counters for how many setups were judged, blocked and filled today, and why the rest were not taken.
+2. Judge: each source chooses how its setups are judged: direct (code only), Jev, an LLM, or signal only.
+3. Risk and execution: one set of code checks shared by every source. Risk per trade, leverage, open positions, daily trade limit, minimum stop distance in ATR, and net reward-to-risk after costs.
+
+Every open idea is a strategy thread. Click one to see the chart, the judgment that opened it, the risk checks it passed and the orders it sent.
+
+## The team
+
+| Agent | Call sign | Job |
+|---|---|---|
+| Gate Captain | HELM | Team status, duty brief, approvals |
+| Radar | RADAR | Market-wide OKX scan, short / swing / weekly screens |
+| Thread Manager | THREAD | Keeps each trade idea consistent from entry to exit |
+| Strategy Lab | LAB | Asset picks, matrix research, the current strategy |
+| Portfolio Manager | BOOK | Exposure, concentration, stop budget (code only) |
+| Risk Sentinel | SENTINEL | Invariants and alerts, can block new entries (code only) |
+| Reviewer | AUDIT | Post-trade reviews and lessons |
+| Executor | EXEC | Authorization, stop protection, reconciliation with OKX |
+| ASP Agent | MARKET | Services, deliveries and after-sales on OKX.AI |
+
+Each agent has its own role file, tool allow-list, work loop and chat thread. Each can run on a different model: a local CLI, or an API key for OpenRouter, Anthropic, DeepSeek, Z.ai, OpenAI or any OpenAI-compatible endpoint. Keys stay on the server; the browser only sees a masked form.
+
+![The floor: the nine agents and what each is doing right now](docs/assets/screenshots/floor.jpg)
+
+## Risk rules
+
+- The model proposes direction, entry, stop, targets and the reason. Code sets size, leverage and margin mode, and decides whether the trade is allowed.
+- "No trade" and "watch" are normal answers.
+- Each judgment is stored with a hash of the exact prompt, the evidence and how fresh it was, the raw output and the result of every check. The thread page replays it.
+- When something is unclear the system stops rather than guesses. Invalid model output means no trade. An order in an unknown state is looked up by client order id instead of being sent again. If the stop order cannot be placed, the position is closed.
+- Chat can propose trades but cannot change risk limits, leverage or the execution channel. Only the user can, in the UI.
+
+## Quick start
+
+Requires Node.js 24 or newer (the gateway uses the built-in `node:sqlite`).
 
 ```bash
 git clone https://github.com/67ss67s/trading-swarm-app && cd trading-swarm-app
 npm install
-cp .env.example .env     # optional; everything in it can stay empty
-npm run dev              # same as ./scripts/dev.sh — builds the gateway, starts gateway + UI
+npm run dev
 ```
 
-Open http://127.0.0.1:5180 (API on 18800; change with `TG_UI_PORT` / `TG_DEMO_PORT`).
+Open http://127.0.0.1:5180 (the API runs on 18800; change them with `TG_UI_PORT` and `TG_DEMO_PORT`).
 
-What to fill in `.env` (all optional)
+No keys are needed to look around. The first start creates a local database under `~/.trade-gate/demo` (move it with `TG_DEMO_HOME`) and loads four sample strategies with their backtests and two research conversations (a parameter comparison and a diagnosis of why a strategy lagged buy-and-hold), so the pages are not empty. Orders go to the built-in paper simulator until you connect OKX. Optional settings are listed in [.env.example](.env.example); copy it to `.env` if you need any of them.
 
-- `OPENROUTER_API_KEY`: imported once into the gateway's key vault and bound to the "decision" role, which uses the Jev structured-judgment model through OpenRouter. This is what the "code + Jev" arm of the matrix study calls.
-- DeepSeek, Anthropic, Z.ai or OpenAI keys are not read from `.env`; add them in the UI under Model connections (they go into the same server-side vault).
-- `TG_DEMO_BACKEND=okx` to route orders to OKX demo trading through the `okx` CLI. The default `paper` needs no exchange account.
+## Configuration
 
-Suggested click path
+Environment variables use the `TG_` prefix (the project's internal name is `trade-gate`, which also shows up in package names). The common ones are in [.env.example](.env.example); the full list is at the top of `packages/gateway/src/demo/main.ts`. Most settings (watch list, risk, models per role) are edited in the UI and saved in the state database, which lives outside the repository.
 
-1. **Start** (开始): the checklist shows what is configured and what is missing.
-2. **Connect** (接入): pick the execution channel (paper, or OKX demo via the CLI), account mode and risk defaults.
-3. **Model connections** (模型连接): add an API key or pick a detected CLI, press Test, and bind roles.
-4. **Agent**: in the chat, type `我想交易 BTC ETH` ("I want to trade BTC ETH"). The agent calls the recommendation tool and returns a card: each asset × short / mid / long horizon, with the evidence and a suggested strategy family.
-5. On the card, choose **去研究台验证** (verify in research). The matrix study opens prefilled with the assets, timeframes and families.
-6. **Matrix research** (矩阵研究): start the study and follow its progress. When it finishes, look at the matrix; either a candidate passed the gates or the result says why nothing did.
-7. Save a passing candidate as a strategy, then **设为当前策略** (set as current strategy) from **My strategies** (我的策略) or the Agent page header. The agent now runs it by role on the selected channel.
-
-## What it does
-
-**Chat to asset recommendations.** `recommend_assets` is a code tool: market-wide scan, daily regime and a three-horizon radar. The model only picks and explains; numbers on the card come from the tool.
-
-![Agent chat](docs/screenshots/03-agent-chat.png)
-
-**Matrix research.** A study crosses assets × timeframe tier (short 15m, mid 4h, long 1d) × strategy family (breakout, MA trend, MA cross, pullback, mean reversion, SMC structure) × two arms: pure code, and code plus a Jev judgment step. Fees, slippage and funding are charged. Data is split into train / validation / held-out; the held-out segment is locked until the final candidates are frozen and is evaluated once. "Nothing passed" is a valid result and is reported with the reason (fees, sample size, underperforms buy-and-hold, drawdown).
-
-Rows of the matrix can be built-in families, your own saved strategies, or both: pick strategies from **My strategies** in the study form (or use "test this in matrix research" on a strategy page), and each selected version is run across the chosen assets and timeframes in the same two arms.
-
-![Matrix research](docs/screenshots/04-matrix-research.png)
-
-**Order-book and liquidation features for the judgment step.** The Jev judgment can read short-horizon microstructure fields for BTC and ETH perpetuals: order-book imbalance within ±0.5% of mid, the largest near-price bid and ask walls, spread, and 5-minute long/short liquidation notional. Live runs and matrix studies read the same recorded frames (gzip JSONL under `TG_MICRO_DIR`), only frames already on disk at the decision time. These fields are marked live-only: without recordings for a period, the judgment reports them as unavailable instead of guessing. The recorder that produces the frames is not part of this repository.
-
-**Strategies run by role.** A saved strategy is an IR plus its judgment questions, asset pool and horizon. Setting it as the agent's current strategy splits it across roles (radar, judge, geometry, risk, holding, execution); each rule is marked as executed by code, by Jev, or by an LLM. "Free judgment" (no strategy) is an explicit option.
-
-![My strategies](docs/screenshots/05-strategies.png)
-
-**Model connections.** API-key connections (OpenRouter, Anthropic, DeepSeek, Z.ai, OpenAI, any OpenAI-compatible endpoint) and local CLIs (`pi`, `codex`, `claude`) are listed on one page. Each role (chat, judge, research planning, strategy filter, review, utility, decision) can be bound to its own connection and model. Keys stay on the server; the browser only sees a masked form.
-
-![Model connections](docs/screenshots/06-model-connections.png)
-
-**Execution.** Paper (in-process simulator) and OKX demo trading through the official `okx` CLI, which signs locally and holds the keys. A non-demo OKX profile is refused unless `TG_OKX_LIVE=1` is set. A Binance path (official `binance-cli`, Binance MCP through an agent CLI, and a Rust executor) exists behind `TG_EXCHANGE=binance`.
-
-![Connect](docs/screenshots/02-connect.png)
-
-**Signal market (OKX.AI ASP).** Browse and subscribe to OKX.AI Agent Service Provider signal services, see the inbound signal ledger, and publish this agent as a provider. Driven through the `onchainos` / `okx-a2a` CLIs; see `skills/asp-agent/SKILL.md`.
-
-As a provider, the gateway defines seven outward services (`packages/gateway/src/demo/asp-agent/services/`). Orders arrive through one job poller and are dispatched to the handler registered for each `serviceId`; subscription deliveries are fanned out per `serviceId`.
-
-- Market Intel (subscription): a 30-minute market brief plus the short / swing / weekly radar picks.
-- BTC/ETH Microstructure Alerts (subscription): liquidation spikes, near-price walls and order-book imbalance, with cooldowns.
-- Asset x Horizon Picks (per call): rule-based picks per horizon, with no LLM call.
-- Strategy Backtest Quick (per call): an idea compiled to rules and backtested over the full window with fees and slippage.
-- Strategy Matrix Research (per call): a matrix study with train / selection / held-out segments and multiple-testing control.
-- Trade Plan Check (per call): rule gates on a trade plan, then a Jev probability.
-- AI Probability Check (per call): Jev probabilities for a plan. This one is held back from listing until the model provider's resale terms are confirmed.
-
-Listing texts are generated for `onchainos agent update`, but listing and submission are done by a person. The two services that call Jev are off by default and are capped per call.
-
-![Signal market](docs/screenshots/09-signal-market.png)
-
-**Operations floor.** A live view of the team: which role is working on what, hand-offs between roles, and which slice of the current strategy each role holds.
-
-![Operations floor](docs/screenshots/07-floor.png)
-
-**Guard rails.** Code gates on every proposal (stop side and distance, risk % of equity, notional cap, open-position limits, daily loss stop, stale evidence), a daily model-call cap, a typed-confirmation emergency stop, and reconciliation by `clientOrderId` when an order outcome is unknown.
-
-## Architecture
-
-```
- browser ──HTTP/SSE──▶ webui (Vite + React, :5180) ──/api proxy──▶ gateway (Node 24, :18800, loopback only)
-                                                                      │
-          ┌────────────────────┬──────────────────┬──────────────────┼──────────────────┬───────────────────┐
-     chat + roles        research engine     strategy runner    execution channels   model connections
-     (tools, hand-offs)  (matrix study,      (current strategy, (paper │ okx CLI │    (API-key vault,
-                          backtest, judge,    role binding)      binance paths)      local CLIs, roles)
-                          improve loop)
-                                   state: ~/.trading-swarm/…/state.sqlite (+ secrets/, mode 600)
-```
-
-Details, data flow and security boundaries: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+- Orders on OKX demo trading: create a profile with the `okx` CLI (installed with the dependencies), with `demo: true`, then pick OKX in the Connect page. Without a profile, orders go to the built-in paper simulator.
+- Models: add keys or pick a detected CLI under Model connections, then bind roles. Without a model, the UI, backtests and paper execution still work; chat and model judgments say that no model is connected.
+- OKX.AI services: need onchainos with a registered ASP identity and `okx-a2a`. Without them the OKX.AI page stays read-only.
 
 ## Repository layout
 
 ```
 packages/
-  gateway/      runtime: HTTP API + SSE, chat and role agents, research engine, strategy runner,
-                execution channels, model connections, migrations (src/demo/**)
-  webui/        React UI (pages: start, connect, agent, matrix study, my strategies, models, floor, …)
-  contracts/    JSON Schema contracts and generated TS types
-  pine-engine/  PineScript v5/v6 runner used by the research engine
-  eval-a/       offline evaluation harness for the judgment chain (implementation A)
-  eval-b/       second, independent evaluation harness (implementation B)
-crates/
-  exec-core/    Rust REST execution core (Binance demo executor `tswarm-demo-exec`)
-  execd/        execution service skeleton (single credential holder / account writer)
-  exchange-mcp/ MCP OAuth client (PKCE, CIMD) and token store
-  contracts-rs/ Rust side of the contracts
-skills/         skill files that let an external agent drive the gateway over HTTP
-scripts/        dev launcher and research / data scripts
-docs/           design notes, runtime contract, research reports, evaluation reports
+  gateway/      runtime: HTTP API and live updates, the nine agents, risk checks, OKX execution
+                and market data, research engine, strategy runs, Jev judgment, judgment ledger,
+                OKX.AI services (src/demo/**)
+  webui/        React UI: trading page, floor, agent chat, OKX.AI, research workbench, strategies,
+                model connections
+  contracts/    JSON Schema contracts and generated TypeScript types
+  pine-engine/  runs PineScript v5/v6 indicators inside strategy rules
+  eval-a/       offline evaluation of the judgment chain
+  eval-b/       a second, independent evaluation harness
+crates/         Rust execution service and shared contracts (used by the Binance path)
+skills/         skills that let another agent drive Trading Swarm, run the strategy loop, or run the ASP
+scripts/        dev launcher and research scripts
+docs/           architecture, design notes, API contract, research and evaluation reports
 ```
 
-## Configuration
+Architecture, data flow and security boundaries: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-Environment variables use the `TG_` prefix. It is the project's historical prefix and is kept so existing local setups keep working. The common ones are listed in [.env.example](.env.example); the full list is in the header of `packages/gateway/src/demo/main.ts` and in `docs/demo/v3-ui-contract.md`. Most runtime settings (watch list, timeframe, risk, models per role) are edited in the UI and stored in the state database.
-
-State lives outside the repository: `~/.trading-swarm/` by default (`TG_DEMO_DB` to move the database; `TRADING_SWARM_HOME` for the Rust tools). Model keys are stored in `secrets/model-keys.json` next to the database (directory 700, file 600).
-
-## Development
+## Tests
 
 ```bash
-npm run typecheck            # tsc -b across the workspace
-npx vitest run               # inside packages/gateway, packages/webui, packages/contracts, …
-cargo test                   # Rust crates
+npm run typecheck                       # tsc across the workspace
+npx vitest run --root packages/gateway  # same for webui, contracts, pine-engine, eval-a, eval-b
+cargo test                              # Rust crates
 ```
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for boundaries and conventions.
 
 ## Status and limits
 
-- Paper and exchange demo trading are the supported modes. Live trading on OKX needs an explicit flag and has only been exercised with small canary orders.
-- Research results so far are mostly negative: the built-in strategies did not beat buy-and-hold after costs, and the batch studies found no family that survives multiple-testing correction. The tool reports this rather than forcing a winner.
-- Order-book and liquidation features are live-only and cover BTC and ETH perpetuals only. They need an external recorder writing to `TG_MICRO_DIR`, and they cannot be backtested over periods that were not recorded.
-- Research scripts under `scripts/trader-*` need the original channel messages and structured signals. These inputs are not distributed with this repository.
-- The Binance MCP path depends on Binance's client allow-list; the gateway's own OAuth client is not on it, so that path runs through an agent CLI. Zero-model account reads for that path need an external read bridge (`TG_DIRECT_READ_BIN`). Without it, account reads go through the agent CLI.
-- Known failing tests, also failing before this snapshot: in `packages/contracts`, the ajv strict-mode check for the `research-loop` schema; in `packages/eval-a`, one gate-coverage case; in `packages/gateway`, the research routes attribution test. Under full-suite load, a few long research and performance tests (and `generate --check`, which has a 5 s timeout) can time out. They pass when run alone.
+- Paper and OKX demo trading are the supported modes. Live OKX trading needs an explicit flag and has only been run with small test orders.
+- Research results so far are mostly negative. The built-in strategy families did not beat buy-and-hold after costs, and the batch studies found none that survives the multiple-testing correction. The tool reports that instead of forcing a winner.
+- Order-book and liquidation features cover BTC and ETH perpetuals only. They need an external recorder, which is not in this repository, and cannot be backtested over periods that were not recorded.
+- Most design notes under `docs/` were written in Chinese while building. Code identifiers and the UI are in English (the UI also has Chinese).
+- A Binance path (official CLI, MCP and a Rust executor) is still in the code behind `TG_EXCHANGE=binance`. This submission uses OKX.
 
-## Documentation
+## License
 
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): processes, modules, data flow, security boundaries
-- [docs/demo/v3-ui-contract.md](docs/demo/v3-ui-contract.md): HTTP API contract between gateway and UI
-- [docs/design/chat-to-strategy-loop-2026-09-25.md](docs/design/chat-to-strategy-loop-2026-09-25.md): chat → research → strategy → run, with acceptance criteria
-- [docs/design/okx-atk-2026-09-20.md](docs/design/okx-atk-2026-09-20.md): OKX execution channel
-- [docs/design/asp-market-2026-09-20.md](docs/design/asp-market-2026-09-20.md): signal market (OKX.AI ASP)
-- [docs/research/](docs/research/): research reports (batch studies, oracle, judgment replay)
-- [docs/eval/](docs/eval/): judgment-chain evaluation method and results
+MIT, see [LICENSE](LICENSE). Trading Swarm provides analysis and tooling, not investment advice.
